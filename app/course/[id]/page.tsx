@@ -15,9 +15,13 @@ interface Student {
 
 interface Exam {
   _id: string;
-  name: string;
+  displayName: string;
+  examType: 'midterm' | 'final' | 'labFinal' | 'oel' | 'custom';
   totalMarks: number;
-  scalingValue: number;
+  weightage: number;
+  scalingEnabled: boolean;
+  isRequired: boolean;
+  numberOfCOs?: number;
   scalingMethod?: string;
 }
 
@@ -26,6 +30,7 @@ interface Mark {
   studentId: string;
   examId: string;
   rawMark: number;
+  coMarks?: number[];
   scaledMark?: number;
   roundedMark?: number;
 }
@@ -36,6 +41,8 @@ interface Course {
   code: string;
   semester: string;
   year: number;
+  courseType: 'Theory' | 'Lab';
+  showFinalGrade: boolean;
 }
 
 export default function CoursePage() {
@@ -54,17 +61,26 @@ export default function CoursePage() {
   const [showImportModal, setShowImportModal] = useState(false);
   const [showExamModal, setShowExamModal] = useState(false);
   const [showMarkModal, setShowMarkModal] = useState(false);
+  const [showExamSettings, setShowExamSettings] = useState<string | null>(null);
   
   const [csvInput, setCsvInput] = useState('');
   const [examFormData, setExamFormData] = useState({
-    name: '',
+    displayName: '',
     totalMarks: '',
-    scalingValue: '',
+    weightage: '',
+    numberOfCOs: '',
   });
   const [markFormData, setMarkFormData] = useState({
     studentId: '',
     examId: '',
     rawMark: '',
+    coMarks: [] as string[],
+  });
+  const [examSettings, setExamSettings] = useState({
+    displayName: '',
+    weightage: '',
+    numberOfCOs: '',
+    totalMarks: '',
   });
   const [error, setError] = useState('');
 
@@ -133,15 +149,22 @@ export default function CoursePage() {
     setError('');
 
     try {
+      const examData: any = {
+        courseId,
+        displayName: examFormData.displayName,
+        totalMarks: parseFloat(examFormData.totalMarks),
+        weightage: parseFloat(examFormData.weightage),
+      };
+
+      // Add numberOfCOs if provided (for theory courses)
+      if (examFormData.numberOfCOs) {
+        examData.numberOfCOs = parseInt(examFormData.numberOfCOs);
+      }
+
       const response = await fetch('/api/exams', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          courseId,
-          name: examFormData.name,
-          totalMarks: parseFloat(examFormData.totalMarks),
-          scalingValue: parseFloat(examFormData.scalingValue),
-        }),
+        body: JSON.stringify(examData),
       });
 
       const data = await response.json();
@@ -149,7 +172,7 @@ export default function CoursePage() {
       if (response.ok) {
         setExams([...exams, data.exam]);
         setShowExamModal(false);
-        setExamFormData({ name: '', totalMarks: '', scalingValue: '' });
+        setExamFormData({ displayName: '', totalMarks: '', weightage: '', numberOfCOs: '' });
       } else {
         setError(data.error);
       }
@@ -191,7 +214,7 @@ export default function CoursePage() {
         }
         
         setShowMarkModal(false);
-        setMarkFormData({ studentId: '', examId: '', rawMark: '' });
+        setMarkFormData({ studentId: '', examId: '', rawMark: '', coMarks: [] });
       } else {
         setError(data.error);
       }
@@ -216,6 +239,77 @@ export default function CoursePage() {
     } catch (err) {
       console.error('Error applying scaling:', err);
       alert('Error applying scaling');
+    }
+  };
+
+  const handleToggleScaling = async (examId: string, currentValue: boolean) => {
+    try {
+      const response = await fetch(`/api/exams/${examId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scalingEnabled: !currentValue }),
+      });
+
+      if (response.ok) {
+        await fetchCourseData();
+      } else {
+        alert('Error updating scaling setting');
+      }
+    } catch (err) {
+      console.error('Error toggling scaling:', err);
+      alert('Error toggling scaling');
+    }
+  };
+
+  const handleUpdateExamSettings = async () => {
+    if (!showExamSettings) return;
+    
+    try {
+      const updateData: any = {};
+      if (examSettings.displayName) updateData.displayName = examSettings.displayName;
+      if (examSettings.weightage) updateData.weightage = parseFloat(examSettings.weightage);
+      if (examSettings.totalMarks) updateData.totalMarks = parseFloat(examSettings.totalMarks);
+      if (examSettings.numberOfCOs) updateData.numberOfCOs = parseInt(examSettings.numberOfCOs);
+
+      const response = await fetch(`/api/exams/${showExamSettings}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updateData),
+      });
+
+      if (response.ok) {
+        await fetchCourseData();
+        setShowExamSettings(null);
+        setExamSettings({ displayName: '', weightage: '', numberOfCOs: '', totalMarks: '' });
+        setError('');
+      } else {
+        const data = await response.json();
+        setError(data.error);
+      }
+    } catch (err) {
+      setError('Error updating exam settings');
+    }
+  };
+
+  const handleDeleteExam = async (examId: string) => {
+    if (!confirm('Are you sure you want to delete this exam? This will delete all associated marks.')) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/exams/${examId}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        await fetchCourseData();
+      } else {
+        const data = await response.json();
+        alert(data.error);
+      }
+    } catch (err) {
+      console.error('Error deleting exam:', err);
+      alert('Error deleting exam');
     }
   };
 
@@ -280,11 +374,18 @@ export default function CoursePage() {
                 />
               </Link>
               <div>
-                <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">
-                  {course.name}
+                <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent flex items-center gap-2">
+                  {course?.courseType === 'Theory' ? '📖' : '🔬'} {course.name}
                 </h1>
                 <p className="text-xs text-gray-400">
-                  {course.code} • {course.semester} {course.year}
+                  {course.code} • {course.semester} {course.year} • 
+                  <span className={`ml-1 px-2 py-0.5 rounded text-xs font-medium ${
+                    course?.courseType === 'Theory' 
+                      ? 'bg-blue-900/30 text-blue-300' 
+                      : 'bg-purple-900/30 text-purple-300'
+                  }`}>
+                    {course.courseType}
+                  </span>
                 </p>
               </div>
             </div>
@@ -348,52 +449,104 @@ export default function CoursePage() {
               {exams.map(exam => (
                 <div key={exam._id} className="p-4 rounded-lg border bg-gray-900/50 border-gray-700/50 hover:border-gray-600 transition-all">
                   <div className="flex items-center justify-between mb-3">
-                    <div>
-                      <div className="font-medium text-lg text-gray-100">{exam.name}</div>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <div className="font-medium text-lg text-gray-100">{exam.displayName}</div>
+                        {exam.isRequired && (
+                          <span className="px-2 py-0.5 bg-emerald-900/30 text-emerald-300 text-xs rounded font-medium">
+                            Required
+                          </span>
+                        )}
+                      </div>
                       <div className="text-sm mt-1 text-gray-400">
                         Total Marks: <span className="font-medium text-blue-400">{exam.totalMarks}</span> | 
-                        Scaling Value: <span className="font-medium text-cyan-400">{exam.scalingValue}</span>
+                        Weightage: <span className="font-medium text-cyan-400">{exam.weightage}%</span>
                         {exam.scalingMethod && (
                           <span className="ml-2 text-emerald-400">
                             | Method: {exam.scalingMethod}
                           </span>
                         )}
+                        {exam.numberOfCOs && (
+                          <span className="ml-2 text-purple-400">
+                            | COs: {exam.numberOfCOs}
+                          </span>
+                        )}
                       </div>
                     </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => {
+                          setShowExamSettings(exam._id);
+                          setExamSettings({
+                            displayName: exam.displayName,
+                            weightage: exam.weightage.toString(),
+                            totalMarks: exam.totalMarks.toString(),
+                            numberOfCOs: exam.numberOfCOs?.toString() || '',
+                          });
+                        }}
+                        className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-white text-xs rounded-lg transition-all"
+                      >
+                        ⚙️ Settings
+                      </button>
+                      {!exam.isRequired && (
+                        <button
+                          onClick={() => handleDeleteExam(exam._id)}
+                          className="px-3 py-1.5 bg-red-900/30 hover:bg-red-900/50 text-red-300 text-xs rounded-lg transition-all"
+                        >
+                          🗑️
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Scaling Toggle */}
+                  <div className="mb-3 flex items-center gap-2 text-sm">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={exam.scalingEnabled}
+                        onChange={() => handleToggleScaling(exam._id, exam.scalingEnabled)}
+                        className="w-4 h-4 rounded bg-gray-700 border-gray-600 text-blue-600 focus:ring-blue-500 focus:ring-offset-gray-900"
+                      />
+                      <span className="text-gray-300">Enable Scaling</span>
+                    </label>
                   </div>
                   
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      onClick={() => handleApplyScaling(exam._id, 'bellCurve')}
-                      className="px-3 py-1.5 bg-gradient-to-r from-yellow-600 to-amber-600 text-white text-xs rounded-lg hover:from-yellow-700 hover:to-amber-700 transition-all shadow-lg"
-                    >
-                      🎯 Bell Curve
-                    </button>
-                    <button
-                      onClick={() => handleApplyScaling(exam._id, 'linearNormalization')}
-                      className="px-3 py-1.5 bg-gradient-to-r from-blue-600 to-blue-700 text-white text-xs rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all shadow-lg"
-                    >
-                      📏 Linear
-                    </button>
-                    <button
-                      onClick={() => handleApplyScaling(exam._id, 'minMaxNormalization')}
-                      className="px-3 py-1.5 bg-gradient-to-r from-purple-600 to-purple-700 text-white text-xs rounded-lg hover:from-purple-700 hover:to-purple-800 transition-all shadow-lg"
-                    >
-                      ⚖️ Min-Max
-                    </button>
-                    <button
-                      onClick={() => handleApplyScaling(exam._id, 'percentile')}
-                      className="px-3 py-1.5 bg-gradient-to-r from-pink-600 to-pink-700 text-white text-xs rounded-lg hover:from-pink-700 hover:to-pink-800 transition-all shadow-lg"
-                    >
-                      📊 Percentile
-                    </button>
-                    <button
-                      onClick={() => handleApplyRounding(exam._id)}
-                      className="px-3 py-1.5 bg-gradient-to-r from-green-600 to-green-700 text-white text-xs rounded-lg hover:from-green-700 hover:to-green-800 transition-all shadow-lg"
-                    >
-                      🔢 Round
-                    </button>
-                  </div>
+                  {/* Scaling Methods - Only show if scaling is enabled */}
+                  {exam.scalingEnabled && (
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        onClick={() => handleApplyScaling(exam._id, 'bellCurve')}
+                        className="px-3 py-1.5 bg-gradient-to-r from-yellow-600 to-amber-600 text-white text-xs rounded-lg hover:from-yellow-700 hover:to-amber-700 transition-all shadow-lg"
+                      >
+                        🎯 Bell Curve
+                      </button>
+                      <button
+                        onClick={() => handleApplyScaling(exam._id, 'linearNormalization')}
+                        className="px-3 py-1.5 bg-gradient-to-r from-blue-600 to-blue-700 text-white text-xs rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all shadow-lg"
+                      >
+                        📏 Linear
+                      </button>
+                      <button
+                        onClick={() => handleApplyScaling(exam._id, 'minMaxNormalization')}
+                        className="px-3 py-1.5 bg-gradient-to-r from-purple-600 to-purple-700 text-white text-xs rounded-lg hover:from-purple-700 hover:to-purple-800 transition-all shadow-lg"
+                      >
+                        ⚖️ Min-Max
+                      </button>
+                      <button
+                        onClick={() => handleApplyScaling(exam._id, 'percentile')}
+                        className="px-3 py-1.5 bg-gradient-to-r from-pink-600 to-pink-700 text-white text-xs rounded-lg hover:from-pink-700 hover:to-pink-800 transition-all shadow-lg"
+                      >
+                        📊 Percentile
+                      </button>
+                      <button
+                        onClick={() => handleApplyRounding(exam._id)}
+                        className="px-3 py-1.5 bg-gradient-to-r from-green-600 to-green-700 text-white text-xs rounded-lg hover:from-green-700 hover:to-green-800 transition-all shadow-lg"
+                      >
+                        🔢 Round
+                      </button>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -415,7 +568,7 @@ export default function CoursePage() {
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-300">Name</th>
                     {exams.map(exam => (
                       <th key={exam._id} className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-300">
-                        <div>{exam.name}</div>
+                        <div>{exam.displayName}</div>
                         <div className="text-[10px] font-normal mt-0.5 text-gray-500">Raw / Scaled / Rounded</div>
                       </th>
                     ))}
@@ -543,10 +696,10 @@ export default function CoursePage() {
                 <input
                   type="text"
                   required
-                  value={examFormData.name}
-                  onChange={(e) => setExamFormData({ ...examFormData, name: e.target.value })}
+                  value={examFormData.displayName}
+                  onChange={(e) => setExamFormData({ ...examFormData, displayName: e.target.value })}
                   className="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-100 placeholder-gray-500"
-                  placeholder="e.g., Midterm"
+                  placeholder="e.g., Quiz 1"
                 />
               </div>
 
@@ -565,18 +718,36 @@ export default function CoursePage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Scaling Value</label>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Weightage (%)</label>
                 <input
                   type="number"
                   required
-                  min="1"
+                  min="0"
+                  max="100"
                   step="0.01"
-                  value={examFormData.scalingValue}
-                  onChange={(e) => setExamFormData({ ...examFormData, scalingValue: e.target.value })}
+                  value={examFormData.weightage}
+                  onChange={(e) => setExamFormData({ ...examFormData, weightage: e.target.value })}
                   className="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-100 placeholder-gray-500"
-                  placeholder="e.g., 50"
+                  placeholder="e.g., 20"
                 />
+                <p className="text-xs text-gray-500 mt-1">Percentage contribution to final grade</p>
               </div>
+
+              {course?.courseType === 'Theory' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Number of COs (Optional)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="10"
+                    value={examFormData.numberOfCOs}
+                    onChange={(e) => setExamFormData({ ...examFormData, numberOfCOs: e.target.value })}
+                    className="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-100 placeholder-gray-500"
+                    placeholder="e.g., 3"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">For exams with CO-wise marks breakdown</p>
+                </div>
+              )}
 
               <div className="flex gap-3 pt-4">
                 <button
@@ -642,7 +813,7 @@ export default function CoursePage() {
                   <option value="">-- Select Exam --</option>
                   {exams.map(exam => (
                     <option key={exam._id} value={exam._id}>
-                      {exam.name} (Max: {exam.totalMarks})
+                      {exam.displayName} (Max: {exam.totalMarks})
                     </option>
                   ))}
                 </select>
@@ -681,6 +852,95 @@ export default function CoursePage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Exam Settings Modal */}
+      {showExamSettings && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
+          <div className="bg-gradient-to-br from-gray-800 to-gray-800/80 rounded-2xl shadow-2xl max-w-md w-full border border-gray-700/50 p-6">
+            <h2 className="text-2xl font-bold text-gray-100 mb-6">Exam Settings</h2>
+            
+            {error && (
+              <div className="mb-4 p-3 bg-red-900/30 border border-red-700 rounded-lg text-red-300 text-sm">
+                {error}
+              </div>
+            )}
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Display Name</label>
+                <input
+                  type="text"
+                  value={examSettings.displayName}
+                  onChange={(e) => setExamSettings({ ...examSettings, displayName: e.target.value })}
+                  className="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-100 placeholder-gray-500"
+                  placeholder="Exam name"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Total Marks</label>
+                <input
+                  type="number"
+                  min="1"
+                  step="0.01"
+                  value={examSettings.totalMarks}
+                  onChange={(e) => setExamSettings({ ...examSettings, totalMarks: e.target.value })}
+                  className="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-100 placeholder-gray-500"
+                  placeholder="e.g., 100"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Weightage (%)</label>
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.01"
+                  value={examSettings.weightage}
+                  onChange={(e) => setExamSettings({ ...examSettings, weightage: e.target.value })}
+                  className="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-100 placeholder-gray-500"
+                  placeholder="e.g., 30"
+                />
+              </div>
+
+              {course?.courseType === 'Theory' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Number of COs</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="10"
+                    value={examSettings.numberOfCOs}
+                    onChange={(e) => setExamSettings({ ...examSettings, numberOfCOs: e.target.value })}
+                    className="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-100 placeholder-gray-500"
+                    placeholder="e.g., 3"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">For CO-wise marks breakdown</p>
+                </div>
+              )}
+
+              <div className="flex gap-3 pt-4">
+                <button
+                  onClick={() => {
+                    setShowExamSettings(null);
+                    setError('');
+                  }}
+                  className="flex-1 px-4 py-3 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 transition-all font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleUpdateExamSettings}
+                  className="flex-1 px-4 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all shadow-lg font-medium"
+                >
+                  Save Changes
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

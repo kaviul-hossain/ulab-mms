@@ -70,13 +70,31 @@ export async function PUT(
     }
 
     const { id } = await params;
-    const { name, code, semester, year } = await request.json();
+    const { name, code, semester, year, courseType, showFinalGrade } = await request.json();
 
     await dbConnect();
 
+    const updateData: any = { name, code, semester, year };
+    
+    // Only update courseType if provided (prevent accidental changes)
+    if (courseType !== undefined) {
+      if (!['Theory', 'Lab'].includes(courseType)) {
+        return NextResponse.json(
+          { error: 'Invalid course type. Must be Theory or Lab' },
+          { status: 400 }
+        );
+      }
+      updateData.courseType = courseType;
+    }
+    
+    // Only update showFinalGrade if provided
+    if (showFinalGrade !== undefined) {
+      updateData.showFinalGrade = showFinalGrade;
+    }
+
     const course = await Course.findOneAndUpdate(
       { _id: id, userId: session.user.id },
-      { name, code, semester, year },
+      updateData,
       { new: true, runValidators: true }
     );
 

@@ -12,6 +12,7 @@ interface Course {
   code: string;
   semester: string;
   year: number;
+  courseType: 'Theory' | 'Lab';
   createdAt: string;
 }
 
@@ -26,6 +27,7 @@ export default function Dashboard() {
     code: '',
     semester: 'Spring',
     year: new Date().getFullYear(),
+    courseType: 'Theory' as 'Theory' | 'Lab',
   });
   const [error, setError] = useState('');
 
@@ -72,6 +74,7 @@ export default function Dashboard() {
         code: '',
         semester: 'Spring',
         year: new Date().getFullYear(),
+        courseType: 'Theory',
       });
     } catch (err) {
       setError('An error occurred. Please try again.');
@@ -184,8 +187,12 @@ export default function Dashboard() {
                 className="bg-gradient-to-br from-gray-800 to-gray-800/80 rounded-xl shadow-xl border border-gray-700/50 p-6 hover:shadow-2xl hover:border-gray-600/50 transition-all group"
               >
                 <div className="flex items-start justify-between mb-4">
-                  <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-blue-600 to-cyan-600 flex items-center justify-center">
-                    <span className="text-2xl">📖</span>
+                  <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
+                    course.courseType === 'Theory' 
+                      ? 'bg-gradient-to-br from-blue-600 to-cyan-600' 
+                      : 'bg-gradient-to-br from-purple-600 to-pink-600'
+                  }`}>
+                    <span className="text-2xl">{course.courseType === 'Theory' ? '📖' : '🔬'}</span>
                   </div>
                   <button
                     onClick={() => handleDeleteCourse(course._id)}
@@ -199,8 +206,13 @@ export default function Dashboard() {
                 <h3 className="text-xl font-bold text-gray-100 mb-2">
                   {course.name}
                 </h3>
-                <p className="text-blue-400 font-medium mb-4">
+                <p className="text-blue-400 font-medium mb-1">
                   {course.code}
+                </p>
+                <p className={`text-xs font-medium mb-4 ${
+                  course.courseType === 'Theory' ? 'text-cyan-400' : 'text-pink-400'
+                }`}>
+                  {course.courseType} Course
                 </p>
                 <div className="flex items-center gap-2 text-sm text-gray-400 mb-4">
                   <span className="px-2 py-1 bg-gray-700/50 rounded">
@@ -302,6 +314,27 @@ export default function Dashboard() {
                   }
                   className="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-100"
                 />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Course Type
+                </label>
+                <select
+                  value={formData.courseType}
+                  onChange={(e) =>
+                    setFormData({ ...formData, courseType: e.target.value as 'Theory' | 'Lab' })
+                  }
+                  className="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-100"
+                >
+                  <option value="Theory">Theory Course</option>
+                  <option value="Lab">Lab Course</option>
+                </select>
+                <p className="mt-2 text-xs text-gray-500">
+                  {formData.courseType === 'Theory' 
+                    ? '📖 Theory courses include Midterm and Final exams with CO breakdown'
+                    : '🔬 Lab courses include Lab Final and OEL/CE Project'}
+                </p>
               </div>
 
               <div className="flex gap-3 pt-4">

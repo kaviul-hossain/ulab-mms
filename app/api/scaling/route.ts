@@ -60,9 +60,9 @@ export async function POST(request: NextRequest) {
 
     const examData = {
       id: (exam._id as any).toString(),
-      name: exam.name,
+      name: exam.displayName,
       totalMarks: exam.totalMarks,
-      scalingValue: exam.scalingValue,
+      scalingValue: exam.totalMarks, // Use totalMarks as scaling value
       scalingMethod: method,
     };
 

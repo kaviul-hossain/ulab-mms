@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import dbConnect from '@/lib/mongodb';
 import Course from '@/models/Course';
+import Exam from '@/models/Exam';
 
 // GET all courses for the authenticated user
 export async function GET() {
@@ -38,10 +39,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { name, code, semester, year } = await request.json();
+    const { name, code, semester, year, courseType } = await request.json();
 
     // Validation
-    if (!name || !code || !semester || !year) {
+    if (!name || !code || !semester || !year || !courseType) {
       return NextResponse.json(
         { error: 'Please provide all required fields' },
         { status: 400 }
@@ -55,6 +56,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (!['Theory', 'Lab'].includes(courseType)) {
+      return NextResponse.json(
+        { error: 'Invalid course type. Must be Theory or Lab' },
+        { status: 400 }
+      );
+    }
+
     await dbConnect();
 
     const course = await Course.create({
@@ -62,8 +70,69 @@ export async function POST(request: NextRequest) {
       code,
       semester,
       year,
+      courseType,
       userId: session.user.id,
     });
+
+    // Auto-initialize required exams based on course type
+    let examsToCreate: any[] = [];
+
+    if (courseType === 'Theory') {
+      // Theory courses: Midterm and Final with CO breakdown
+      examsToCreate = [
+        {
+          courseId: course._id,
+          displayName: 'Midterm',
+          examType: 'midterm',
+          totalMarks: 30,
+          weightage: 30,
+          scalingEnabled: false,
+          isRequired: true,
+          numberOfCOs: 3, // Default 3 COs, can be edited later
+          userId: session.user.id,
+        },
+        {
+          courseId: course._id,
+          displayName: 'Final',
+          examType: 'final',
+          totalMarks: 50,
+          weightage: 50,
+          scalingEnabled: false,
+          isRequired: true,
+          numberOfCOs: 4, // Default 4 COs, can be edited later
+          userId: session.user.id,
+        },
+      ];
+    } else if (courseType === 'Lab') {
+      // Lab courses: Lab Final and OEL/CE Project
+      examsToCreate = [
+        {
+          courseId: course._id,
+          displayName: 'Lab Final',
+          examType: 'labFinal',
+          totalMarks: 50,
+          weightage: 50,
+          scalingEnabled: false,
+          isRequired: true,
+          userId: session.user.id,
+        },
+        {
+          courseId: course._id,
+          displayName: 'OEL/CE Project',
+          examType: 'oel',
+          totalMarks: 50,
+          weightage: 50,
+          scalingEnabled: false,
+          isRequired: true,
+          userId: session.user.id,
+        },
+      ];
+    }
+
+    // Create the required exams
+    if (examsToCreate.length > 0) {
+      await Exam.insertMany(examsToCreate);
+    }
 
     return NextResponse.json({ course }, { status: 201 });
   } catch (error: any) {

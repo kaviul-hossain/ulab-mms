@@ -5,6 +5,8 @@ export interface ICourse extends Document {
   code: string;
   semester: string;
   year: number;
+  courseType: 'Theory' | 'Lab';
+  showFinalGrade: boolean;
   userId: mongoose.Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
@@ -32,6 +34,15 @@ const CourseSchema: Schema = new Schema(
       required: [true, 'Please provide a year'],
       min: 2000,
       max: 2100,
+    },
+    courseType: {
+      type: String,
+      required: [true, 'Please provide a course type'],
+      enum: ['Theory', 'Lab'],
+    },
+    showFinalGrade: {
+      type: Boolean,
+      default: false,
     },
     userId: {
       type: Schema.Types.ObjectId,
