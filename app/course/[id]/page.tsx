@@ -6,6 +6,7 @@ import { useRouter, useParams } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
 import { parseCSV } from '@/app/utils/csv';
+import AddMarkModal from '@/app/components/AddMarkModal';
 
 interface Student {
   _id: string;
@@ -62,6 +63,8 @@ export default function CoursePage() {
   const [showExamModal, setShowExamModal] = useState(false);
   const [showMarkModal, setShowMarkModal] = useState(false);
   const [showExamSettings, setShowExamSettings] = useState<string | null>(null);
+  const [initialExamId, setInitialExamId] = useState<string | undefined>(undefined);
+  const [initialStudentId, setInitialStudentId] = useState<string | undefined>(undefined);
   
   const [csvInput, setCsvInput] = useState('');
   const [examFormData, setExamFormData] = useState({
@@ -69,12 +72,6 @@ export default function CoursePage() {
     totalMarks: '',
     weightage: '',
     numberOfCOs: '',
-  });
-  const [markFormData, setMarkFormData] = useState({
-    studentId: '',
-    examId: '',
-    rawMark: '',
-    coMarks: [] as string[],
   });
   const [examSettings, setExamSettings] = useState({
     displayName: '',
@@ -178,48 +175,6 @@ export default function CoursePage() {
       }
     } catch (err) {
       setError('Error creating exam');
-    }
-  };
-
-  const handleAddMark = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-
-    try {
-      const response = await fetch('/api/marks', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          courseId,
-          studentId: markFormData.studentId,
-          examId: markFormData.examId,
-          rawMark: parseFloat(markFormData.rawMark),
-        }),
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        // Update or add mark
-        const existingIndex = marks.findIndex(
-          m => m.studentId === data.mark.studentId && m.examId === data.mark.examId
-        );
-        
-        if (existingIndex >= 0) {
-          const newMarks = [...marks];
-          newMarks[existingIndex] = data.mark;
-          setMarks(newMarks);
-        } else {
-          setMarks([...marks, data.mark]);
-        }
-        
-        setShowMarkModal(false);
-        setMarkFormData({ studentId: '', examId: '', rawMark: '', coMarks: [] });
-      } else {
-        setError(data.error);
-      }
-    } catch (err) {
-      setError('Error adding mark');
     }
   };
 
@@ -429,7 +384,11 @@ export default function CoursePage() {
               ➕ Add Exam
             </button>
             <button
-              onClick={() => setShowMarkModal(true)}
+              onClick={() => {
+                setInitialExamId(undefined);
+                setInitialStudentId(undefined);
+                setShowMarkModal(true);
+              }}
               disabled={students.length === 0 || exams.length === 0}
               className="px-5 py-2.5 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-lg hover:from-purple-700 hover:to-purple-800 transition-all shadow-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed"
             >
@@ -572,6 +531,7 @@ export default function CoursePage() {
                         <div className="text-[10px] font-normal mt-0.5 text-gray-500">Raw / Scaled / Rounded</div>
                       </th>
                     ))}
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-300">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-700/50">
@@ -583,32 +543,59 @@ export default function CoursePage() {
                         const mark = getMark(student._id, exam._id);
                         return (
                           <td key={exam._id} className="px-4 py-3 text-sm text-gray-300">
-                            {mark ? (
-                              <div className="flex flex-col gap-1">
-                                <span className="px-2 py-1 rounded font-medium text-xs bg-blue-900/30 text-blue-300">
-                                  Raw: {mark.rawMark}
-                                </span>
-                                {mark.scaledMark !== undefined && mark.scaledMark !== null ? (
-                                  <span className="px-2 py-1 rounded font-medium text-xs bg-emerald-900/30 text-emerald-300">
-                                    Scaled: {mark.scaledMark}
-                                  </span>
+                            <div className="flex items-center gap-2">
+                              <div className="flex-1">
+                                {mark ? (
+                                  <div className="flex flex-col gap-1">
+                                    <span className="px-2 py-1 rounded font-medium text-xs bg-blue-900/30 text-blue-300">
+                                      Raw: {mark.rawMark}
+                                    </span>
+                                    {mark.scaledMark !== undefined && mark.scaledMark !== null ? (
+                                      <span className="px-2 py-1 rounded font-medium text-xs bg-emerald-900/30 text-emerald-300">
+                                        Scaled: {mark.scaledMark}
+                                      </span>
+                                    ) : (
+                                      <span className="text-xs italic text-gray-600">Not scaled</span>
+                                    )}
+                                    {mark.roundedMark !== undefined && mark.roundedMark !== null ? (
+                                      <span className="px-2 py-1 rounded font-medium text-xs bg-purple-900/30 text-purple-300">
+                                        Rounded: {mark.roundedMark}
+                                      </span>
+                                    ) : mark.scaledMark !== undefined && mark.scaledMark !== null ? (
+                                      <span className="text-xs italic text-gray-600">Not rounded</span>
+                                    ) : null}
+                                  </div>
                                 ) : (
-                                  <span className="text-xs italic text-gray-600">Not scaled</span>
+                                  <span className="text-gray-600">-</span>
                                 )}
-                                {mark.roundedMark !== undefined && mark.roundedMark !== null ? (
-                                  <span className="px-2 py-1 rounded font-medium text-xs bg-purple-900/30 text-purple-300">
-                                    Rounded: {mark.roundedMark}
-                                  </span>
-                                ) : mark.scaledMark !== undefined && mark.scaledMark !== null ? (
-                                  <span className="text-xs italic text-gray-600">Not rounded</span>
-                                ) : null}
                               </div>
-                            ) : (
-                              <span className="text-gray-600">-</span>
-                            )}
+                              <button
+                                onClick={() => {
+                                  setInitialExamId(exam._id);
+                                  setInitialStudentId(student._id);
+                                  setShowMarkModal(true);
+                                }}
+                                className="px-2 py-1 bg-gray-700 hover:bg-gray-600 text-white text-xs rounded transition-all"
+                                title={mark ? 'Edit mark' : 'Add mark'}
+                              >
+                                {mark ? '✏️' : '➕'}
+                              </button>
+                            </div>
                           </td>
                         );
                       })}
+                      <td className="px-4 py-3 text-sm">
+                        <button
+                          onClick={() => {
+                            setInitialExamId(undefined);
+                            setInitialStudentId(student._id);
+                            setShowMarkModal(true);
+                          }}
+                          className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs rounded-lg transition-all"
+                        >
+                          ✏️ Edit Marks
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -772,89 +759,22 @@ export default function CoursePage() {
         </div>
       )}
 
-      {/* Add Mark Modal */}
-      {showMarkModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
-          <div className="bg-gradient-to-br from-gray-800 to-gray-800/80 rounded-2xl shadow-2xl max-w-md w-full border border-gray-700/50 p-6">
-            <h2 className="text-2xl font-bold text-gray-100 mb-6">Add/Update Mark</h2>
-            
-            {error && (
-              <div className="mb-4 p-3 bg-red-900/30 border border-red-700 rounded-lg text-red-300 text-sm">
-                {error}
-              </div>
-            )}
-
-            <form onSubmit={handleAddMark} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Student</label>
-                <select
-                  required
-                  value={markFormData.studentId}
-                  onChange={(e) => setMarkFormData({ ...markFormData, studentId: e.target.value })}
-                  className="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-100"
-                >
-                  <option value="">-- Select Student --</option>
-                  {students.map(student => (
-                    <option key={student._id} value={student._id}>
-                      {student.studentId} - {student.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Exam</label>
-                <select
-                  required
-                  value={markFormData.examId}
-                  onChange={(e) => setMarkFormData({ ...markFormData, examId: e.target.value })}
-                  className="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-100"
-                >
-                  <option value="">-- Select Exam --</option>
-                  {exams.map(exam => (
-                    <option key={exam._id} value={exam._id}>
-                      {exam.displayName} (Max: {exam.totalMarks})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Raw Mark</label>
-                <input
-                  type="number"
-                  required
-                  min="0"
-                  step="0.01"
-                  value={markFormData.rawMark}
-                  onChange={(e) => setMarkFormData({ ...markFormData, rawMark: e.target.value })}
-                  className="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-100 placeholder-gray-500"
-                  placeholder="Enter mark"
-                />
-              </div>
-
-              <div className="flex gap-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowMarkModal(false);
-                    setError('');
-                  }}
-                  className="flex-1 px-4 py-3 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 transition-all font-medium"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 px-4 py-3 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-lg hover:from-purple-700 hover:to-purple-800 transition-all shadow-lg font-medium"
-                >
-                  Save Mark
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      {/* Add Mark Modal - New Component */}
+      <AddMarkModal
+        isOpen={showMarkModal}
+        onClose={() => {
+          setShowMarkModal(false);
+          setInitialExamId(undefined);
+          setInitialStudentId(undefined);
+        }}
+        students={students}
+        exams={exams}
+        marks={marks}
+        courseId={courseId}
+        onMarkSaved={fetchCourseData}
+        initialExamId={initialExamId}
+        initialStudentId={initialStudentId}
+      />
 
       {/* Exam Settings Modal */}
       {showExamSettings && (

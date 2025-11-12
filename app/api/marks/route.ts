@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { studentId, examId, courseId, rawMark } = await request.json();
+    const { studentId, examId, courseId, rawMark, coMarks } = await request.json();
 
     if (!studentId || !examId || !courseId || rawMark === undefined) {
       return NextResponse.json(
@@ -39,16 +39,60 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Validate raw mark
+    if (rawMark < 0 || rawMark > exam.totalMarks) {
+      return NextResponse.json(
+        { error: `Raw mark must be between 0 and ${exam.totalMarks}` },
+        { status: 400 }
+      );
+    }
+
+    // Validate CO marks if provided
+    if (coMarks && Array.isArray(coMarks)) {
+      // Check if exam requires CO marks
+      if (exam.numberOfCOs && exam.numberOfCOs > 0) {
+        if (coMarks.length !== exam.numberOfCOs) {
+          return NextResponse.json(
+            { error: `Expected ${exam.numberOfCOs} CO marks` },
+            { status: 400 }
+          );
+        }
+
+        // Validate CO marks sum equals raw mark
+        const coMarksSum = coMarks.reduce((sum: number, cm: number) => sum + cm, 0);
+        if (Math.abs(coMarksSum - rawMark) > 0.01) {
+          return NextResponse.json(
+            { error: `CO marks must sum to ${rawMark}. Current sum: ${coMarksSum.toFixed(2)}` },
+            { status: 400 }
+          );
+        }
+
+        // Validate each CO mark is non-negative
+        if (coMarks.some((cm: number) => cm < 0)) {
+          return NextResponse.json(
+            { error: 'CO marks cannot be negative' },
+            { status: 400 }
+          );
+        }
+      }
+    }
+
     // Create or update mark
+    const markData: any = {
+      studentId,
+      examId,
+      courseId,
+      userId: session.user.id,
+      rawMark,
+    };
+
+    if (coMarks && Array.isArray(coMarks) && coMarks.length > 0) {
+      markData.coMarks = coMarks;
+    }
+
     const mark = await Mark.findOneAndUpdate(
       { studentId, examId },
-      {
-        studentId,
-        examId,
-        courseId,
-        userId: session.user.id,
-        rawMark,
-      },
+      markData,
       { upsert: true, new: true, runValidators: true }
     );
 
