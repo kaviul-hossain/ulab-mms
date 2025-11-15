@@ -833,7 +833,11 @@ export default function CoursePage() {
                           min="0"
                           max={exam.totalMarks}
                           step="0.01"
-                          value={scalingTargets[exam._id] !== undefined ? scalingTargets[exam._id] : (exam.scalingTarget || exam.totalMarks)}
+                          value={
+                            scalingTargets[exam._id] !== undefined 
+                              ? scalingTargets[exam._id] 
+                              : (exam.scalingTarget !== undefined && exam.scalingTarget !== null ? exam.scalingTarget : exam.totalMarks)
+                          }
                           onChange={(e) => {
                             const value = e.target.value;
                             setScalingTargets(prev => ({
@@ -846,9 +850,10 @@ export default function CoursePage() {
                             const value = scalingTargets[exam._id];
                             if (value === undefined || value === '' || value === null) {
                               alert('Please enter a scaling target value');
+                              const currentTarget = exam.scalingTarget !== undefined && exam.scalingTarget !== null ? exam.scalingTarget : exam.totalMarks;
                               setScalingTargets(prev => ({
                                 ...prev,
-                                [exam._id]: (exam.scalingTarget || exam.totalMarks).toString()
+                                [exam._id]: currentTarget.toString()
                               }));
                             }
                           }}
@@ -858,10 +863,15 @@ export default function CoursePage() {
                         <button
                           onClick={() => {
                             const value = scalingTargets[exam._id];
-                            const target = value !== undefined ? parseFloat(value) : (exam.scalingTarget || exam.totalMarks);
+                            const currentTarget = exam.scalingTarget !== undefined && exam.scalingTarget !== null ? exam.scalingTarget : exam.totalMarks;
+                            const target = value !== undefined ? parseFloat(value) : currentTarget;
                             handleUpdateScalingTarget(exam._id, target);
                           }}
-                          disabled={!scalingTargets[exam._id] || scalingTargets[exam._id] === (exam.scalingTarget || exam.totalMarks).toString()}
+                          disabled={
+                            !scalingTargets[exam._id] || 
+                            scalingTargets[exam._id] === '' ||
+                            parseFloat(scalingTargets[exam._id]) === (exam.scalingTarget !== undefined && exam.scalingTarget !== null ? exam.scalingTarget : exam.totalMarks)
+                          }
                           className="px-3 py-1.5 bg-green-600 hover:bg-green-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white text-xs rounded-lg transition-all shadow-lg flex items-center gap-1"
                           title="Apply scaling target and recalculate"
                         >
