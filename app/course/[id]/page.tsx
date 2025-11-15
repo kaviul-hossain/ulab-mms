@@ -7,6 +7,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { parseCSV } from '@/app/utils/csv';
 import AddMarkModal from '@/app/components/AddMarkModal';
+import StudentDetailModal from '@/app/components/StudentDetailModal';
 
 interface Student {
   _id: string;
@@ -24,6 +25,8 @@ interface Exam {
   isRequired: boolean;
   numberOfCOs?: number;
   scalingMethod?: string;
+  scalingTarget?: number;
+  examCategory?: 'Quiz' | 'Assignment' | 'Project' | 'Attendance' | 'MainExam' | 'ClassPerformance' | 'Others';
 }
 
 interface Mark {
@@ -44,6 +47,10 @@ interface Course {
   year: number;
   courseType: 'Theory' | 'Lab';
   showFinalGrade: boolean;
+  quizAggregation?: 'average' | 'best';
+  assignmentAggregation?: 'average' | 'best';
+  quizWeightage?: number;
+  assignmentWeightage?: number;
 }
 
 export default function CoursePage() {
@@ -63,8 +70,13 @@ export default function CoursePage() {
   const [showExamModal, setShowExamModal] = useState(false);
   const [showMarkModal, setShowMarkModal] = useState(false);
   const [showExamSettings, setShowExamSettings] = useState<string | null>(null);
+  const [showCourseSettings, setShowCourseSettings] = useState(false);
   const [initialExamId, setInitialExamId] = useState<string | undefined>(undefined);
   const [initialStudentId, setInitialStudentId] = useState<string | undefined>(undefined);
+  const [showStudentDetail, setShowStudentDetail] = useState(false);
+  const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
+  const [showGradeBreakdown, setShowGradeBreakdown] = useState(false);
+  const [selectedStudentForGrade, setSelectedStudentForGrade] = useState<Student | null>(null);
   
   const [csvInput, setCsvInput] = useState('');
   const [examFormData, setExamFormData] = useState({
@@ -72,12 +84,20 @@ export default function CoursePage() {
     totalMarks: '',
     weightage: '',
     numberOfCOs: '',
+    examCategory: '',
   });
   const [examSettings, setExamSettings] = useState({
     displayName: '',
     weightage: '',
     numberOfCOs: '',
     totalMarks: '',
+    examCategory: '',
+  });
+  const [courseSettingsData, setCourseSettingsData] = useState({
+    quizAggregation: 'average' as 'average' | 'best',
+    assignmentAggregation: 'average' as 'average' | 'best',
+    quizWeightage: '',
+    assignmentWeightage: '',
   });
   const [error, setError] = useState('');
 
@@ -150,8 +170,19 @@ export default function CoursePage() {
         courseId,
         displayName: examFormData.displayName,
         totalMarks: parseFloat(examFormData.totalMarks),
-        weightage: parseFloat(examFormData.weightage),
       };
+
+      // Add examCategory if provided
+      if (examFormData.examCategory) {
+        examData.examCategory = examFormData.examCategory;
+      }
+
+      // Only add weightage for non-Quiz and non-Assignment exams
+      if (examFormData.examCategory !== 'Quiz' && examFormData.examCategory !== 'Assignment') {
+        examData.weightage = parseFloat(examFormData.weightage);
+      } else {
+        examData.weightage = 0; // Set to 0 for Quiz/Assignment
+      }
 
       // Add numberOfCOs if provided (for theory courses)
       if (examFormData.numberOfCOs) {
@@ -169,7 +200,7 @@ export default function CoursePage() {
       if (response.ok) {
         setExams([...exams, data.exam]);
         setShowExamModal(false);
-        setExamFormData({ displayName: '', totalMarks: '', weightage: '', numberOfCOs: '' });
+        setExamFormData({ displayName: '', totalMarks: '', weightage: '', numberOfCOs: '', examCategory: '' });
       } else {
         setError(data.error);
       }
@@ -216,6 +247,25 @@ export default function CoursePage() {
     }
   };
 
+  const handleUpdateScalingTarget = async (examId: string, target: number) => {
+    try {
+      const response = await fetch(`/api/exams/${examId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scalingTarget: target }),
+      });
+
+      if (response.ok) {
+        await fetchCourseData();
+      } else {
+        alert('Error updating scaling target');
+      }
+    } catch (err) {
+      console.error('Error updating scaling target:', err);
+      alert('Error updating scaling target');
+    }
+  };
+
   const handleUpdateExamSettings = async () => {
     if (!showExamSettings) return;
     
@@ -225,6 +275,7 @@ export default function CoursePage() {
       if (examSettings.weightage) updateData.weightage = parseFloat(examSettings.weightage);
       if (examSettings.totalMarks) updateData.totalMarks = parseFloat(examSettings.totalMarks);
       if (examSettings.numberOfCOs) updateData.numberOfCOs = parseInt(examSettings.numberOfCOs);
+      if (examSettings.examCategory) updateData.examCategory = examSettings.examCategory;
 
       const response = await fetch(`/api/exams/${showExamSettings}`, {
         method: 'PUT',
@@ -235,7 +286,7 @@ export default function CoursePage() {
       if (response.ok) {
         await fetchCourseData();
         setShowExamSettings(null);
-        setExamSettings({ displayName: '', weightage: '', numberOfCOs: '', totalMarks: '' });
+        setExamSettings({ displayName: '', weightage: '', numberOfCOs: '', totalMarks: '', examCategory: '' });
         setError('');
       } else {
         const data = await response.json();
@@ -292,8 +343,246 @@ export default function CoursePage() {
     }
   };
 
+  const handleSaveCourseSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+
+    try {
+      const updateData: any = {
+        quizAggregation: courseSettingsData.quizAggregation,
+        assignmentAggregation: courseSettingsData.assignmentAggregation,
+      };
+
+      if (courseSettingsData.quizWeightage) {
+        updateData.quizWeightage = parseFloat(courseSettingsData.quizWeightage);
+      }
+      if (courseSettingsData.assignmentWeightage) {
+        updateData.assignmentWeightage = parseFloat(courseSettingsData.assignmentWeightage);
+      }
+
+      const response = await fetch(`/api/courses/${courseId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updateData),
+      });
+
+      if (response.ok) {
+        await fetchCourseData();
+        setShowCourseSettings(false);
+        alert('Course settings updated successfully!');
+      } else {
+        const data = await response.json();
+        setError(data.error);
+      }
+    } catch (err) {
+      setError('Error updating course settings');
+    }
+  };
+
   const getMark = (studentId: string, examId: string) => {
     return marks.find(m => m.studentId === studentId && m.examId === examId);
+  };
+
+  // Calculate aggregated mark for a student based on exam category
+  const getAggregatedMark = (studentId: string, category: 'Quiz' | 'Assignment'): Mark | { rawMark: number; scaledMark: number; roundedMark: number; isAggregated: boolean; examId?: string } | null => {
+    // Get all exams of this category
+    const categoryExams = exams.filter(exam => exam.examCategory === category);
+    
+    if (categoryExams.length === 0) return null;
+
+    // Get all marks for this student in this category
+    const categoryMarks = categoryExams
+      .map(exam => getMark(studentId, exam._id))
+      .filter(mark => mark !== undefined);
+
+    if (categoryMarks.length === 0) return null;
+
+    // Calculate based on aggregation method
+    const aggregationMethod = category === 'Quiz' 
+      ? course?.quizAggregation || 'average'
+      : course?.assignmentAggregation || 'average';
+
+    if (aggregationMethod === 'best') {
+      // Find the best mark (highest actual mark, using scaled if available)
+      let bestMark = categoryMarks[0];
+      let bestValue = 0;
+
+      categoryMarks.forEach(mark => {
+        const exam = categoryExams.find(e => e._id === mark.examId);
+        if (exam) {
+          // Use scaled mark if available and exam has scaling enabled, otherwise use raw mark
+          const markToUse = (exam.scalingEnabled && mark.scaledMark !== undefined && mark.scaledMark !== null) 
+            ? mark.scaledMark 
+            : mark.rawMark;
+          
+          if (markToUse > bestValue) {
+            bestValue = markToUse;
+            bestMark = mark;
+          }
+        }
+      });
+
+      return bestMark;
+    } else {
+      // Calculate average of actual marks (not percentages)
+      let totalMarks = 0;
+      
+      categoryMarks.forEach(mark => {
+        const exam = categoryExams.find(e => e._id === mark.examId);
+        if (exam) {
+          // Use scaled mark if available and exam has scaling enabled, otherwise use raw mark
+          const markToUse = (exam.scalingEnabled && mark.scaledMark !== undefined && mark.scaledMark !== null) 
+            ? mark.scaledMark 
+            : mark.rawMark;
+          totalMarks += markToUse;
+        }
+      });
+
+      const avgMark = totalMarks / categoryMarks.length;
+      
+      // Return a synthetic mark object for display
+      return {
+        rawMark: avgMark,
+        scaledMark: avgMark, // For aggregated marks, scaled = raw (already calculated from scaled marks if available)
+        roundedMark: Math.round(avgMark),
+        isAggregated: true,
+      };
+    }
+  };
+
+  // Check if we should show aggregated columns
+  const hasQuizzes = exams.some(exam => exam.examCategory === 'Quiz');
+  const hasAssignments = exams.some(exam => exam.examCategory === 'Assignment');
+
+  // Calculate final grade for a student
+  const calculateFinalGrade = (studentId: string): { total: number; breakdown: Array<{ name: string; mark: number; totalMarks: number; weightage: number; contribution: number; isAggregated?: boolean }> } => {
+    const breakdown: Array<{ name: string; mark: number; totalMarks: number; weightage: number; contribution: number; isAggregated?: boolean }> = [];
+    let totalContribution = 0;
+
+    // Process individual exams (non-Quiz, non-Assignment)
+    exams.forEach(exam => {
+      if (exam.examCategory === 'Quiz' || exam.examCategory === 'Assignment') {
+        return; // Skip, will be handled by aggregated columns
+      }
+
+      const mark = getMark(studentId, exam._id);
+      if (mark) {
+        // Use scaled mark if available and scaling is enabled, otherwise raw mark
+        const markToUse = (exam.scalingEnabled && mark.scaledMark !== undefined && mark.scaledMark !== null) 
+          ? mark.scaledMark 
+          : mark.rawMark;
+        
+        // Calculate percentage
+        const percentage = (markToUse / exam.totalMarks) * 100;
+        
+        // Calculate contribution (percentage * weightage / 100)
+        const contribution = (percentage * exam.weightage) / 100;
+        
+        breakdown.push({
+          name: exam.displayName,
+          mark: markToUse,
+          totalMarks: exam.totalMarks,
+          weightage: exam.weightage,
+          contribution: contribution,
+        });
+        
+        totalContribution += contribution;
+      }
+    });
+
+    // Add Quiz aggregated column if exists
+    if (hasQuizzes && course?.quizWeightage) {
+      const aggMark = getAggregatedMark(studentId, 'Quiz');
+      if (aggMark) {
+        let markToUse = 0;
+        let totalMarks = 100; // Aggregated marks are already percentages or actual marks
+        
+        if ('isAggregated' in aggMark && aggMark.isAggregated) {
+          // Average mode: rawMark is the average value
+          markToUse = aggMark.rawMark;
+          // For aggregated average, we need to find the totalMarks from one of the quiz exams
+          const quizExam = exams.find(e => e.examCategory === 'Quiz');
+          if (quizExam) {
+            totalMarks = quizExam.totalMarks;
+          }
+        } else {
+          // Best mode: get the actual mark
+          const exam = exams.find(e => e._id === aggMark.examId);
+          if (exam) {
+            markToUse = (exam.scalingEnabled && aggMark.scaledMark !== undefined && aggMark.scaledMark !== null) 
+              ? aggMark.scaledMark 
+              : aggMark.rawMark;
+            totalMarks = exam.totalMarks;
+          }
+        }
+        
+        // Calculate percentage
+        const percentage = (markToUse / totalMarks) * 100;
+        
+        // Calculate contribution
+        const contribution = (percentage * course.quizWeightage) / 100;
+        
+        breakdown.push({
+          name: 'Quiz (Aggregated)',
+          mark: markToUse,
+          totalMarks: totalMarks,
+          weightage: course.quizWeightage,
+          contribution: contribution,
+          isAggregated: true,
+        });
+        
+        totalContribution += contribution;
+      }
+    }
+
+    // Add Assignment aggregated column if exists
+    if (hasAssignments && course?.assignmentWeightage) {
+      const aggMark = getAggregatedMark(studentId, 'Assignment');
+      if (aggMark) {
+        let markToUse = 0;
+        let totalMarks = 100;
+        
+        if ('isAggregated' in aggMark && aggMark.isAggregated) {
+          // Average mode
+          markToUse = aggMark.rawMark;
+          const assignmentExam = exams.find(e => e.examCategory === 'Assignment');
+          if (assignmentExam) {
+            totalMarks = assignmentExam.totalMarks;
+          }
+        } else {
+          // Best mode
+          const exam = exams.find(e => e._id === aggMark.examId);
+          if (exam) {
+            markToUse = (exam.scalingEnabled && aggMark.scaledMark !== undefined && aggMark.scaledMark !== null) 
+              ? aggMark.scaledMark 
+              : aggMark.rawMark;
+            totalMarks = exam.totalMarks;
+          }
+        }
+        
+        // Calculate percentage
+        const percentage = (markToUse / totalMarks) * 100;
+        
+        // Calculate contribution
+        const contribution = (percentage * course.assignmentWeightage) / 100;
+        
+        breakdown.push({
+          name: 'Assignment (Aggregated)',
+          mark: markToUse,
+          totalMarks: totalMarks,
+          weightage: course.assignmentWeightage,
+          contribution: contribution,
+          isAggregated: true,
+        });
+        
+        totalContribution += contribution;
+      }
+    }
+
+    return {
+      total: totalContribution,
+      breakdown: breakdown,
+    };
   };
 
   if (loading) {
@@ -347,6 +636,12 @@ export default function CoursePage() {
 
             <div className="flex items-center gap-3">
               <Link
+                href="/settings"
+                className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-all font-medium text-sm"
+              >
+                ⚙️ Settings
+              </Link>
+              <Link
                 href="/dashboard"
                 className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-all font-medium text-sm"
               >
@@ -393,6 +688,21 @@ export default function CoursePage() {
               className="px-5 py-2.5 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-lg hover:from-purple-700 hover:to-purple-800 transition-all shadow-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed"
             >
               ✏️ Add Mark
+            </button>
+            <button
+              onClick={() => {
+                // Initialize form with current course settings
+                setCourseSettingsData({
+                  quizAggregation: course?.quizAggregation || 'average',
+                  assignmentAggregation: course?.assignmentAggregation || 'average',
+                  quizWeightage: course?.quizWeightage?.toString() || '',
+                  assignmentWeightage: course?.assignmentWeightage?.toString() || '',
+                });
+                setShowCourseSettings(true);
+              }}
+              className="px-5 py-2.5 bg-gradient-to-r from-amber-600 to-amber-700 text-white rounded-lg hover:from-amber-700 hover:to-amber-800 transition-all shadow-lg font-medium"
+            >
+              ⚙️ Course Settings
             </button>
           </div>
         </div>
@@ -441,6 +751,7 @@ export default function CoursePage() {
                             weightage: exam.weightage.toString(),
                             totalMarks: exam.totalMarks.toString(),
                             numberOfCOs: exam.numberOfCOs?.toString() || '',
+                            examCategory: exam.examCategory || '',
                           });
                         }}
                         className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-white text-xs rounded-lg transition-all"
@@ -459,8 +770,8 @@ export default function CoursePage() {
                   </div>
 
                   {/* Scaling Toggle */}
-                  <div className="mb-3 flex items-center gap-2 text-sm">
-                    <label className="flex items-center gap-2 cursor-pointer">
+                  <div className="mb-3 space-y-3">
+                    <label className="flex items-center gap-2 cursor-pointer text-sm">
                       <input
                         type="checkbox"
                         checked={exam.scalingEnabled}
@@ -469,6 +780,26 @@ export default function CoursePage() {
                       />
                       <span className="text-gray-300">Enable Scaling</span>
                     </label>
+                    
+                    {/* Scaling Target Input */}
+                    {exam.scalingEnabled && (
+                      <div className="flex items-center gap-3 ml-6">
+                        <label className="text-sm text-gray-400">Scaled to:</label>
+                        <input
+                          type="number"
+                          min="0"
+                          max={exam.totalMarks}
+                          step="0.01"
+                          value={exam.scalingTarget || exam.totalMarks}
+                          onChange={(e) => handleUpdateScalingTarget(exam._id, parseFloat(e.target.value))}
+                          className="w-24 px-3 py-1.5 bg-gray-900 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-100 text-sm"
+                          placeholder={exam.totalMarks.toString()}
+                        />
+                        <span className="text-xs text-gray-500">
+                          (Max: {exam.totalMarks})
+                        </span>
+                      </div>
+                    )}
                   </div>
                   
                   {/* Scaling Methods - Only show if scaling is enabled */}
@@ -531,6 +862,34 @@ export default function CoursePage() {
                         <div className="text-[10px] font-normal mt-0.5 text-gray-500">Raw / Scaled / Rounded</div>
                       </th>
                     ))}
+                    {hasQuizzes && (
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider bg-amber-900/20 border-l-2 border-amber-500/50">
+                        <div className="flex items-center gap-1">
+                          <span>📝 Quiz (Agg)</span>
+                        </div>
+                        <div className="text-[10px] font-normal mt-0.5 text-amber-400">
+                          {course?.quizAggregation === 'best' ? 'Best' : 'Average'} • {course?.quizWeightage || 0}%
+                        </div>
+                      </th>
+                    )}
+                    {hasAssignments && (
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider bg-blue-900/20 border-l-2 border-blue-500/50">
+                        <div className="flex items-center gap-1">
+                          <span>📋 Assignment (Agg)</span>
+                        </div>
+                        <div className="text-[10px] font-normal mt-0.5 text-blue-400">
+                          {course?.assignmentAggregation === 'best' ? 'Best' : 'Average'} • {course?.assignmentWeightage || 0}%
+                        </div>
+                      </th>
+                    )}
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider bg-gradient-to-r from-green-900/20 to-emerald-900/20 border-l-2 border-green-500/50">
+                      <div className="flex items-center gap-1">
+                        <span>🎯 Final Grade (Est.)</span>
+                      </div>
+                      <div className="text-[10px] font-normal mt-0.5 text-green-400">
+                        Weighted Total
+                      </div>
+                    </th>
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-300">Actions</th>
                   </tr>
                 </thead>
@@ -538,7 +897,17 @@ export default function CoursePage() {
                   {students.map((student, idx) => (
                     <tr key={student._id} className={`transition-colors hover:bg-gray-700/30 ${idx % 2 === 0 ? 'bg-gray-800/20' : 'bg-gray-900/20'}`}>
                       <td className="px-4 py-3 text-sm font-medium text-blue-300">{student.studentId}</td>
-                      <td className="px-4 py-3 text-sm text-gray-200">{student.name}</td>
+                      <td className="px-4 py-3 text-sm text-gray-200">
+                        <button
+                          onClick={() => {
+                            setSelectedStudent(student);
+                            setShowStudentDetail(true);
+                          }}
+                          className="hover:text-blue-400 hover:underline transition-colors cursor-pointer text-left"
+                        >
+                          {student.name}
+                        </button>
+                      </td>
                       {exams.map(exam => {
                         const mark = getMark(student._id, exam._id);
                         return (
@@ -584,6 +953,129 @@ export default function CoursePage() {
                           </td>
                         );
                       })}
+                      {hasQuizzes && (
+                        <td className="px-4 py-3 text-sm bg-amber-900/10 border-l-2 border-amber-500/30">
+                          {(() => {
+                            const aggMark = getAggregatedMark(student._id, 'Quiz');
+                            if (!aggMark) return <span className="text-gray-600">-</span>;
+                            
+                            if ('isAggregated' in aggMark && aggMark.isAggregated) {
+                              // Average mode: show calculated average and rounded value
+                              return (
+                                <div className="flex flex-col gap-1">
+                                  <span className="px-2 py-1 rounded font-medium text-xs bg-amber-900/40 text-amber-200">
+                                    Avg: {aggMark.rawMark.toFixed(2)}
+                                  </span>
+                                  <span className="px-2 py-1 rounded font-medium text-xs bg-amber-800/40 text-amber-300">
+                                    Rounded: {aggMark.roundedMark}
+                                  </span>
+                                </div>
+                              );
+                            } else {
+                              // Best mode: show the best mark
+                              const exam = exams.find(e => e._id === aggMark.examId);
+                              if (!exam) return <span className="text-gray-600">-</span>;
+                              
+                              // Use scaled mark if available and scaling is enabled, otherwise raw mark
+                              const markToUse = (exam.scalingEnabled && aggMark.scaledMark !== undefined && aggMark.scaledMark !== null) 
+                                ? aggMark.scaledMark 
+                                : aggMark.rawMark;
+                              const markLabel = (exam.scalingEnabled && aggMark.scaledMark !== undefined && aggMark.scaledMark !== null) 
+                                ? 'Scaled' 
+                                : 'Raw';
+                              
+                              return (
+                                <div className="flex flex-col gap-1">
+                                  <span className="px-2 py-1 rounded font-medium text-xs bg-amber-900/40 text-amber-200">
+                                    Best: {markToUse}
+                                  </span>
+                                  <span className="text-xs italic text-gray-500">
+                                    ({markLabel}: {markToUse}/{exam.totalMarks})
+                                  </span>
+                                </div>
+                              );
+                            }
+                          })()}
+                        </td>
+                      )}
+                      {hasAssignments && (
+                        <td className="px-4 py-3 text-sm bg-blue-900/10 border-l-2 border-blue-500/30">
+                          {(() => {
+                            const aggMark = getAggregatedMark(student._id, 'Assignment');
+                            if (!aggMark) return <span className="text-gray-600">-</span>;
+                            
+                            if ('isAggregated' in aggMark && aggMark.isAggregated) {
+                              // Average mode: show calculated average and rounded value
+                              return (
+                                <div className="flex flex-col gap-1">
+                                  <span className="px-2 py-1 rounded font-medium text-xs bg-blue-900/40 text-blue-200">
+                                    Avg: {aggMark.rawMark.toFixed(2)}
+                                  </span>
+                                  <span className="px-2 py-1 rounded font-medium text-xs bg-blue-800/40 text-blue-300">
+                                    Rounded: {aggMark.roundedMark}
+                                  </span>
+                                </div>
+                              );
+                            } else {
+                              // Best mode: show the best mark
+                              const exam = exams.find(e => e._id === aggMark.examId);
+                              if (!exam) return <span className="text-gray-600">-</span>;
+                              
+                              // Use scaled mark if available and scaling is enabled, otherwise raw mark
+                              const markToUse = (exam.scalingEnabled && aggMark.scaledMark !== undefined && aggMark.scaledMark !== null) 
+                                ? aggMark.scaledMark 
+                                : aggMark.rawMark;
+                              const markLabel = (exam.scalingEnabled && aggMark.scaledMark !== undefined && aggMark.scaledMark !== null) 
+                                ? 'Scaled' 
+                                : 'Raw';
+                              
+                              return (
+                                <div className="flex flex-col gap-1">
+                                  <span className="px-2 py-1 rounded font-medium text-xs bg-blue-900/40 text-blue-200">
+                                    Best: {markToUse}
+                                  </span>
+                                  <span className="text-xs italic text-gray-500">
+                                    ({markLabel}: {markToUse}/{exam.totalMarks})
+                                  </span>
+                                </div>
+                              );
+                            }
+                          })()}
+                        </td>
+                      )}
+                      <td className="px-4 py-3 text-sm bg-gradient-to-r from-green-900/10 to-emerald-900/10 border-l-2 border-green-500/30">
+                        {(() => {
+                          const gradeData = calculateFinalGrade(student._id);
+                          if (gradeData.breakdown.length === 0) {
+                            return <span className="text-gray-600">-</span>;
+                          }
+                          
+                          return (
+                            <div className="flex items-center gap-2">
+                              <div className="flex-1">
+                                <div className="flex flex-col gap-1">
+                                  <span className="px-2 py-1 rounded font-medium text-xs bg-green-900/40 text-green-200">
+                                    Total: {gradeData.total.toFixed(2)}%
+                                  </span>
+                                  <span className="text-[10px] italic text-gray-500">
+                                    Out of 100%
+                                  </span>
+                                </div>
+                              </div>
+                              <button
+                                onClick={() => {
+                                  setSelectedStudentForGrade(student);
+                                  setShowGradeBreakdown(true);
+                                }}
+                                className="px-2 py-1 bg-blue-900/40 hover:bg-blue-900/60 text-blue-300 text-xs rounded transition-all"
+                                title="View breakdown"
+                              >
+                                ℹ️
+                              </button>
+                            </div>
+                          );
+                        })()}
+                      </td>
                       <td className="px-4 py-3 text-sm">
                         <button
                           onClick={() => {
@@ -691,6 +1183,26 @@ export default function CoursePage() {
               </div>
 
               <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Exam Category</label>
+                <select
+                  required
+                  value={examFormData.examCategory}
+                  onChange={(e) => setExamFormData({ ...examFormData, examCategory: e.target.value })}
+                  className="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-100"
+                >
+                  <option value="">Select category...</option>
+                  <option value="Quiz">Quiz</option>
+                  <option value="Assignment">Assignment</option>
+                  <option value="Project">Project</option>
+                  <option value="Attendance">Attendance</option>
+                  <option value="MainExam">Main Exam</option>
+                  <option value="ClassPerformance">Class Performance</option>
+                  <option value="Others">Others</option>
+                </select>
+                <p className="text-xs text-gray-500 mt-1">Quiz & Assignment types will be aggregated based on course settings</p>
+              </div>
+
+              <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">Total Marks</label>
                 <input
                   type="number"
@@ -705,10 +1217,15 @@ export default function CoursePage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Weightage (%)</label>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Weightage (%)
+                  {(examFormData.examCategory === 'Quiz' || examFormData.examCategory === 'Assignment') && (
+                    <span className="ml-2 text-xs text-amber-400">(Not used for Quiz/Assignment)</span>
+                  )}
+                </label>
                 <input
                   type="number"
-                  required
+                  required={examFormData.examCategory !== 'Quiz' && examFormData.examCategory !== 'Assignment'}
                   min="0"
                   max="100"
                   step="0.01"
@@ -716,8 +1233,13 @@ export default function CoursePage() {
                   onChange={(e) => setExamFormData({ ...examFormData, weightage: e.target.value })}
                   className="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-100 placeholder-gray-500"
                   placeholder="e.g., 20"
+                  disabled={examFormData.examCategory === 'Quiz' || examFormData.examCategory === 'Assignment'}
                 />
-                <p className="text-xs text-gray-500 mt-1">Percentage contribution to final grade</p>
+                <p className="text-xs text-gray-500 mt-1">
+                  {(examFormData.examCategory === 'Quiz' || examFormData.examCategory === 'Assignment') 
+                    ? 'Weightage is set at course level for aggregated Quiz/Assignment columns'
+                    : 'Percentage contribution to final grade'}
+                </p>
               </div>
 
               {course?.courseType === 'Theory' && (
@@ -801,6 +1323,26 @@ export default function CoursePage() {
               </div>
 
               <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Exam Category</label>
+                <select
+                  required
+                  value={examSettings.examCategory}
+                  onChange={(e) => setExamSettings({ ...examSettings, examCategory: e.target.value })}
+                  className="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-100"
+                >
+                  {!examSettings.examCategory && <option value="">Select category...</option>}
+                  <option value="Quiz">Quiz</option>
+                  <option value="Assignment">Assignment</option>
+                  <option value="Project">Project</option>
+                  <option value="Attendance">Attendance</option>
+                  <option value="MainExam">Main Exam</option>
+                  <option value="ClassPerformance">Class Performance</option>
+                  <option value="Others">Others</option>
+                </select>
+                <p className="text-xs text-gray-500 mt-1">Quiz & Assignment types will be aggregated</p>
+              </div>
+
+              <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">Total Marks</label>
                 <input
                   type="number"
@@ -814,17 +1356,33 @@ export default function CoursePage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Weightage (%)</label>
-                <input
-                  type="number"
-                  min="0"
-                  max="100"
-                  step="0.01"
-                  value={examSettings.weightage}
-                  onChange={(e) => setExamSettings({ ...examSettings, weightage: e.target.value })}
-                  className="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-100 placeholder-gray-500"
-                  placeholder="e.g., 30"
-                />
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Weightage (%)
+                  {(examSettings.examCategory === 'Quiz' || examSettings.examCategory === 'Assignment') && (
+                    <span className="ml-2 text-xs text-amber-400">(Set in Course Settings)</span>
+                  )}
+                </label>
+                {(examSettings.examCategory === 'Quiz' || examSettings.examCategory === 'Assignment') ? (
+                  <div className="w-full px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg text-gray-400 cursor-not-allowed">
+                    Not applicable - weightage set at course level
+                  </div>
+                ) : (
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.01"
+                    value={examSettings.weightage}
+                    onChange={(e) => setExamSettings({ ...examSettings, weightage: e.target.value })}
+                    className="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-100 placeholder-gray-500"
+                    placeholder="e.g., 30"
+                  />
+                )}
+                <p className="text-xs text-gray-500 mt-1">
+                  {(examSettings.examCategory === 'Quiz' || examSettings.examCategory === 'Assignment') 
+                    ? '💡 Use Course Settings button to configure Quiz/Assignment aggregation weightage'
+                    : 'Percentage contribution to final grade'}
+                </p>
               </div>
 
               {course?.courseType === 'Theory' && (
@@ -861,6 +1419,267 @@ export default function CoursePage() {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Course Settings Modal */}
+      {showCourseSettings && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
+          <div className="bg-gradient-to-br from-gray-800 to-gray-800/80 rounded-2xl shadow-2xl max-w-lg w-full border border-gray-700/50 p-6">
+            <h2 className="text-2xl font-bold text-gray-100 mb-6">⚙️ Course Settings</h2>
+            
+            {error && (
+              <div className="mb-4 p-3 bg-red-900/30 border border-red-700 rounded-lg text-red-300 text-sm">
+                {error}
+              </div>
+            )}
+
+            <form onSubmit={handleSaveCourseSettings} className="space-y-6">
+              {/* Quiz Settings */}
+              <div className="p-4 bg-gray-900/50 rounded-lg border border-gray-700/50">
+                <h3 className="text-lg font-semibold text-gray-100 mb-4 flex items-center gap-2">
+                  📝 Quiz Aggregation
+                </h3>
+                
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">Aggregation Method</label>
+                    <select
+                      value={courseSettingsData.quizAggregation}
+                      onChange={(e) => setCourseSettingsData({ ...courseSettingsData, quizAggregation: e.target.value as 'average' | 'best' })}
+                      className="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-100"
+                    >
+                      <option value="average">Average of all quizzes</option>
+                      <option value="best">Best quiz score</option>
+                    </select>
+                    <p className="text-xs text-gray-500 mt-1">How to calculate the aggregated Quiz column</p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">Quiz Weightage (%)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="0.01"
+                      value={courseSettingsData.quizWeightage}
+                      onChange={(e) => setCourseSettingsData({ ...courseSettingsData, quizWeightage: e.target.value })}
+                      className="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-100 placeholder-gray-500"
+                      placeholder="e.g., 20"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Weightage for the aggregated Quiz column in final grade</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Assignment Settings */}
+              <div className="p-4 bg-gray-900/50 rounded-lg border border-gray-700/50">
+                <h3 className="text-lg font-semibold text-gray-100 mb-4 flex items-center gap-2">
+                  📋 Assignment Aggregation
+                </h3>
+                
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">Aggregation Method</label>
+                    <select
+                      value={courseSettingsData.assignmentAggregation}
+                      onChange={(e) => setCourseSettingsData({ ...courseSettingsData, assignmentAggregation: e.target.value as 'average' | 'best' })}
+                      className="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-100"
+                    >
+                      <option value="average">Average of all assignments</option>
+                      <option value="best">Best assignment score</option>
+                    </select>
+                    <p className="text-xs text-gray-500 mt-1">How to calculate the aggregated Assignment column</p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">Assignment Weightage (%)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="0.01"
+                      value={courseSettingsData.assignmentWeightage}
+                      onChange={(e) => setCourseSettingsData({ ...courseSettingsData, assignmentWeightage: e.target.value })}
+                      className="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-100 placeholder-gray-500"
+                      placeholder="e.g., 15"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Weightage for the aggregated Assignment column in final grade</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Info Box */}
+              <div className="p-3 bg-blue-900/20 border border-blue-700/50 rounded-lg">
+                <p className="text-sm text-blue-300">
+                  💡 <strong>Note:</strong> Individual Quiz/Assignment exams don't need weightages. 
+                  The aggregated column will use the weightage you set here.
+                </p>
+              </div>
+
+              <div className="flex gap-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowCourseSettings(false);
+                    setError('');
+                  }}
+                  className="flex-1 px-4 py-3 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 transition-all font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 px-4 py-3 bg-gradient-to-r from-emerald-600 to-emerald-700 text-white rounded-lg hover:from-emerald-700 hover:to-emerald-800 transition-all shadow-lg font-medium"
+                >
+                  Save Settings
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Student Detail Modal */}
+      <StudentDetailModal
+        isOpen={showStudentDetail}
+        onClose={() => {
+          setShowStudentDetail(false);
+          setSelectedStudent(null);
+        }}
+        student={selectedStudent}
+        exams={exams}
+        marks={marks}
+      />
+
+      {/* Grade Breakdown Modal */}
+      {showGradeBreakdown && selectedStudentForGrade && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
+          <div className="bg-gradient-to-br from-gray-800 to-gray-800/80 rounded-2xl shadow-2xl max-w-3xl w-full border border-gray-700/50 p-6 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="text-2xl font-bold text-gray-100">Final Grade Breakdown</h2>
+                <p className="text-sm text-gray-400 mt-1">
+                  {selectedStudentForGrade.name} ({selectedStudentForGrade.studentId})
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setShowGradeBreakdown(false);
+                  setSelectedStudentForGrade(null);
+                }}
+                className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-all"
+              >
+                ✕ Close
+              </button>
+            </div>
+
+            {(() => {
+              const gradeData = calculateFinalGrade(selectedStudentForGrade._id);
+              
+              if (gradeData.breakdown.length === 0) {
+                return (
+                  <div className="text-center py-12 text-gray-400">
+                    No marks available for final grade calculation
+                  </div>
+                );
+              }
+
+              return (
+                <div className="space-y-6">
+                  {/* Breakdown Table */}
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-700">
+                      <thead className="bg-gray-900/50">
+                        <tr>
+                          <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-300">
+                            Exam / Assessment
+                          </th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-300">
+                            Mark Obtained
+                          </th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-300">
+                            Percentage
+                          </th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-300">
+                            Weightage
+                          </th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-300">
+                            Contribution
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-700/50">
+                        {gradeData.breakdown.map((item, idx) => {
+                          const percentage = (item.mark / item.totalMarks) * 100;
+                          return (
+                            <tr key={idx} className={`${idx % 2 === 0 ? 'bg-gray-800/20' : 'bg-gray-900/20'} ${item.isAggregated ? 'bg-amber-900/10' : ''}`}>
+                              <td className="px-4 py-3 text-sm text-gray-200">
+                                <div className="flex items-center gap-2">
+                                  {item.isAggregated && <span className="text-xs">📊</span>}
+                                  <span className={item.isAggregated ? 'font-semibold' : ''}>
+                                    {item.name}
+                                  </span>
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 text-sm">
+                                <span className="px-2 py-1 rounded font-medium text-xs bg-blue-900/30 text-blue-300">
+                                  {item.mark.toFixed(2)} / {item.totalMarks}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 text-sm">
+                                <span className="px-2 py-1 rounded font-medium text-xs bg-purple-900/30 text-purple-300">
+                                  {percentage.toFixed(2)}%
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 text-sm">
+                                <span className="px-2 py-1 rounded font-medium text-xs bg-cyan-900/30 text-cyan-300">
+                                  {item.weightage}%
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 text-sm">
+                                <span className="px-2 py-1 rounded font-medium text-xs bg-green-900/30 text-green-300">
+                                  {item.contribution.toFixed(2)}%
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                      <tfoot className="bg-gray-900/70">
+                        <tr>
+                          <td colSpan={4} className="px-4 py-4 text-right text-sm font-semibold text-gray-100">
+                            Final Grade (Estimated):
+                          </td>
+                          <td className="px-4 py-4 text-sm">
+                            <span className="px-3 py-2 rounded-lg font-bold text-lg bg-gradient-to-r from-green-900/50 to-emerald-900/50 text-green-200 border border-green-500/30">
+                              {gradeData.total.toFixed(2)}%
+                            </span>
+                          </td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+
+                  {/* Info Box */}
+                  <div className="p-4 bg-blue-900/20 border border-blue-700/50 rounded-lg">
+                    <p className="text-sm text-blue-300">
+                      <strong>💡 Calculation Formula:</strong> For each exam/assessment, contribution = (Mark/TotalMarks × 100) × Weightage ÷ 100
+                    </p>
+                    <p className="text-xs text-blue-400 mt-2">
+                      • Aggregated columns (Quiz/Assignment) use their configured weightage from Course Settings
+                    </p>
+                    <p className="text-xs text-blue-400">
+                      • When scaling is enabled, scaled marks are used in calculations
+                    </p>
+                    <p className="text-xs text-blue-400">
+                      • Final grade is the sum of all contributions
+                    </p>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         </div>
       )}

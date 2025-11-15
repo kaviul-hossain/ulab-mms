@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import dbConnect from '@/lib/mongodb';
 import Exam from '@/models/Exam';
+import Mark from '@/models/Mark';
 
 // PUT - Update exam settings
 export async function PUT(
@@ -17,7 +18,7 @@ export async function PUT(
     }
 
     const { id } = await params;
-    const { displayName, weightage, scalingEnabled, numberOfCOs, totalMarks } =
+    const { displayName, weightage, scalingEnabled, scalingTarget, numberOfCOs, totalMarks, examCategory } =
       await request.json();
 
     await dbConnect();
@@ -27,6 +28,18 @@ export async function PUT(
     // Update displayName if provided
     if (displayName !== undefined) {
       updateData.displayName = displayName;
+    }
+
+    // Update examCategory if provided
+    if (examCategory !== undefined) {
+      const validCategories = ['Quiz', 'Assignment', 'Project', 'Attendance', 'MainExam', 'ClassPerformance', 'Others'];
+      if (!validCategories.includes(examCategory) && examCategory !== '') {
+        return NextResponse.json(
+          { error: 'Invalid exam category' },
+          { status: 400 }
+        );
+      }
+      updateData.examCategory = examCategory;
     }
 
     // Update weightage if provided (0-100)
@@ -43,6 +56,34 @@ export async function PUT(
     // Update scalingEnabled if provided
     if (scalingEnabled !== undefined) {
       updateData.scalingEnabled = scalingEnabled;
+      
+      // If scaling is being disabled, clear all scaled and rounded marks for this exam
+      if (scalingEnabled === false) {
+        await Mark.updateMany(
+          { examId: id },
+          { 
+            $unset: { 
+              scaledMark: "",
+              roundedMark: "" 
+            } 
+          }
+        );
+        
+        // Also clear the scaling method and target from the exam
+        updateData.scalingMethod = null;
+        updateData.scalingTarget = null;
+      }
+    }
+
+    // Update scalingTarget if provided
+    if (scalingTarget !== undefined) {
+      if (scalingTarget < 0) {
+        return NextResponse.json(
+          { error: 'Scaling target cannot be negative' },
+          { status: 400 }
+        );
+      }
+      updateData.scalingTarget = scalingTarget;
     }
 
     // Update numberOfCOs if provided

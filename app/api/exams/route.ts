@@ -14,18 +14,26 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { courseId, displayName, totalMarks, weightage, numberOfCOs } =
+    const { courseId, displayName, totalMarks, weightage, numberOfCOs, examCategory } =
       await request.json();
 
     // Validation
-    if (!courseId || !displayName || !totalMarks || weightage === undefined) {
+    if (!courseId || !displayName || !totalMarks) {
       return NextResponse.json(
         { error: 'Please provide all required fields' },
         { status: 400 }
       );
     }
 
-    if (weightage < 0 || weightage > 100) {
+    // Weightage is required for non-Quiz and non-Assignment exams
+    if (examCategory !== 'Quiz' && examCategory !== 'Assignment' && weightage === undefined) {
+      return NextResponse.json(
+        { error: 'Weightage is required for non-Quiz/Assignment exams' },
+        { status: 400 }
+      );
+    }
+
+    if (weightage !== undefined && (weightage < 0 || weightage > 100)) {
       return NextResponse.json(
         { error: 'Weightage must be between 0 and 100' },
         { status: 400 }
@@ -56,11 +64,23 @@ export async function POST(request: NextRequest) {
       displayName,
       examType: 'custom',
       totalMarks,
-      weightage,
+      weightage: weightage || 0, // Default to 0 for Quiz/Assignment
       scalingEnabled: false,
       isRequired: false,
       userId: session.user.id,
     };
+
+    // Add examCategory if provided
+    if (examCategory) {
+      const validCategories = ['Quiz', 'Assignment', 'Project', 'Attendance', 'MainExam', 'ClassPerformance', 'Others'];
+      if (!validCategories.includes(examCategory)) {
+        return NextResponse.json(
+          { error: 'Invalid exam category' },
+          { status: 400 }
+        );
+      }
+      examData.examCategory = examCategory;
+    }
 
     // Add numberOfCOs if provided (for theory courses)
     if (numberOfCOs !== undefined && numberOfCOs > 0) {

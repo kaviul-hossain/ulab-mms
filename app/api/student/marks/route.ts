@@ -1,0 +1,113 @@
+import { NextRequest, NextResponse } from 'next/server';
+import dbConnect from '@/lib/mongodb';
+import Student from '@/models/Student';
+import Mark from '@/models/Mark';
+import Exam from '@/models/Exam';
+import Course from '@/models/Course';
+
+// GET student marks by student ID
+export async function GET(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const studentId = searchParams.get('studentId');
+
+    if (!studentId) {
+      return NextResponse.json(
+        { error: 'Student ID is required' },
+        { status: 400 }
+      );
+    }
+
+    await dbConnect();
+
+    // Find all student records with this student ID across all courses
+    const studentRecords = await Student.find({ 
+      studentId: { $regex: new RegExp(`^${studentId}$`, 'i') } 
+    }).populate('courseId');
+
+    if (!studentRecords || studentRecords.length === 0) {
+      return NextResponse.json(
+        { error: 'Student ID not found in any course' },
+        { status: 404 }
+      );
+    }
+
+    // Get all courses for this student
+    const coursesData = await Promise.all(
+      studentRecords.map(async (studentRecord) => {
+        const course = await Course.findById(studentRecord.courseId);
+        
+        if (!course) return null;
+
+        // Get all exams for this course
+        const exams = await Exam.find({ 
+          courseId: course._id 
+        }).sort({ createdAt: 1 });
+
+        // Get all marks for this student in this course
+        const marks = await Mark.find({
+          studentId: studentRecord._id,
+          courseId: course._id,
+        });
+
+        return {
+          student: {
+            _id: studentRecord._id,
+            studentId: studentRecord.studentId,
+            name: studentRecord.name,
+          },
+          course: {
+            _id: course._id,
+            name: course.name,
+            code: course.code,
+            semester: course.semester,
+            year: course.year,
+            courseType: course.courseType,
+            showFinalGrade: course.showFinalGrade,
+          },
+          exams: exams.map(exam => ({
+            _id: exam._id,
+            displayName: exam.displayName,
+            totalMarks: exam.totalMarks,
+            weightage: exam.weightage,
+            scalingEnabled: exam.scalingEnabled,
+            scalingMethod: exam.scalingMethod,
+            examType: exam.examType,
+            numberOfCOs: exam.numberOfCOs,
+          })),
+          marks: marks.map(mark => ({
+            _id: mark._id,
+            examId: mark.examId,
+            rawMark: mark.rawMark,
+            coMarks: mark.coMarks,
+            scaledMark: mark.scaledMark,
+            roundedMark: mark.roundedMark,
+          })),
+        };
+      })
+    );
+
+    // Filter out null values
+    const validCoursesData = coursesData.filter(data => data !== null);
+
+    if (validCoursesData.length === 0) {
+      return NextResponse.json(
+        { error: 'No course data found for this student' },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json({ 
+      studentId,
+      studentName: validCoursesData[0]?.student.name,
+      courses: validCoursesData 
+    }, { status: 200 });
+
+  } catch (error: any) {
+    console.error('Get student marks error:', error);
+    return NextResponse.json(
+      { error: error.message || 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}

@@ -7,6 +7,10 @@ export interface ICourse extends Document {
   year: number;
   courseType: 'Theory' | 'Lab';
   showFinalGrade: boolean;
+  quizAggregation: 'average' | 'best'; // How to aggregate quiz marks
+  quizWeightage: number; // Weightage for aggregated quiz column
+  assignmentAggregation: 'average' | 'best'; // How to aggregate assignment marks
+  assignmentWeightage: number; // Weightage for aggregated assignment column
   userId: mongoose.Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
@@ -43,6 +47,28 @@ const CourseSchema: Schema = new Schema(
     showFinalGrade: {
       type: Boolean,
       default: false,
+    },
+    quizAggregation: {
+      type: String,
+      enum: ['average', 'best'],
+      default: 'average',
+    },
+    quizWeightage: {
+      type: Number,
+      default: 0,
+      min: [0, 'Weightage cannot be negative'],
+      max: [100, 'Weightage cannot exceed 100'],
+    },
+    assignmentAggregation: {
+      type: String,
+      enum: ['average', 'best'],
+      default: 'average',
+    },
+    assignmentWeightage: {
+      type: Number,
+      default: 0,
+      min: [0, 'Weightage cannot be negative'],
+      max: [100, 'Weightage cannot exceed 100'],
     },
     userId: {
       type: Schema.Types.ObjectId,

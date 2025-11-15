@@ -126,6 +126,26 @@ export default function SignIn() {
             </p>
           </div>
         </div>
+
+        {/* Student Check Marks */}
+        <div className="mt-6 text-center">
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-gray-700"></div>
+            </div>
+            <div className="relative flex justify-center text-sm">
+              <span className="px-2 bg-gray-900 text-gray-400">or</span>
+            </div>
+          </div>
+
+          <Link
+            href="/student/check-marks"
+            className="mt-4 w-full inline-flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-emerald-600 to-emerald-700 text-white rounded-lg hover:from-emerald-700 hover:to-emerald-800 transition-all shadow-lg shadow-emerald-900/50 font-medium"
+          >
+            <span className="text-lg">📊</span>
+            Check Marks (Student)
+          </Link>
+        </div>
       </div>
     </div>
   );

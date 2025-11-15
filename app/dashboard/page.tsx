@@ -22,7 +22,16 @@ export default function Dashboard() {
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingCourse, setEditingCourse] = useState<Course | null>(null);
   const [formData, setFormData] = useState({
+    name: '',
+    code: '',
+    semester: 'Spring',
+    year: new Date().getFullYear(),
+    courseType: 'Theory' as 'Theory' | 'Lab',
+  });
+  const [editFormData, setEditFormData] = useState({
     name: '',
     code: '',
     semester: 'Spring',
@@ -99,6 +108,54 @@ export default function Dashboard() {
     }
   };
 
+  const handleEditCourse = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+
+    if (!editingCourse) return;
+
+    try {
+      const response = await fetch(`/api/courses/${editingCourse._id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(editFormData),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.error || 'Failed to update course');
+        return;
+      }
+
+      // Update the course in the list
+      setCourses(courses.map(c => c._id === editingCourse._id ? data.course : c));
+      setShowEditModal(false);
+      setEditingCourse(null);
+      setEditFormData({
+        name: '',
+        code: '',
+        semester: 'Spring',
+        year: new Date().getFullYear(),
+        courseType: 'Theory',
+      });
+    } catch (err) {
+      setError('An error occurred. Please try again.');
+    }
+  };
+
+  const openEditModal = (course: Course) => {
+    setEditingCourse(course);
+    setEditFormData({
+      name: course.name,
+      code: course.code,
+      semester: course.semester,
+      year: course.year,
+      courseType: course.courseType,
+    });
+    setShowEditModal(true);
+  };
+
   if (status === 'loading' || loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-slate-900 to-gray-900 flex items-center justify-center">
@@ -131,12 +188,20 @@ export default function Dashboard() {
               </div>
             </div>
 
-            <button
-              onClick={() => signOut({ callbackUrl: '/auth/signin' })}
-              className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-all font-medium text-sm"
-            >
-              Sign Out
-            </button>
+            <div className="flex items-center gap-3">
+              <Link
+                href="/settings"
+                className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-all font-medium text-sm"
+              >
+                ⚙️ Settings
+              </Link>
+              <button
+                onClick={() => signOut({ callbackUrl: '/auth/signin' })}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-all font-medium text-sm"
+              >
+                Sign Out
+              </button>
+            </div>
           </div>
         </div>
       </nav>
@@ -194,13 +259,22 @@ export default function Dashboard() {
                   }`}>
                     <span className="text-2xl">{course.courseType === 'Theory' ? '📖' : '🔬'}</span>
                   </div>
-                  <button
-                    onClick={() => handleDeleteCourse(course._id)}
-                    className="px-2 py-1 text-red-400 hover:text-red-300 hover:bg-red-900/30 rounded transition-all"
-                    title="Delete course"
-                  >
-                    🗑️
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => openEditModal(course)}
+                      className="px-2 py-1 text-blue-400 hover:text-blue-300 hover:bg-blue-900/30 rounded transition-all"
+                      title="Edit course"
+                    >
+                      ⚙️
+                    </button>
+                    <button
+                      onClick={() => handleDeleteCourse(course._id)}
+                      className="px-2 py-1 text-red-400 hover:text-red-300 hover:bg-red-900/30 rounded transition-all"
+                      title="Delete course"
+                    >
+                      🗑️
+                    </button>
+                  </div>
                 </div>
 
                 <h3 className="text-xl font-bold text-gray-100 mb-2">
@@ -353,6 +427,132 @@ export default function Dashboard() {
                   className="flex-1 px-4 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all shadow-lg font-medium"
                 >
                   Create Course
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Course Modal */}
+      {showEditModal && editingCourse && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
+          <div className="bg-gradient-to-br from-gray-800 to-gray-800/80 rounded-2xl shadow-2xl max-w-md w-full border border-gray-700/50 p-6">
+            <h2 className="text-2xl font-bold text-gray-100 mb-6">
+              Edit Course
+            </h2>
+
+            {error && (
+              <div className="mb-4 p-3 bg-red-900/30 border border-red-700 rounded-lg text-red-300 text-sm">
+                {error}
+              </div>
+            )}
+
+            <form onSubmit={handleEditCourse} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Course Name
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editFormData.name}
+                  onChange={(e) =>
+                    setEditFormData({ ...editFormData, name: e.target.value })
+                  }
+                  className="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-100 placeholder-gray-500"
+                  placeholder="e.g., Data Structures"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Course Code
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editFormData.code}
+                  onChange={(e) =>
+                    setEditFormData({ ...editFormData, code: e.target.value })
+                  }
+                  className="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-100 placeholder-gray-500"
+                  placeholder="e.g., CSE201"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Semester
+                </label>
+                <select
+                  value={editFormData.semester}
+                  onChange={(e) =>
+                    setEditFormData({ ...editFormData, semester: e.target.value })
+                  }
+                  className="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-100"
+                >
+                  <option value="Spring">Spring</option>
+                  <option value="Summer">Summer</option>
+                  <option value="Fall">Fall</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Year
+                </label>
+                <input
+                  type="number"
+                  required
+                  min="2000"
+                  max="2100"
+                  value={editFormData.year}
+                  onChange={(e) =>
+                    setEditFormData({ ...editFormData, year: parseInt(e.target.value) })
+                  }
+                  className="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-100"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Course Type
+                </label>
+                <select
+                  value={editFormData.courseType}
+                  onChange={(e) =>
+                    setEditFormData({ ...editFormData, courseType: e.target.value as 'Theory' | 'Lab' })
+                  }
+                  className="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-100"
+                >
+                  <option value="Theory">Theory Course</option>
+                  <option value="Lab">Lab Course</option>
+                </select>
+                <p className="mt-2 text-xs text-gray-500">
+                  {editFormData.courseType === 'Theory' 
+                    ? '📖 Theory courses include Midterm and Final exams with CO breakdown'
+                    : '🔬 Lab courses include Lab Final and OEL/CE Project'}
+                </p>
+              </div>
+
+              <div className="flex gap-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowEditModal(false);
+                    setEditingCourse(null);
+                    setError('');
+                  }}
+                  className="flex-1 px-4 py-3 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 transition-all font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 px-4 py-3 bg-gradient-to-r from-emerald-600 to-emerald-700 text-white rounded-lg hover:from-emerald-700 hover:to-emerald-800 transition-all shadow-lg font-medium"
+                >
+                  Save Changes
                 </button>
               </div>
             </form>

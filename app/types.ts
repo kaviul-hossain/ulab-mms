@@ -11,6 +11,7 @@ export interface Exam {
   name: string;
   totalMarks: number;
   scalingValue: number; // Final scaled maximum
+  scalingTarget?: number; // Target value to scale to (if specified, overrides scalingValue)
   scalingMethod?: 'bellCurve' | 'linearNormalization' | 'minMaxNormalization' | 'percentile'; // Scaling method used
 }
 

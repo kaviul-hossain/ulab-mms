@@ -11,7 +11,10 @@ export const applyBellCurveScaling = (
   exam: Exam
 ): Student[] => {
   const examId = exam.id;
-  const scalingValue = exam.scalingValue;
+  // Use scalingTarget if specified, otherwise use scalingValue
+  const scalingValue = exam.scalingTarget !== undefined && exam.scalingTarget !== null 
+    ? exam.scalingTarget 
+    : exam.scalingValue;
 
   // Get all ORIGINAL marks for this exam (not scaled marks)
   const marks = students
@@ -82,7 +85,10 @@ export const applyLinearNormalization = (
   exam: Exam
 ): Student[] => {
   const examId = exam.id;
-  const scalingValue = exam.scalingValue;
+  // Use scalingTarget if specified, otherwise use scalingValue
+  const scalingValue = exam.scalingTarget !== undefined && exam.scalingTarget !== null 
+    ? exam.scalingTarget 
+    : exam.scalingValue;
   const totalMarks = exam.totalMarks;
 
   return students.map(student => {
@@ -116,7 +122,10 @@ export const applyMinMaxNormalization = (
   exam: Exam
 ): Student[] => {
   const examId = exam.id;
-  const scalingValue = exam.scalingValue;
+  // Use scalingTarget if specified, otherwise use scalingValue
+  const scalingValue = exam.scalingTarget !== undefined && exam.scalingTarget !== null 
+    ? exam.scalingTarget 
+    : exam.scalingValue;
 
   const marks = students
     .map(s => s.marks[examId])
@@ -173,7 +182,10 @@ export const applyPercentileScaling = (
   exam: Exam
 ): Student[] => {
   const examId = exam.id;
-  const scalingValue = exam.scalingValue;
+  // Use scalingTarget if specified, otherwise use scalingValue
+  const scalingValue = exam.scalingTarget !== undefined && exam.scalingTarget !== null 
+    ? exam.scalingTarget 
+    : exam.scalingValue;
 
   const studentsWithMarks = students
     .map((student, index) => ({

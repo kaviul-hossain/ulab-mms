@@ -70,11 +70,29 @@ export async function PUT(
     }
 
     const { id } = await params;
-    const { name, code, semester, year, courseType, showFinalGrade } = await request.json();
+    const body = await request.json();
+    const { 
+      name, 
+      code, 
+      semester, 
+      year, 
+      courseType, 
+      showFinalGrade,
+      quizAggregation,
+      assignmentAggregation,
+      quizWeightage,
+      assignmentWeightage,
+    } = body;
 
     await dbConnect();
 
-    const updateData: any = { name, code, semester, year };
+    const updateData: any = {};
+    
+    // Update basic fields if provided
+    if (name !== undefined) updateData.name = name;
+    if (code !== undefined) updateData.code = code;
+    if (semester !== undefined) updateData.semester = semester;
+    if (year !== undefined) updateData.year = year;
     
     // Only update courseType if provided (prevent accidental changes)
     if (courseType !== undefined) {
@@ -90,6 +108,35 @@ export async function PUT(
     // Only update showFinalGrade if provided
     if (showFinalGrade !== undefined) {
       updateData.showFinalGrade = showFinalGrade;
+    }
+
+    // Update aggregation settings if provided
+    if (quizAggregation !== undefined) {
+      if (!['average', 'best'].includes(quizAggregation)) {
+        return NextResponse.json(
+          { error: 'Invalid quiz aggregation method. Must be average or best' },
+          { status: 400 }
+        );
+      }
+      updateData.quizAggregation = quizAggregation;
+    }
+
+    if (assignmentAggregation !== undefined) {
+      if (!['average', 'best'].includes(assignmentAggregation)) {
+        return NextResponse.json(
+          { error: 'Invalid assignment aggregation method. Must be average or best' },
+          { status: 400 }
+        );
+      }
+      updateData.assignmentAggregation = assignmentAggregation;
+    }
+
+    if (quizWeightage !== undefined) {
+      updateData.quizWeightage = quizWeightage;
+    }
+
+    if (assignmentWeightage !== undefined) {
+      updateData.assignmentWeightage = assignmentWeightage;
     }
 
     const course = await Course.findOneAndUpdate(
