@@ -50,6 +50,43 @@ export async function GET(request: NextRequest) {
           courseId: course._id,
         });
 
+        // Get class statistics for performance comparison
+        const allStudentsInCourse = await Student.find({ courseId: course._id });
+        const classStats = await Promise.all(
+          exams.map(async (exam) => {
+            const examMarks = await Mark.find({ 
+              examId: exam._id,
+              courseId: course._id 
+            });
+            
+            if (examMarks.length === 0) {
+              return {
+                examId: exam._id.toString(),
+                average: 0,
+                highest: 0,
+                lowest: 0,
+                count: 0
+              };
+            }
+
+            // Use scaled marks if available, otherwise raw marks
+            const markValues = examMarks.map(m => {
+              if (exam.scalingEnabled && m.scaledMark !== undefined && m.scaledMark !== null) {
+                return m.scaledMark;
+              }
+              return m.rawMark;
+            });
+
+            return {
+              examId: exam._id.toString(),
+              average: markValues.reduce((a, b) => a + b, 0) / markValues.length,
+              highest: Math.max(...markValues),
+              lowest: Math.min(...markValues),
+              count: markValues.length
+            };
+          })
+        );
+
         return {
           student: {
             _id: studentRecord._id,
@@ -64,6 +101,10 @@ export async function GET(request: NextRequest) {
             year: course.year,
             courseType: course.courseType,
             showFinalGrade: course.showFinalGrade,
+            quizAggregation: course.quizAggregation,
+            quizWeightage: course.quizWeightage,
+            assignmentAggregation: course.assignmentAggregation,
+            assignmentWeightage: course.assignmentWeightage,
           },
           exams: exams.map(exam => ({
             _id: exam._id,
@@ -72,7 +113,9 @@ export async function GET(request: NextRequest) {
             weightage: exam.weightage,
             scalingEnabled: exam.scalingEnabled,
             scalingMethod: exam.scalingMethod,
+            scalingTarget: exam.scalingTarget,
             examType: exam.examType,
+            examCategory: exam.examCategory,
             numberOfCOs: exam.numberOfCOs,
           })),
           marks: marks.map(mark => ({
@@ -83,6 +126,7 @@ export async function GET(request: NextRequest) {
             scaledMark: mark.scaledMark,
             roundedMark: mark.roundedMark,
           })),
+          classStats,
         };
       })
     );
