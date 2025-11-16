@@ -23,6 +23,8 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
   const [editingCourse, setEditingCourse] = useState<Course | null>(null);
   const [formData, setFormData] = useState({
     name: '',
@@ -156,6 +158,44 @@ export default function Dashboard() {
     setShowEditModal(true);
   };
 
+  const handleImportCourse = async () => {
+    if (!importFile) {
+      alert('Please select a file to import');
+      return;
+    }
+
+    try {
+      const fileContent = await importFile.text();
+      const courseData = JSON.parse(fileContent);
+
+      // Validate the import file structure
+      if (!courseData.version || !courseData.course || !courseData.students || !courseData.exams) {
+        alert('Invalid import file format. Please select a valid course backup file.');
+        return;
+      }
+
+      const response = await fetch('/api/courses/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(courseData),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        alert(`Course "${data.course.name}" imported successfully!`);
+        setShowImportModal(false);
+        setImportFile(null);
+        await fetchCourses(); // Refresh the course list
+      } else {
+        const data = await response.json();
+        alert(data.error || 'Error importing course');
+      }
+    } catch (err) {
+      console.error('Import error:', err);
+      alert('Error importing course. Please ensure the file is a valid JSON backup.');
+    }
+  };
+
   if (status === 'loading' || loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-slate-900 to-gray-900 flex items-center justify-center">
@@ -217,12 +257,20 @@ export default function Dashboard() {
               Manage your courses and student marks
             </p>
           </div>
-          <button
-            onClick={() => setShowAddModal(true)}
-            className="px-5 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all shadow-lg shadow-blue-900/50 font-medium"
-          >
-            ➕ Add Course
-          </button>
+          <div className="flex gap-3">
+            <button
+              onClick={() => setShowImportModal(true)}
+              className="px-5 py-3 bg-gradient-to-r from-indigo-600 to-indigo-700 text-white rounded-lg hover:from-indigo-700 hover:to-indigo-800 transition-all shadow-lg shadow-indigo-900/50 font-medium"
+            >
+              📥 Import Course
+            </button>
+            <button
+              onClick={() => setShowAddModal(true)}
+              className="px-5 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all shadow-lg shadow-blue-900/50 font-medium"
+            >
+              ➕ Add Course
+            </button>
+          </div>
         </div>
 
         {/* Courses Grid */}
@@ -556,6 +604,64 @@ export default function Dashboard() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Import Course Modal */}
+      {showImportModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
+          <div className="bg-gradient-to-br from-gray-800 to-gray-800/80 rounded-2xl shadow-2xl max-w-md w-full border border-gray-700/50 p-6">
+            <h2 className="text-2xl font-bold text-gray-100 mb-6">
+              Import Course
+            </h2>
+
+            <div className="mb-6">
+              <p className="text-gray-300 text-sm mb-4">
+                Select a course backup JSON file to import. This will create a new course with all students, exams, and marks from the backup.
+              </p>
+              
+              <div className="bg-amber-900/20 border border-amber-600/50 rounded-lg p-4 mb-4">
+                <p className="text-amber-200 text-sm">
+                  ⚠️ This will create a new course. The imported data will not affect existing courses.
+                </p>
+              </div>
+
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Select JSON Backup File
+              </label>
+              <input
+                type="file"
+                accept=".json"
+                onChange={(e) => setImportFile(e.target.files?.[0] || null)}
+                className="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-gray-100 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-700"
+              />
+              {importFile && (
+                <p className="mt-2 text-sm text-gray-400">
+                  Selected: {importFile.name}
+                </p>
+              )}
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowImportModal(false);
+                  setImportFile(null);
+                }}
+                className="flex-1 px-4 py-3 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 transition-all font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleImportCourse}
+                disabled={!importFile}
+                className="flex-1 px-4 py-3 bg-gradient-to-r from-indigo-600 to-indigo-700 text-white rounded-lg hover:from-indigo-700 hover:to-indigo-800 transition-all shadow-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Import Course
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -77,6 +77,8 @@ export default function CoursePage() {
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [showGradeBreakdown, setShowGradeBreakdown] = useState(false);
   const [selectedStudentForGrade, setSelectedStudentForGrade] = useState<Student | null>(null);
+  const [showImportCourseModal, setShowImportCourseModal] = useState(false);
+  const [importCourseFile, setImportCourseFile] = useState<File | null>(null);
   
   const [csvInput, setCsvInput] = useState('');
   const [examFormData, setExamFormData] = useState({
@@ -419,6 +421,87 @@ export default function CoursePage() {
       }
     } catch (err) {
       setError('Error updating course settings');
+    }
+  };
+
+  const handleExportCourse = async () => {
+    try {
+      const response = await fetch(`/api/courses/${courseId}/export?format=json`);
+      
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${course?.code}_${course?.name}_backup_${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        alert('Course exported as JSON successfully!');
+      } else {
+        const data = await response.json();
+        alert(data.error || 'Error exporting course');
+      }
+    } catch (err) {
+      console.error('Export error:', err);
+      alert('Error exporting course');
+    }
+  };
+
+  const handleExportCSV = async () => {
+    try {
+      const response = await fetch(`/api/courses/${courseId}/export?format=csv`);
+      
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${course?.code}_${course?.name}_${new Date().toISOString().split('T')[0]}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        alert('Course exported as CSV successfully!');
+      } else {
+        const data = await response.json();
+        alert(data.error || 'Error exporting course');
+      }
+    } catch (err) {
+      console.error('Export error:', err);
+      alert('Error exporting course');
+    }
+  };
+
+  const handleImportCourse = async () => {
+    if (!importCourseFile) {
+      alert('Please select a file to import');
+      return;
+    }
+
+    try {
+      const fileContent = await importCourseFile.text();
+      const courseData = JSON.parse(fileContent);
+
+      const response = await fetch(`/api/courses/${courseId}/import`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(courseData),
+      });
+
+      if (response.ok) {
+        await fetchCourseData();
+        setShowImportCourseModal(false);
+        setImportCourseFile(null);
+        alert('Course imported successfully!');
+      } else {
+        const data = await response.json();
+        alert(data.error || 'Error importing course');
+      }
+    } catch (err) {
+      console.error('Import error:', err);
+      alert('Error importing course. Please ensure the file is valid.');
     }
   };
 
@@ -772,6 +855,26 @@ export default function CoursePage() {
               className="px-5 py-2.5 bg-gradient-to-r from-amber-600 to-amber-700 text-white rounded-lg hover:from-amber-700 hover:to-amber-800 transition-all shadow-lg font-medium"
             >
               ⚙️ Course Settings
+            </button>
+            <button
+              onClick={handleExportCourse}
+              disabled={!course}
+              className="px-5 py-2.5 bg-gradient-to-r from-cyan-600 to-cyan-700 text-white rounded-lg hover:from-cyan-700 hover:to-cyan-800 transition-all shadow-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              📤 Export JSON
+            </button>
+            <button
+              onClick={handleExportCSV}
+              disabled={!course}
+              className="px-5 py-2.5 bg-gradient-to-r from-teal-600 to-teal-700 text-white rounded-lg hover:from-teal-700 hover:to-teal-800 transition-all shadow-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              📊 Export CSV
+            </button>
+            <button
+              onClick={() => setShowImportCourseModal(true)}
+              className="px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-indigo-700 text-white rounded-lg hover:from-indigo-700 hover:to-indigo-800 transition-all shadow-lg font-medium"
+            >
+              📥 Import Course Data
             </button>
           </div>
         </div>
@@ -1809,6 +1912,84 @@ export default function CoursePage() {
                 </div>
               );
             })()}
+          </div>
+        </div>
+      )}
+
+      {/* Import Course Modal */}
+      {showImportCourseModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
+          <div className="bg-gradient-to-br from-gray-800 to-gray-800/80 rounded-2xl shadow-2xl max-w-md w-full border border-gray-700/50 p-6">
+            <h2 className="text-2xl font-bold text-gray-100 mb-6">📥 Import Course Data</h2>
+            
+            <div className="mb-6 p-4 bg-amber-900/20 border border-amber-700/50 rounded-lg">
+              <p className="text-sm text-amber-300 mb-2">
+                <strong>⚠️ Warning:</strong> This will replace all current data in this course!
+              </p>
+              <p className="text-xs text-amber-400">
+                • All students, exams, and marks will be replaced
+                <br />
+                • Course settings will be updated
+                <br />
+                • This action cannot be undone
+                <br />
+                • Make sure to export current data first if needed
+              </p>
+            </div>
+
+            {error && (
+              <div className="mb-4 p-3 bg-red-900/30 border border-red-700 rounded-lg text-red-300 text-sm">
+                {error}
+              </div>
+            )}
+
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Select Course Backup File (.json)
+              </label>
+              <input
+                type="file"
+                accept=".json"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    setImportCourseFile(file);
+                  }
+                }}
+                className="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-100 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700"
+              />
+              {importCourseFile && (
+                <p className="mt-2 text-sm text-green-400">
+                  ✓ Selected: {importCourseFile.name}
+                </p>
+              )}
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setShowImportCourseModal(false);
+                  setImportCourseFile(null);
+                  setError('');
+                }}
+                className="flex-1 px-4 py-3 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 transition-all font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleImportCourse}
+                disabled={!importCourseFile}
+                className="flex-1 px-4 py-3 bg-gradient-to-r from-indigo-600 to-indigo-700 text-white rounded-lg hover:from-indigo-700 hover:to-indigo-800 transition-all shadow-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Import Data
+              </button>
+            </div>
+
+            <div className="mt-4 p-3 bg-blue-900/20 border border-blue-700/50 rounded-lg">
+              <p className="text-xs text-blue-300">
+                <strong>💡 Tip:</strong> Only import files that were exported from this system to ensure compatibility.
+              </p>
+            </div>
           </div>
         </div>
       )}
