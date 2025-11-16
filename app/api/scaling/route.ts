@@ -63,6 +63,7 @@ export async function POST(request: NextRequest) {
       name: exam.displayName,
       totalMarks: exam.totalMarks,
       scalingValue: exam.totalMarks, // Use totalMarks as scaling value
+      scalingTarget: exam.scalingTarget, // Pass scalingTarget if set
       scalingMethod: method,
     };
 

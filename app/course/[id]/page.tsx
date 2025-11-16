@@ -515,8 +515,13 @@ export default function CoursePage() {
           ? mark.scaledMark 
           : mark.rawMark;
         
+        // Use scalingTarget if scaling is enabled and mark is scaled, otherwise use totalMarks
+        const totalMarksToUse = (exam.scalingEnabled && mark.scaledMark !== undefined && mark.scaledMark !== null && exam.scalingTarget) 
+          ? exam.scalingTarget 
+          : exam.totalMarks;
+        
         // Calculate percentage
-        const percentage = (markToUse / exam.totalMarks) * 100;
+        const percentage = (markToUse / totalMarksToUse) * 100;
         
         // Calculate contribution (percentage * weightage / 100)
         const contribution = (percentage * exam.weightage) / 100;
@@ -524,7 +529,7 @@ export default function CoursePage() {
         breakdown.push({
           name: exam.displayName,
           mark: markToUse,
-          totalMarks: exam.totalMarks,
+          totalMarks: totalMarksToUse,
           weightage: exam.weightage,
           contribution: contribution,
         });
@@ -543,10 +548,17 @@ export default function CoursePage() {
         if ('isAggregated' in aggMark && aggMark.isAggregated) {
           // Average mode: rawMark is the average value
           markToUse = aggMark.rawMark;
-          // For aggregated average, we need to find the totalMarks from one of the quiz exams
-          const quizExam = exams.find(e => e.examCategory === 'Quiz');
-          if (quizExam) {
-            totalMarks = quizExam.totalMarks;
+          // For aggregated average, find the maximum scalingTarget or totalMarks
+          // This handles cases where different quizzes have different scaling targets
+          const quizExams = exams.filter(e => e.examCategory === 'Quiz');
+          if (quizExams.length > 0) {
+            // Find the max scalingTarget among scaled exams, or max totalMarks if none are scaled
+            const scaledExams = quizExams.filter(e => e.scalingEnabled && e.scalingTarget);
+            if (scaledExams.length > 0) {
+              totalMarks = Math.max(...scaledExams.map(e => e.scalingTarget!));
+            } else {
+              totalMarks = Math.max(...quizExams.map(e => e.totalMarks));
+            }
           }
         } else {
           // Best mode: get the actual mark
@@ -555,7 +567,10 @@ export default function CoursePage() {
             markToUse = (exam.scalingEnabled && aggMark.scaledMark !== undefined && aggMark.scaledMark !== null) 
               ? aggMark.scaledMark 
               : aggMark.rawMark;
-            totalMarks = exam.totalMarks;
+            // Use scalingTarget if scaling is enabled and mark is scaled, otherwise use totalMarks
+            totalMarks = (exam.scalingEnabled && aggMark.scaledMark !== undefined && aggMark.scaledMark !== null && exam.scalingTarget) 
+              ? exam.scalingTarget 
+              : exam.totalMarks;
           }
         }
         
@@ -588,9 +603,17 @@ export default function CoursePage() {
         if ('isAggregated' in aggMark && aggMark.isAggregated) {
           // Average mode
           markToUse = aggMark.rawMark;
-          const assignmentExam = exams.find(e => e.examCategory === 'Assignment');
-          if (assignmentExam) {
-            totalMarks = assignmentExam.totalMarks;
+          // For aggregated average, find the maximum scalingTarget or totalMarks
+          // This handles cases where different assignments have different scaling targets
+          const assignmentExams = exams.filter(e => e.examCategory === 'Assignment');
+          if (assignmentExams.length > 0) {
+            // Find the max scalingTarget among scaled exams, or max totalMarks if none are scaled
+            const scaledExams = assignmentExams.filter(e => e.scalingEnabled && e.scalingTarget);
+            if (scaledExams.length > 0) {
+              totalMarks = Math.max(...scaledExams.map(e => e.scalingTarget!));
+            } else {
+              totalMarks = Math.max(...assignmentExams.map(e => e.totalMarks));
+            }
           }
         } else {
           // Best mode
@@ -599,7 +622,10 @@ export default function CoursePage() {
             markToUse = (exam.scalingEnabled && aggMark.scaledMark !== undefined && aggMark.scaledMark !== null) 
               ? aggMark.scaledMark 
               : aggMark.rawMark;
-            totalMarks = exam.totalMarks;
+            // Use scalingTarget if scaling is enabled and mark is scaled, otherwise use totalMarks
+            totalMarks = (exam.scalingEnabled && aggMark.scaledMark !== undefined && aggMark.scaledMark !== null && exam.scalingTarget) 
+              ? exam.scalingTarget 
+              : exam.totalMarks;
           }
         }
         
@@ -772,7 +798,28 @@ export default function CoursePage() {
                       </div>
                       <div className="text-sm mt-1 text-gray-400">
                         Total Marks: <span className="font-medium text-blue-400">{exam.totalMarks}</span> | 
-                        Weightage: <span className="font-medium text-cyan-400">{exam.weightage}%</span>
+                        {exam.examCategory === 'Quiz' || exam.examCategory === 'Assignment' ? (
+                          <span className="text-amber-400"> 
+                            Weightage: Change from <button 
+                              onClick={() => {
+                                setCourseSettingsData({
+                                  quizAggregation: course?.quizAggregation || 'average',
+                                  assignmentAggregation: course?.assignmentAggregation || 'average',
+                                  quizWeightage: course?.quizWeightage?.toString() || '',
+                                  assignmentWeightage: course?.assignmentWeightage?.toString() || '',
+                                });
+                                setShowCourseSettings(true);
+                              }}
+                              className="underline hover:text-amber-300 font-medium"
+                            >
+                              Course Settings
+                            </button>
+                          </span>
+                        ) : (
+                          <>
+                            Weightage: <span className="font-medium text-cyan-400">{exam.weightage}%</span>
+                          </>
+                        )}
                         {exam.scalingMethod && (
                           <span className="ml-2 text-emerald-400">
                             | Method: {exam.scalingMethod}
@@ -1165,9 +1212,9 @@ export default function CoursePage() {
                             setInitialStudentId(student._id);
                             setShowMarkModal(true);
                           }}
-                          className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs rounded-lg transition-all"
+                          className="px-3 py-1.5 bg-sky-600 hover:bg-sky-700 text-white text-xs rounded-lg transition-all"
                         >
-                          ✏️ Edit Marks
+                          ✏️
                         </button>
                       </td>
                     </tr>
