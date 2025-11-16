@@ -35,6 +35,7 @@ interface Exam {
   examType: string;
   examCategory?: 'Quiz' | 'Assignment' | 'Project' | 'Attendance' | 'MainExam' | 'ClassPerformance' | 'Others';
   numberOfCOs?: number;
+  numberOfQuestions?: number;
 }
 
 interface Mark {
@@ -42,6 +43,7 @@ interface Mark {
   examId: string;
   rawMark: number;
   coMarks?: number[];
+  questionMarks?: number[];
   scaledMark?: number;
   roundedMark?: number;
 }
@@ -72,6 +74,7 @@ export default function StudentCheckMarks() {
   const [selectedCourse, setSelectedCourse] = useState<CourseData | null>(null);
   const [showCourseModal, setShowCourseModal] = useState(false);
   const [theme, setTheme] = useState<'light' | 'dark'>('dark');
+  const [searching, setSearching] = useState(false);
 
   useEffect(() => {
     const savedTheme = localStorage.getItem('theme') as 'light' | 'dark' | null;
@@ -104,6 +107,7 @@ export default function StudentCheckMarks() {
     e.preventDefault();
     setError('');
     setLoading(true);
+    setSearching(true);
     setSearched(false);
     setCourses([]);
 
@@ -124,6 +128,7 @@ export default function StudentCheckMarks() {
       setSearched(true);
     } finally {
       setLoading(false);
+      setSearching(false);
     }
   };
 
@@ -378,9 +383,19 @@ export default function StudentCheckMarks() {
             <button
               type="submit"
               disabled={loading}
-              className="px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all shadow-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all shadow-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             >
-              {loading ? 'Searching...' : 'Search'}
+              {searching ? (
+                <>
+                  <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Searching...
+                </>
+              ) : (
+                'Search'
+              )}
             </button>
           </form>
 
@@ -533,11 +548,17 @@ export default function StudentCheckMarks() {
                               </span>
                             )}
                           </div>
-                          <div className="text-xs text-gray-400 space-y-1">
+                            <div className="text-xs text-gray-400 space-y-1">
                             <div className="flex items-center gap-2 flex-wrap">
                               <span>📝 Total: {exam.totalMarks} marks</span>
                               {exam.scalingTarget && exam.scalingEnabled && (
                                 <span className="text-emerald-400">• Scaled to: {exam.scalingTarget}</span>
+                              )}
+                              {exam.numberOfCOs && (
+                                <span className="text-purple-400">• {exam.numberOfCOs} COs</span>
+                              )}
+                              {exam.numberOfQuestions && (
+                                <span className="text-cyan-400">• {exam.numberOfQuestions} Questions</span>
                               )}
                             </div>
                             {exam.examCategory !== 'Quiz' && exam.examCategory !== 'Assignment' && (
@@ -694,6 +715,25 @@ export default function StudentCheckMarks() {
                                       <div className="text-xs text-gray-400">CO{idx + 1}</div>
                                       <div className="text-sm font-semibold text-cyan-300">
                                         {coMark}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Question Marks */}
+                            {mark.questionMarks && mark.questionMarks.length > 0 && (
+                              <div className="mt-3 p-3 rounded-lg bg-indigo-900/20 border border-indigo-700/50">
+                                <div className="text-xs font-medium text-gray-300 mb-2">
+                                  Question-wise Marks
+                                </div>
+                                <div className="grid grid-cols-4 gap-2">
+                                  {mark.questionMarks.map((qMark, idx) => (
+                                    <div key={idx} className="text-center p-2 bg-indigo-800/30 rounded">
+                                      <div className="text-xs text-gray-400">Q{idx + 1}</div>
+                                      <div className="text-sm font-semibold text-indigo-300">
+                                        {qMark}
                                       </div>
                                     </div>
                                   ))}
