@@ -283,6 +283,19 @@ export default function AddMarkModal({
       e.preventDefault();
       if (currentField === 'save') {
         validateAndSave();
+      } else if (currentField === 'studentSearch') {
+        // Auto-select student if there's only one match or exact match
+        if (filteredStudents.length === 1) {
+          handleStudentSelect(filteredStudents[0]._id);
+        } else if (filteredStudents.length > 1) {
+          // Check for exact ID match
+          const exactMatch = filteredStudents.find(
+            s => s.studentId.toLowerCase() === studentSearch.toLowerCase()
+          );
+          if (exactMatch) {
+            handleStudentSelect(exactMatch._id);
+          }
+        }
       } else {
         // Move to next field on Enter
         handleTabNavigation(e as any, currentField);
