@@ -1603,8 +1603,8 @@ export default function CoursePage() {
               <table className={`min-w-full divide-y ${theme === 'dark' ? 'divide-gray-700' : 'divide-gray-300'}`}>
                 <thead className={theme === 'dark' ? 'bg-gray-900/50' : 'bg-gray-100'}>
                   <tr>
-                    <th className={`px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider ${theme === 'dark' ? 'text-gray-300' : 'text-gray-800'}`}>ID</th>
-                    <th className={`px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider ${theme === 'dark' ? 'text-gray-300' : 'text-gray-800'}`}>Name</th>
+                    <th className={`px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider sticky left-0 z-20 ${theme === 'dark' ? 'text-gray-300 bg-gray-900' : 'text-gray-800 bg-gray-100'}`}>ID</th>
+                    <th className={`px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider sticky left-[100px] z-20 ${theme === 'dark' ? 'text-gray-300 bg-gray-900' : 'text-gray-800 bg-gray-100'}`}>Name</th>
                     {exams.map(exam => (
                       <th key={exam._id} className={`px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider ${theme === 'dark' ? 'text-gray-300' : 'text-gray-800'}`}>
                         <div>{exam.displayName}</div>
@@ -1657,8 +1657,8 @@ export default function CoursePage() {
                         ? `hover:bg-gray-700/30 ${idx % 2 === 0 ? 'bg-gray-800/20' : 'bg-gray-900/20'}`
                         : `hover:bg-gray-100 ${idx % 2 === 0 ? 'bg-gray-50' : 'bg-white'}`
                     }`}>
-                      <td className="px-4 py-3 text-sm font-medium text-blue-400">{student.studentId}</td>
-                      <td className={`px-4 py-3 text-sm ${theme === 'dark' ? 'text-gray-200' : 'text-gray-800'}`}>
+                      <td className={`px-4 py-3 text-sm font-medium text-blue-400 sticky left-0 z-10 ${idx % 2 === 0 ? (theme === 'dark' ? 'bg-gray-800' : 'bg-gray-50') : (theme === 'dark' ? 'bg-gray-900' : 'bg-white')}`}>{student.studentId}</td>
+                      <td className={`px-4 py-3 text-sm sticky left-[100px] z-10 ${theme === 'dark' ? 'text-gray-200' : 'text-gray-800'} ${idx % 2 === 0 ? (theme === 'dark' ? 'bg-gray-800' : 'bg-gray-50') : (theme === 'dark' ? 'bg-gray-900' : 'bg-white')}`}>
                         <button
                           onClick={() => {
                             setSelectedStudent(student);
@@ -1720,20 +1720,9 @@ export default function CoursePage() {
                                     </span>
                                   )
                                 ) : (
-                                  <span className={theme === 'dark' ? 'text-gray-600' : 'text-gray-400'}>-</span>
+                                  <span className={theme === 'dark' ? 'text-gray-600' : 'text-gray-400'}>0</span>
                                 )}
                               </div>
-                              <button
-                                onClick={() => {
-                                  setInitialExamId(exam._id);
-                                  setInitialStudentId(student._id);
-                                  setShowMarkModal(true);
-                                }}
-                                className="px-2 py-1 bg-gray-700 hover:bg-gray-600 text-white text-xs rounded transition-all"
-                                title={mark ? 'Edit mark' : 'Add mark'}
-                              >
-                                {mark ? '✏️' : '➕'}
-                              </button>
                             </div>
                           </td>
                         );
@@ -1742,7 +1731,7 @@ export default function CoursePage() {
                         <td className="px-4 py-3 text-sm bg-amber-900/10 border-l-2 border-amber-500/30">
                           {(() => {
                             const aggMark = getAggregatedMark(student._id, 'Quiz');
-                            if (!aggMark) return <span className="text-gray-600">-</span>;
+                            if (!aggMark) return <span className="text-gray-600">0</span>;
                             
                             if ('isAggregated' in aggMark && aggMark.isAggregated) {
                               // Average mode: show calculated average and rounded value
@@ -1759,7 +1748,7 @@ export default function CoursePage() {
                             } else {
                               // Best mode: show the best mark
                               const exam = exams.find(e => e._id === aggMark.examId);
-                              if (!exam) return <span className="text-gray-600">-</span>;
+                              if (!exam) return <span className="text-gray-600">0</span>;
                               
                               // Use scaled mark if available and scaling is enabled, otherwise raw mark
                               const markToUse = (exam.scalingEnabled && aggMark.scaledMark !== undefined && aggMark.scaledMark !== null) 
@@ -1787,7 +1776,7 @@ export default function CoursePage() {
                         <td className="px-4 py-3 text-sm bg-blue-900/10 border-l-2 border-blue-500/30">
                           {(() => {
                             const aggMark = getAggregatedMark(student._id, 'Assignment');
-                            if (!aggMark) return <span className="text-gray-600">-</span>;
+                            if (!aggMark) return <span className="text-gray-600">0</span>;
                             
                             if ('isAggregated' in aggMark && aggMark.isAggregated) {
                               // Average mode: show calculated average and rounded value
@@ -1804,7 +1793,7 @@ export default function CoursePage() {
                             } else {
                               // Best mode: show the best mark
                               const exam = exams.find(e => e._id === aggMark.examId);
-                              if (!exam) return <span className="text-gray-600">-</span>;
+                              if (!exam) return <span className="text-gray-600">0</span>;
                               
                               // Use scaled mark if available and scaling is enabled, otherwise raw mark
                               const markToUse = (exam.scalingEnabled && aggMark.scaledMark !== undefined && aggMark.scaledMark !== null) 
@@ -1832,7 +1821,7 @@ export default function CoursePage() {
                         {(() => {
                           const gradeData = calculateFinalGrade(student._id);
                           if (gradeData.breakdown.length === 0) {
-                            return <span className="text-gray-600">-</span>;
+                            return <span className="text-gray-600">0</span>;
                           }
                           
                           return (
@@ -1865,13 +1854,13 @@ export default function CoursePage() {
                         {(() => {
                           const gradeData = calculateFinalGrade(student._id);
                           if (gradeData.breakdown.length === 0) {
-                            return <span className="text-gray-600">-</span>;
+                            return <span className="text-gray-600">0</span>;
                           }
                           
                           const letterGrade = calculateLetterGrade(gradeData.total, course?.gradingScale);
                           
                           if (!letterGrade) {
-                            return <span className="text-gray-600">-</span>;
+                            return <span className="text-gray-600">0</span>;
                           }
                           
                           return (
@@ -1915,7 +1904,7 @@ export default function CoursePage() {
                     Marks Management
                   </h1>
                   <p className={`text-sm mt-1 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
-                    Add and manage marks for {students.length} student(s) across {exams.length} exam(s)
+                    Add and manage marks for {students.length} student(s) across {exams.length} exam(s). Click on each mark to add or edit.
                   </p>
                 </div>
                 <div className="flex gap-3">
