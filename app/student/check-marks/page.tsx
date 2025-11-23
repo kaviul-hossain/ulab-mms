@@ -312,6 +312,55 @@ export default function StudentCheckMarks() {
     return exams.reduce((sum, exam) => sum + exam.weightage, 0);
   };
 
+  const calculateEstimatedGrade = (courseData: CourseData) => {
+    const gradeData = calculateFinalGrade(courseData);
+    const completedExams = courseData.marks.length;
+    const totalExams = courseData.exams.length;
+    const remainingExams = totalExams - completedExams;
+    
+    if (remainingExams === 0) {
+      return null; // All exams completed
+    }
+
+    // Calculate remaining weightage
+    const completedWeightage = courseData.exams
+      .filter(exam => courseData.marks.some(m => m.examId === exam._id))
+      .reduce((sum, exam) => sum + exam.weightage, 0);
+    
+    const remainingWeightage = calculateTotalWeightage(courseData.exams) - completedWeightage;
+
+    // Calculate what's needed for different grade targets
+    const targets = [
+      { grade: 'A', min: 80 },
+      { grade: 'B', min: 65 },
+      { grade: 'C', min: 50 },
+      { grade: 'D', min: 40 },
+    ];
+
+    const estimates = targets.map(target => {
+      const neededTotal = target.min;
+      const neededFromRemaining = neededTotal - gradeData.total;
+      const averageNeeded = remainingWeightage > 0 ? (neededFromRemaining / remainingWeightage) * 100 : 0;
+      
+      return {
+        grade: target.grade,
+        targetPercentage: target.min,
+        averageNeeded: Math.max(0, averageNeeded),
+        achievable: averageNeeded <= 100 && averageNeeded >= 0
+      };
+    });
+
+    return {
+      completedExams,
+      totalExams,
+      remainingExams,
+      completedWeightage,
+      remainingWeightage,
+      currentPoints: gradeData.total,
+      estimates
+    };
+  };
+
   return (
     <div className={`min-h-screen transition-colors ${
       theme === 'dark'
@@ -858,6 +907,112 @@ export default function StudentCheckMarks() {
                       );
                     })()}
                   </div>
+
+                  {/* Estimated Grade Calculator */}
+                  {(() => {
+                    const estimate = calculateEstimatedGrade(selectedCourse);
+                    if (!estimate) return null;
+
+                    return (
+                      <div className="mt-6 p-4 rounded-lg bg-gradient-to-r from-purple-900/30 to-pink-900/30 border border-purple-700/50">
+                        <h4 className="text-lg font-semibold text-gray-100 mb-3 flex items-center gap-2">
+                          <span>🎯</span>
+                          <span>Grade Estimator</span>
+                        </h4>
+                        
+                        <div className="mb-4 grid grid-cols-2 md:grid-cols-4 gap-3">
+                          <div className="p-3 bg-purple-900/20 rounded-lg">
+                            <div className="text-xs text-gray-400">Current Progress</div>
+                            <div className="text-lg font-bold text-purple-300">
+                              {estimate.completedExams}/{estimate.totalExams}
+                            </div>
+                            <div className="text-xs text-gray-500">exams</div>
+                          </div>
+                          <div className="p-3 bg-blue-900/20 rounded-lg">
+                            <div className="text-xs text-gray-400">Current Points</div>
+                            <div className="text-lg font-bold text-blue-300">
+                              {estimate.currentPoints.toFixed(1)}
+                            </div>
+                            <div className="text-xs text-gray-500">out of {estimate.completedWeightage}%</div>
+                          </div>
+                          <div className="p-3 bg-amber-900/20 rounded-lg">
+                            <div className="text-xs text-gray-400">Remaining Exams</div>
+                            <div className="text-lg font-bold text-amber-300">
+                              {estimate.remainingExams}
+                            </div>
+                            <div className="text-xs text-gray-500">exams</div>
+                          </div>
+                          <div className="p-3 bg-emerald-900/20 rounded-lg">
+                            <div className="text-xs text-gray-400">Remaining Weight</div>
+                            <div className="text-lg font-bold text-emerald-300">
+                              {estimate.remainingWeightage.toFixed(0)}%
+                            </div>
+                            <div className="text-xs text-gray-500">weightage</div>
+                          </div>
+                        </div>
+
+                        <div className="space-y-2">
+                          <div className="text-sm font-medium text-gray-300 mb-3">
+                            Average % needed in remaining exams to achieve:
+                          </div>
+                          {estimate.estimates.map((est, idx) => (
+                            <div 
+                              key={idx} 
+                              className={`p-3 rounded-lg border ${
+                                est.achievable 
+                                  ? 'bg-gray-800/50 border-gray-700/50' 
+                                  : 'bg-red-900/20 border-red-700/30 opacity-50'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                  <span className={`text-2xl font-bold ${
+                                    est.grade === 'A' ? 'text-green-400' :
+                                    est.grade === 'B' ? 'text-blue-400' :
+                                    est.grade === 'C' ? 'text-yellow-400' :
+                                    'text-orange-400'
+                                  }`}>
+                                    {est.grade}
+                                  </span>
+                                  <div>
+                                    <div className="text-sm text-gray-300">
+                                      Grade {est.grade} (≥{est.targetPercentage}%)
+                                    </div>
+                                    <div className="text-xs text-gray-500">
+                                      Need {(est.targetPercentage - estimate.currentPoints).toFixed(1)} more points
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="text-right">
+                                  <div className={`text-2xl font-bold ${
+                                    est.achievable ? 'text-cyan-300' : 'text-red-400'
+                                  }`}>
+                                    {est.averageNeeded.toFixed(1)}%
+                                  </div>
+                                  <div className="text-xs text-gray-500">
+                                    {est.achievable ? 'avg needed' : 'not possible'}
+                                  </div>
+                                </div>
+                              </div>
+                              {!est.achievable && (
+                                <div className="mt-2 text-xs text-red-400">
+                                  ⚠️ Target not achievable with remaining weightage
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+
+                        <div className="mt-4 p-3 bg-cyan-900/20 border border-cyan-700/50 rounded-lg">
+                          <p className="text-xs text-cyan-300">
+                            <strong>💡 How to read:</strong> If you score the shown percentage (average) in all remaining exams, 
+                            you'll achieve that grade. For example, if "Grade B" shows "75%", scoring an average of 75% 
+                            in your remaining {estimate.remainingExams} exam(s) will get you a B grade overall.
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   {/* Info Note */}
                   <div className="mt-4 p-3 bg-blue-900/20 border border-blue-700/50 rounded-lg">

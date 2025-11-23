@@ -97,6 +97,12 @@ export default function CoursePage() {
   const [exportingCSV, setExportingCSV] = useState(false);
   const [importingCourse, setImportingCourse] = useState(false);
   const [courseSettingsTab, setCourseSettingsTab] = useState<'aggregation' | 'grading'>('aggregation');
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [activeView, setActiveView] = useState<'overview' | 'exams' | 'students' | 'marks'>('overview');
+  const [expandedExam, setExpandedExam] = useState<string | null>(null);
+  const [searchStudentId, setSearchStudentId] = useState('');
+  const [showStudentStatsModal, setShowStudentStatsModal] = useState(false);
+  const [selectedStudentForStats, setSelectedStudentForStats] = useState<Student | null>(null);
   
   const [csvInput, setCsvInput] = useState('');
   const [examFormData, setExamFormData] = useState({
@@ -830,7 +836,105 @@ export default function CoursePage() {
     );
   }
 
+  // Helper functions for student stats modal
+  const handleStudentSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!searchStudentId.trim()) return;
+    
+    const student = students.find(s => 
+      s.studentId.toLowerCase().includes(searchStudentId.toLowerCase()) ||
+      s.name.toLowerCase().includes(searchStudentId.toLowerCase())
+    );
+    
+    if (student) {
+      setSelectedStudentForStats(student);
+      setShowStudentStatsModal(true);
+      setSearchStudentId('');
+    } else {
+      alert('Student not found in this course');
+    }
+  };
+
+  const getStudentMarks = (studentId: string) => {
+    return marks.filter(m => m.studentId === studentId);
+  };
+
+  const calculateTotalWeightage = () => {
+    return exams.reduce((sum, exam) => sum + exam.weightage, 0);
+  };
+
+  const getClassStatsForExam = (examId: string) => {
+    const examMarks = marks.filter(m => m.examId === examId);
+    if (examMarks.length === 0) return null;
+
+    const exam = exams.find(e => e._id === examId);
+    const values = examMarks.map(m => {
+      if (!exam) return m.rawMark;
+      return exam.scalingEnabled && m.scaledMark !== undefined && m.scaledMark !== null
+        ? m.scaledMark
+        : m.rawMark;
+    });
+
+    return {
+      average: values.reduce((sum, val) => sum + val, 0) / values.length,
+      highest: Math.max(...values),
+      lowest: Math.min(...values),
+      count: values.length
+    };
+  };
+
+  const calculateEstimatedGrade = (studentId: string) => {
+    const gradeData = calculateFinalGrade(studentId);
+    const studentMarks = marks.filter(m => m.studentId === studentId);
+    const completedExams = studentMarks.length;
+    const totalExams = exams.length;
+    const remainingExams = totalExams - completedExams;
+    
+    if (remainingExams === 0) {
+      return null; // All exams completed
+    }
+
+    // Calculate remaining weightage
+    const completedWeightage = exams
+      .filter(exam => studentMarks.some(m => m.examId === exam._id))
+      .reduce((sum, exam) => sum + exam.weightage, 0);
+    
+    const remainingWeightage = calculateTotalWeightage() - completedWeightage;
+
+    // Calculate what's needed for different grade targets
+    const targets = [
+      { grade: 'A', min: 80 },
+      { grade: 'B', min: 65 },
+      { grade: 'C', min: 50 },
+      { grade: 'D', min: 40 },
+    ];
+
+    const estimates = targets.map(target => {
+      const neededTotal = target.min;
+      const neededFromRemaining = neededTotal - gradeData.total;
+      const averageNeeded = remainingWeightage > 0 ? (neededFromRemaining / remainingWeightage) * 100 : 0;
+      
+      return {
+        grade: target.grade,
+        targetPercentage: target.min,
+        averageNeeded: Math.max(0, averageNeeded),
+        achievable: averageNeeded <= 100 && averageNeeded >= 0
+      };
+    });
+
+    return {
+      completedExams,
+      totalExams,
+      remainingExams,
+      completedWeightage,
+      remainingWeightage,
+      currentPoints: gradeData.total,
+      estimates
+    };
+  };
+
   return (
+    <>
     <div className={`min-h-screen transition-colors ${
       theme === 'dark'
         ? 'bg-gradient-to-br from-gray-900 via-slate-900 to-gray-900'
@@ -903,44 +1007,99 @@ export default function CoursePage() {
         </div>
       </nav>
 
-      <div className="max-w-7xl mx-auto p-4 pt-8">
-        {/* Control Panel */}
-        <div className={`rounded-xl shadow-2xl p-6 mb-6 border transition-colors ${
-          theme === 'dark'
-            ? 'bg-gradient-to-br from-gray-800 to-gray-800/80 border-gray-700/50'
-            : 'bg-white border-gray-300'
-        }`}>
-          <h2 className={`text-xl font-semibold mb-4 flex items-center gap-2 ${theme === 'dark' ? 'text-gray-100' : 'text-gray-800'}`}>
-            <span className="w-1 h-6 bg-gradient-to-b from-blue-500 to-cyan-500 rounded-full"></span>
-            Control Panel
-          </h2>
-          <div className="flex flex-wrap gap-3">
+      {/* Sidebar + Main Content Layout */}
+      <div className="flex h-[calc(100vh-72px)]">
+        {/* Left Sidebar */}
+        <aside className={`${
+          sidebarOpen ? 'w-64' : 'w-16'
+        } transition-all duration-300 border-r ${
+          theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-300'
+        } flex flex-col`}>
+          {/* Sidebar Header */}
+          <div className="p-4 border-b ${theme === 'dark' ? 'border-gray-700' : 'border-gray-300'}">
             <button
-              onClick={() => setShowImportModal(true)}
-              className="px-5 py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all shadow-lg font-medium"
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all ${
+                theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-100'
+              }`}
             >
-              📥 Import Students (CSV)
+              <span className="text-xl">☰</span>
+              {sidebarOpen && <span className={`font-medium ${theme === 'dark' ? 'text-gray-100' : 'text-gray-800'}`}>Menu</span>}
             </button>
+          </div>
+
+          {/* Navigation */}
+          <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
             <button
-              onClick={() => setShowExamModal(true)}
-              className="px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-emerald-700 text-white rounded-lg hover:from-emerald-700 hover:to-emerald-800 transition-all shadow-lg font-medium"
+              onClick={() => setActiveView('overview')}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all ${
+                activeView === 'overview'
+                  ? 'bg-blue-600 text-white'
+                  : theme === 'dark'
+                  ? 'text-gray-300 hover:bg-gray-700'
+                  : 'text-gray-700 hover:bg-gray-100'
+              }`}
             >
-              ➕ Add Exam
+              <span className="text-xl">📊</span>
+              {sidebarOpen && <span className="font-medium">Overview</span>}
             </button>
+            
+            <button
+              onClick={() => setActiveView('exams')}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all ${
+                activeView === 'exams'
+                  ? 'bg-emerald-600 text-white'
+                  : theme === 'dark'
+                  ? 'text-gray-300 hover:bg-gray-700'
+                  : 'text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              <span className="text-xl">📝</span>
+              {sidebarOpen && (
+                <div className="flex-1 flex items-center justify-between">
+                  <span className="font-medium">Exams</span>
+                  <span className="px-2 py-0.5 bg-black/20 rounded text-xs">{exams.length}</span>
+                </div>
+              )}
+            </button>
+            
+            <button
+              onClick={() => setActiveView('students')}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all ${
+                activeView === 'students'
+                  ? 'bg-purple-600 text-white'
+                  : theme === 'dark'
+                  ? 'text-gray-300 hover:bg-gray-700'
+                  : 'text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              <span className="text-xl">👥</span>
+              {sidebarOpen && (
+                <div className="flex-1 flex items-center justify-between">
+                  <span className="font-medium">Students</span>
+                  <span className="px-2 py-0.5 bg-black/20 rounded text-xs">{students.length}</span>
+                </div>
+              )}
+            </button>
+            
+            <button
+              onClick={() => setActiveView('marks')}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all ${
+                activeView === 'marks'
+                  ? 'bg-amber-600 text-white'
+                  : theme === 'dark'
+                  ? 'text-gray-300 hover:bg-gray-700'
+                  : 'text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              <span className="text-xl">✏️</span>
+              {sidebarOpen && <span className="font-medium">Marks</span>}
+            </button>
+
+            {sidebarOpen && <div className="pt-4 mt-4 border-t ${theme === 'dark' ? 'border-gray-700' : 'border-gray-300'}"></div>}
+
             <button
               onClick={() => {
-                setInitialExamId(undefined);
-                setInitialStudentId(undefined);
-                setShowMarkModal(true);
-              }}
-              disabled={students.length === 0 || exams.length === 0}
-              className="px-5 py-2.5 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-lg hover:from-purple-700 hover:to-purple-800 transition-all shadow-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              ✏️ Add Mark
-            </button>
-            <button
-              onClick={() => {
-                // Initialize form with current course settings
                 setCourseSettingsData({
                   quizAggregation: course?.quizAggregation || 'average',
                   assignmentAggregation: course?.assignmentAggregation || 'average',
@@ -952,150 +1111,364 @@ export default function CoursePage() {
                 });
                 setShowCourseSettings(true);
               }}
-              className="px-5 py-2.5 bg-gradient-to-r from-amber-600 to-amber-700 text-white rounded-lg hover:from-amber-700 hover:to-amber-800 transition-all shadow-lg font-medium"
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all ${
+                theme === 'dark'
+                  ? 'text-gray-300 hover:bg-gray-700'
+                  : 'text-gray-700 hover:bg-gray-100'
+              }`}
             >
-              ⚙️ Course Settings
+              <span className="text-xl">⚙️</span>
+              {sidebarOpen && <span className="font-medium">Settings</span>}
             </button>
-            <button
-              onClick={handleExportCourse}
-              disabled={!course || exportingJSON}
-              className="px-5 py-2.5 bg-gradient-to-r from-cyan-600 to-cyan-700 text-white rounded-lg hover:from-cyan-700 hover:to-cyan-800 transition-all shadow-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-            >
-              {exportingJSON ? (
-                <>
-                  <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  Exporting...
-                </>
-              ) : (
-                <>📤 Export JSON</>
-              )}
-            </button>
-            <button
-              onClick={handleExportCSV}
-              disabled={!course || exportingCSV}
-              className="px-5 py-2.5 bg-gradient-to-r from-teal-600 to-teal-700 text-white rounded-lg hover:from-teal-700 hover:to-teal-800 transition-all shadow-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-            >
-              {exportingCSV ? (
-                <>
-                  <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  Exporting...
-                </>
-              ) : (
-                <>📊 Export CSV</>
-              )}
-            </button>
-            <button
-              onClick={() => setShowImportCourseModal(true)}
-              className="px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-indigo-700 text-white rounded-lg hover:from-indigo-700 hover:to-indigo-800 transition-all shadow-lg font-medium"
-            >
-              📥 Import Course Data
-            </button>
-          </div>
-        </div>
+          </nav>
 
-        {/* Exams List */}
-        {exams.length > 0 && (
-          <div className={`rounded-xl shadow-2xl p-6 mb-6 border transition-colors ${
-            theme === 'dark'
-              ? 'bg-gradient-to-br from-gray-800 to-gray-800/80 border-gray-700/50'
-              : 'bg-white border-gray-300'
-          }`}>
-            <h2 className={`text-xl font-semibold mb-4 flex items-center gap-2 ${theme === 'dark' ? 'text-gray-100' : 'text-gray-800'}`}>
-              <span className="w-1 h-6 bg-gradient-to-b from-emerald-500 to-cyan-500 rounded-full"></span>
-              Exams & Scaling
-            </h2>
-            <div className="space-y-4">
-              {exams.map(exam => (
-                <div key={exam._id} className={`p-4 rounded-lg border transition-all ${
-                  theme === 'dark'
-                    ? 'bg-gray-900/50 border-gray-700/50 hover:border-gray-600'
-                    : 'bg-gray-50 border-gray-300 hover:border-gray-400'
-                }`}>
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <div className={`font-medium text-lg ${theme === 'dark' ? 'text-gray-100' : 'text-gray-800'}`}>{exam.displayName}</div>
-                        {exam.isRequired && (
-                          <span className="px-2 py-0.5 bg-emerald-900/30 text-emerald-300 text-xs rounded font-medium">
-                            Required
-                          </span>
-                        )}
-                      </div>
-                      <div className={`text-sm mt-1 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-700'}`}>
-                        Total Marks: <span className="font-medium text-blue-600">{exam.totalMarks}</span> | 
-                        {exam.examCategory === 'Quiz' || exam.examCategory === 'Assignment' ? (
-                          <span className={theme === 'dark' ? 'text-amber-400' : 'text-amber-600'}> 
-                            Weightage: Change from <button 
-                              onClick={() => {
-                                setCourseSettingsData({
-                                  quizAggregation: course?.quizAggregation || 'average',
-                                  assignmentAggregation: course?.assignmentAggregation || 'average',
-                                  quizWeightage: course?.quizWeightage?.toString() || '',
-                                  assignmentWeightage: course?.assignmentWeightage?.toString() || '',
-                                  gradingScale: course?.gradingScale 
-                                    ? decodeGradingScale(course.gradingScale) 
-                                    : DEFAULT_GRADING_SCALE,
-                                });
-                                setShowCourseSettings(true);
-                              }}
-                              className={`underline font-medium ${theme === 'dark' ? 'hover:text-amber-300' : 'hover:text-amber-700'}`}
-                            >
-                              Course Settings
-                            </button>
-                          </span>
-                        ) : (
-                          <>
-                            Weightage: <span className="font-medium text-cyan-400">{exam.weightage}%</span>
-                          </>
-                        )}
-                        {exam.scalingMethod && (
-                          <span className="ml-2 text-emerald-400">
-                            | Method: {exam.scalingMethod}
-                          </span>
-                        )}
-                        {exam.numberOfCOs && (
-                          <span className="ml-2 text-purple-400">
-                            | COs: {exam.numberOfCOs}
-                          </span>
-                        )}
+          {/* Student Search */}
+          <div className={`px-4 py-3 border-t border-b ${theme === 'dark' ? 'border-gray-700' : 'border-gray-300'}`}>
+            {sidebarOpen ? (
+              <form onSubmit={handleStudentSearch} className="space-y-2">
+                <label className={`text-xs font-medium ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
+                  🔍 Search Student
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={searchStudentId}
+                    onChange={(e) => setSearchStudentId(e.target.value)}
+                    placeholder="ID or Name"
+                    className={`flex-1 px-2 py-1.5 text-sm rounded border ${theme === 'dark' ? 'bg-gray-900 border-gray-600 text-gray-100 placeholder-gray-500' : 'bg-white border-gray-300 text-gray-900'}`}
+                  />
+                  <button
+                    type="submit"
+                    className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm transition-all"
+                  >
+                    →
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <button
+                onClick={() => setSidebarOpen(true)}
+                className={`w-full flex items-center justify-center p-2 rounded-lg ${theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-100'} transition-all`}
+                title="Search Student"
+              >
+                <span className="text-xl">🔍</span>
+              </button>
+            )}
+          </div>
+
+          {/* Quick Actions */}
+          {sidebarOpen && (
+            <div className="p-3 border-t ${theme === 'dark' ? 'border-gray-700' : 'border-gray-300'} space-y-2">
+              <button
+                onClick={handleExportCourse}
+                disabled={!course || exportingJSON}
+                className="w-full px-3 py-2 bg-cyan-600 hover:bg-cyan-700 text-white rounded-lg text-sm transition-all disabled:opacity-50 flex items-center gap-2 justify-center"
+              >
+                {exportingJSON ? '...' : '📤 Export'}
+              </button>
+              <button
+                onClick={() => setShowImportCourseModal(true)}
+                className="w-full px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm transition-all flex items-center gap-2 justify-center"
+              >
+                📥 Import
+              </button>
+            </div>
+          )}
+        </aside>
+
+        {/* Main Content Area */}
+        <main className="flex-1 overflow-y-auto">
+          <div className="max-w-7xl mx-auto p-6">
+            {/* Overview View */}
+            {activeView === 'overview' && (
+              <div className="space-y-6">
+                <div>
+                  <h1 className={`text-3xl font-bold ${theme === 'dark' ? 'text-gray-100' : 'text-gray-800'}`}>
+                    Course Overview
+                  </h1>
+                  <p className={`text-sm mt-1 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
+                    Quick stats and actions for {course?.name}
+                  </p>
+                </div>
+
+                {/* Stats Cards */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className={`rounded-xl p-6 border ${
+                    theme === 'dark'
+                      ? 'bg-gradient-to-br from-blue-900/20 to-blue-800/10 border-blue-700/50'
+                      : 'bg-blue-50 border-blue-200'
+                  }`}>
+                    <div className="flex items-center gap-3 mb-2">
+                      <span className="text-3xl">👥</span>
+                      <div>
+                        <div className={`text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>Students</div>
+                        <div className={`text-2xl font-bold ${theme === 'dark' ? 'text-gray-100' : 'text-gray-800'}`}>{students.length}</div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => {
-                          setShowExamSettings(exam._id);
-                          setExamSettings({
-                            displayName: exam.displayName,
-                            weightage: exam.weightage.toString(),
-                            totalMarks: exam.totalMarks.toString(),
-                            numberOfCOs: exam.numberOfCOs?.toString() || '',
-                            numberOfQuestions: exam.numberOfQuestions?.toString() || '',
-                            examCategory: exam.examCategory || '',
-                          });
-                        }}
-                        className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-white text-xs rounded-lg transition-all"
-                      >
-                        ⚙️ Settings
-                      </button>
-                      {!exam.isRequired && (
-                        <button
-                          onClick={() => handleDeleteExam(exam._id)}
-                          className="px-3 py-1.5 bg-red-900/30 hover:bg-red-900/50 text-red-300 text-xs rounded-lg transition-all"
-                        >
-                          🗑️
-                        </button>
-                      )}
-                    </div>
+                    <button
+                      onClick={() => setShowImportModal(true)}
+                      className="w-full mt-3 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm transition-all"
+                    >
+                      ➕ Import Students
+                    </button>
                   </div>
 
-                  {/* Scaling Toggle */}
-                  <div className="mb-3 space-y-3">
+                  <div className={`rounded-xl p-6 border ${
+                    theme === 'dark'
+                      ? 'bg-gradient-to-br from-emerald-900/20 to-emerald-800/10 border-emerald-700/50'
+                      : 'bg-emerald-50 border-emerald-200'
+                  }`}>
+                    <div className="flex items-center gap-3 mb-2">
+                      <span className="text-3xl">📝</span>
+                      <div>
+                        <div className={`text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>Exams</div>
+                        <div className={`text-2xl font-bold ${theme === 'dark' ? 'text-gray-100' : 'text-gray-800'}`}>{exams.length}</div>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setShowExamModal(true)}
+                      className="w-full mt-3 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm transition-all"
+                    >
+                      ➕ Add Exam
+                    </button>
+                  </div>
+
+                  <div className={`rounded-xl p-6 border ${
+                    theme === 'dark'
+                      ? 'bg-gradient-to-br from-purple-900/20 to-purple-800/10 border-purple-700/50'
+                      : 'bg-purple-50 border-purple-200'
+                  }`}>
+                    <div className="flex items-center gap-3 mb-2">
+                      <span className="text-3xl">✏️</span>
+                      <div>
+                        <div className={`text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>Total Marks</div>
+                        <div className={`text-2xl font-bold ${theme === 'dark' ? 'text-gray-100' : 'text-gray-800'}`}>{marks.length}</div>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setInitialExamId(undefined);
+                        setInitialStudentId(undefined);
+                        setShowMarkModal(true);
+                      }}
+                      disabled={students.length === 0 || exams.length === 0}
+                      className="w-full mt-3 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      ➕ Add Mark
+                    </button>
+                  </div>
+                </div>
+
+                {/* Quick Actions Grid */}
+                <div className={`rounded-xl p-6 border ${
+                  theme === 'dark'
+                    ? 'bg-gray-800 border-gray-700'
+                    : 'bg-white border-gray-300'
+                }`}>
+                  <h2 className={`text-xl font-semibold mb-4 ${theme === 'dark' ? 'text-gray-100' : 'text-gray-800'}`}>
+                    Quick Actions
+                  </h2>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <button
+                      onClick={() => setActiveView('students')}
+                      className={`p-4 rounded-lg border transition-all ${
+                        theme === 'dark'
+                          ? 'bg-gray-700/50 border-gray-600 hover:bg-gray-700'
+                          : 'bg-gray-50 border-gray-300 hover:bg-gray-100'
+                      } flex flex-col items-center gap-2`}
+                    >
+                      <span className="text-2xl">👥</span>
+                      <span className={`text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                        View Students
+                      </span>
+                    </button>
+                    
+                    <button
+                      onClick={() => setActiveView('exams')}
+                      className={`p-4 rounded-lg border transition-all ${
+                        theme === 'dark'
+                          ? 'bg-gray-700/50 border-gray-600 hover:bg-gray-700'
+                          : 'bg-gray-50 border-gray-300 hover:bg-gray-100'
+                      } flex flex-col items-center gap-2`}
+                    >
+                      <span className="text-2xl">📝</span>
+                      <span className={`text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                        Manage Exams
+                      </span>
+                    </button>
+                    
+                    <button
+                      onClick={handleExportCSV}
+                      disabled={exportingCSV}
+                      className={`p-4 rounded-lg border transition-all ${
+                        theme === 'dark'
+                          ? 'bg-gray-700/50 border-gray-600 hover:bg-gray-700'
+                          : 'bg-gray-50 border-gray-300 hover:bg-gray-100'
+                      } flex flex-col items-center gap-2 disabled:opacity-50`}
+                    >
+                      <span className="text-2xl">📊</span>
+                      <span className={`text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                        {exportingCSV ? 'Exporting...' : 'Export CSV'}
+                      </span>
+                    </button>
+                    
+                    <button
+                      onClick={() => setActiveView('marks')}
+                      className={`p-4 rounded-lg border transition-all ${
+                        theme === 'dark'
+                          ? 'bg-gray-700/50 border-gray-600 hover:bg-gray-700'
+                          : 'bg-gray-50 border-gray-300 hover:bg-gray-100'
+                      } flex flex-col items-center gap-2`}
+                    >
+                      <span className="text-2xl">✏️</span>
+                      <span className={`text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                        Add Marks
+                      </span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Recent Activity or Empty State */}
+                {students.length === 0 ? (
+                  <div className={`rounded-xl p-12 text-center border ${
+                    theme === 'dark'
+                      ? 'bg-gray-800 border-gray-700'
+                      : 'bg-white border-gray-300'
+                  }`}>
+                    <div className="text-6xl mb-4">🎓</div>
+                    <h3 className={`text-xl font-semibold mb-2 ${theme === 'dark' ? 'text-gray-100' : 'text-gray-800'}`}>
+                      Get Started
+                    </h3>
+                    <p className={`mb-6 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
+                      Import students to begin managing your course
+                    </p>
+                    <button
+                      onClick={() => setShowImportModal(true)}
+                      className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-all font-medium"
+                    >
+                      📥 Import Students Now
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+            )}
+
+            {/* Exams View */}
+            {activeView === 'exams' && (
+              <div className="space-y-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h1 className={`text-3xl font-bold ${theme === 'dark' ? 'text-gray-100' : 'text-gray-800'}`}>
+                      Exams Management
+                    </h1>
+                    <p className={`text-sm mt-1 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
+                      Configure and manage {exams.length} exam(s)
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setShowExamModal(true)}
+                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-all font-medium flex items-center gap-2"
+                  >
+                    ➕ Add New Exam
+                  </button>
+                </div>
+
+                {exams.length === 0 ? (
+                  <div className={`rounded-xl p-12 text-center border ${
+                    theme === 'dark'
+                      ? 'bg-gray-800 border-gray-700'
+                      : 'bg-white border-gray-300'
+                  }`}>
+                    <div className="text-6xl mb-4">📝</div>
+                    <h3 className={`text-xl font-semibold mb-2 ${theme === 'dark' ? 'text-gray-100' : 'text-gray-800'}`}>
+                      No Exams Yet
+                    </h3>
+                    <p className={`mb-6 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
+                      Create your first exam to start tracking student performance
+                    </p>
+                    <button
+                      onClick={() => setShowExamModal(true)}
+                      className="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-all font-medium"
+                    >
+                      ➕ Create First Exam
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {exams.map(exam => (
+                      <div key={exam._id} className={`rounded-lg border transition-all ${
+                        theme === 'dark'
+                          ? 'bg-gray-800 border-gray-700'
+                          : 'bg-white border-gray-300'
+                      }`}>
+                        {/* Exam Header - Always Visible */}
+                        <div className="p-4 flex items-center justify-between">
+                          <button
+                            onClick={() => setExpandedExam(expandedExam === exam._id ? null : exam._id)}
+                            className="flex-1 flex items-center gap-3 text-left"
+                          >
+                            <span className="text-xl">
+                              {expandedExam === exam._id ? '▼' : '▶'}
+                            </span>
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2">
+                                <div className={`font-medium text-lg ${theme === 'dark' ? 'text-gray-100' : 'text-gray-800'}`}>
+                                  {exam.displayName}
+                                </div>
+                                {exam.isRequired && (
+                                  <span className="px-2 py-0.5 bg-emerald-900/30 text-emerald-300 text-xs rounded font-medium">
+                                    Required
+                                  </span>
+                                )}
+                                {exam.examCategory && (
+                                  <span className={`px-2 py-0.5 text-xs rounded font-medium ${
+                                    exam.examCategory === 'Quiz' ? 'bg-amber-900/30 text-amber-300' :
+                                    exam.examCategory === 'Assignment' ? 'bg-blue-900/30 text-blue-300' :
+                                    'bg-gray-700 text-gray-300'
+                                  }`}>
+                                    {exam.examCategory}
+                                  </span>
+                                )}
+                              </div>
+                              <div className={`text-sm mt-1 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
+                                {exam.totalMarks} marks • {exam.weightage || 'See Settings'}% weight
+                                {exam.scalingEnabled && <span className="text-emerald-400"> • Scaling On</span>}
+                              </div>
+                            </div>
+                          </button>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => {
+                                setShowExamSettings(exam._id);
+                                setExamSettings({
+                                  displayName: exam.displayName,
+                                  weightage: exam.weightage.toString(),
+                                  totalMarks: exam.totalMarks.toString(),
+                                  numberOfCOs: exam.numberOfCOs?.toString() || '',
+                                  numberOfQuestions: exam.numberOfQuestions?.toString() || '',
+                                  examCategory: exam.examCategory || '',
+                                });
+                              }}
+                              className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-white text-xs rounded-lg transition-all"
+                            >
+                              ⚙️
+                            </button>
+                            {!exam.isRequired && (
+                              <button
+                                onClick={() => handleDeleteExam(exam._id)}
+                                className="px-3 py-1.5 bg-red-900/30 hover:bg-red-900/50 text-red-300 text-xs rounded-lg transition-all"
+                              >
+                                🗑️
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Collapsible Content */}
+                        {expandedExam === exam._id && (
+                          <div className={`px-4 pb-4 border-t pt-4 ${theme === 'dark' ? 'border-gray-700' : 'border-gray-300'}`}>
+                            {/* Scaling Toggle */}
+                            <div className="mb-4 space-y-3">
                     <label className="flex items-center gap-2 cursor-pointer text-sm">
                       <input
                         type="checkbox"
@@ -1193,31 +1566,39 @@ export default function CoursePage() {
                       >
                         📊 Percentile
                       </button>
-                      <button
-                        onClick={() => handleApplyRounding(exam._id)}
-                        className="px-3 py-1.5 bg-gradient-to-r from-green-600 to-green-700 text-white text-xs rounded-lg hover:from-green-700 hover:to-green-800 transition-all shadow-lg"
-                      >
-                        🔢 Round
-                      </button>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+                              <button
+                                onClick={() => handleApplyRounding(exam._id)}
+                                className="px-3 py-1.5 bg-gradient-to-r from-green-600 to-green-700 text-white text-xs rounded-lg hover:from-green-700 hover:to-green-800 transition-all shadow-lg"
+                              >
+                                🔢 Round
+                              </button>
+                            </div>
+                          )}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
-        {/* Students & Marks Table */}
-        {students.length > 0 && (
-          <div className={`rounded-xl shadow-2xl p-6 border transition-colors ${
-            theme === 'dark'
-              ? 'bg-gradient-to-br from-gray-800 to-gray-800/80 border-gray-700/50'
-              : 'bg-white border-gray-300'
-          }`}>
-            <h2 className={`text-xl font-semibold mb-4 flex items-center gap-2 ${theme === 'dark' ? 'text-gray-100' : 'text-gray-800'}`}>
-              <span className="w-1 h-6 bg-gradient-to-b from-cyan-500 to-blue-500 rounded-full"></span>
-              Students & Marks
-            </h2>
+            {/* Students View */}
+            {activeView === 'students' && students.length > 0 && (
+              <div className="space-y-6">
+                <div>
+                  <h1 className={`text-3xl font-bold ${theme === 'dark' ? 'text-gray-100' : 'text-gray-800'}`}>
+                    Students & Marks
+                  </h1>
+                  <p className={`text-sm mt-1 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
+                    Managing {students.length} student(s)
+                  </p>
+                </div>
+                <div className={`rounded-xl shadow-2xl p-6 border transition-colors ${
+                  theme === 'dark'
+                    ? 'bg-gradient-to-br from-gray-800 to-gray-800/80 border-gray-700/50'
+                    : 'bg-white border-gray-300'
+                }`}>
             <div className="overflow-x-auto">
               <table className={`min-w-full divide-y ${theme === 'dark' ? 'divide-gray-700' : 'divide-gray-300'}`}>
                 <thead className={theme === 'dark' ? 'bg-gray-900/50' : 'bg-gray-100'}>
@@ -1523,26 +1904,122 @@ export default function CoursePage() {
               </table>
             </div>
           </div>
-        )}
+        </div>
+      )}
 
-        {/* Empty States */}
-        {students.length === 0 && (
-          <div className="bg-gradient-to-br from-gray-800 to-gray-800/80 rounded-xl shadow-2xl p-12 text-center border border-gray-700/50">
-            <div className="w-20 h-20 rounded-full bg-blue-900/30 flex items-center justify-center mx-auto mb-4">
-              <span className="text-4xl">👨‍🎓</span>
-            </div>
-            <h3 className="text-lg font-medium text-gray-100 mb-2">No Students Yet</h3>
-            <p className="text-gray-400 mb-6">Import students using CSV</p>
-            <button
-              onClick={() => setShowImportModal(true)}
-              className="px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all shadow-lg font-medium"
-            >
-              📥 Import Students
-            </button>
-          </div>
-        )}
-      </div>
+      {/* Marks View - Shows same table focused on marks management */}
+            {activeView === 'marks' && students.length > 0 && exams.length > 0 && (
+              <div className="space-y-6">
+                <div>
+                  <h1 className={`text-3xl font-bold ${theme === 'dark' ? 'text-gray-100' : 'text-gray-800'}`}>
+                    Marks Management
+                  </h1>
+                  <p className={`text-sm mt-1 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
+                    Add and manage marks for {students.length} student(s) across {exams.length} exam(s)
+                  </p>
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => {
+                      setInitialExamId(undefined);
+                      setInitialStudentId(undefined);
+                      setShowMarkModal(true);
+                    }}
+                    className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-all font-medium flex items-center gap-2"
+                  >
+                    ✏️ Add Mark
+                  </button>
+                </div>
+                <div className={`rounded-xl p-6 border ${
+                  theme === 'dark'
+                    ? 'bg-gray-800 border-gray-700'
+                    : 'bg-white border-gray-300'
+                }`}>
+                  <div className="overflow-x-auto">
+                    <table className={`min-w-full divide-y ${theme === 'dark' ? 'divide-gray-700' : 'divide-gray-300'}`}>
+                      <thead className={theme === 'dark' ? 'bg-gray-900/50' : 'bg-gray-100'}>
+                        <tr>
+                          <th className={`px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider ${theme === 'dark' ? 'text-gray-300' : 'text-gray-800'}`}>Student</th>
+                          {exams.map(exam => (
+                            <th key={exam._id} className={`px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider ${theme === 'dark' ? 'text-gray-300' : 'text-gray-800'}`}>
+                              {exam.displayName}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody className={`divide-y ${theme === 'dark' ? 'divide-gray-700/50' : 'divide-gray-300/50'}`}>
+                        {students.map((student, idx) => (
+                          <tr key={student._id} className={`transition-colors ${
+                            theme === 'dark'
+                              ? `hover:bg-gray-700/30 ${idx % 2 === 0 ? 'bg-gray-800/20' : 'bg-gray-900/20'}`
+                              : `hover:bg-gray-100 ${idx % 2 === 0 ? 'bg-gray-50' : 'bg-white'}`
+                          }`}>
+                            <td className={`px-4 py-3 text-sm ${theme === 'dark' ? 'text-gray-200' : 'text-gray-800'}`}>
+                              {student.name}
+                            </td>
+                            {exams.map(exam => {
+                              const mark = getMark(student._id, exam._id);
+                              return (
+                                <td key={exam._id} className={`px-4 py-3 text-sm`}>
+                                  <button
+                                    onClick={() => {
+                                      setInitialExamId(exam._id);
+                                      setInitialStudentId(student._id);
+                                      setShowMarkModal(true);
+                                    }}
+                                    className={`w-full text-left px-3 py-2 rounded-lg transition-all ${
+                                      mark
+                                        ? theme === 'dark'
+                                          ? 'bg-blue-900/30 text-blue-300 hover:bg-blue-900/50'
+                                          : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                                        : theme === 'dark'
+                                        ? 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                    }`}
+                                  >
+                                    {mark ? mark.rawMark : '+ Add'}
+                                  </button>
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
 
+            {/* Empty States */}
+            {activeView === 'students' && students.length === 0 && (
+              <div className={`rounded-xl p-12 text-center border ${
+                theme === 'dark'
+                  ? 'bg-gray-800 border-gray-700'
+                  : 'bg-white border-gray-300'
+              }`}>
+                <div className="text-6xl mb-4">👨‍🎓</div>
+                <h3 className={`text-xl font-semibold mb-2 ${theme === 'dark' ? 'text-gray-100' : 'text-gray-800'}`}>
+                  No Students Yet
+                </h3>
+                <p className={`mb-6 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
+                  Import students using CSV to get started
+                </p>
+                <button
+                  onClick={() => setShowImportModal(true)}
+                  className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-all font-medium"
+                >
+                  📥 Import Students
+                </button>
+              </div>
+            )}
+          </div> {/* Close max-w-7xl */}
+        </main>
+      </div> {/* Close flex container */}
+    </div> {/* Close min-h-screen */}
+
+    {/* Modals - Rendered as siblings for proper z-index */}
+    <div>
       {/* Import Students Modal */}
       {showImportModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
@@ -2404,6 +2881,425 @@ export default function CoursePage() {
           </div>
         </div>
       )}
-    </div>
+    </div> {/* Close modals wrapper */}
+
+    {/* Student Stats Modal */}
+    {showStudentStatsModal && selectedStudentForStats && (
+      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
+        <div className="bg-gradient-to-br from-gray-800 to-gray-800/80 rounded-2xl shadow-2xl max-w-5xl w-full border border-gray-700/50 p-6 max-h-[90vh] overflow-y-auto">
+          {/* Header */}
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-4">
+              <div className="w-16 h-16 rounded-full bg-blue-600 flex items-center justify-center text-2xl">
+                👨‍🎓
+              </div>
+              <div>
+                <h2 className="text-2xl font-bold text-gray-100">{selectedStudentForStats.name}</h2>
+                <p className="text-sm text-gray-400 mt-1">Student ID: {selectedStudentForStats.studentId}</p>
+                <p className="text-sm text-emerald-400 mt-1">
+                  {getStudentMarks(selectedStudentForStats._id).length} / {exams.length} exams completed
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                setShowStudentStatsModal(false);
+                setSelectedStudentForStats(null);
+              }}
+              className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-all font-medium text-sm"
+            >
+              Close
+            </button>
+          </div>
+
+          {/* Exams Grid */}
+          {exams.length === 0 ? (
+            <div className="text-center py-12">
+              <div className="text-4xl mb-3">📭</div>
+              <p className="text-gray-400">No exams configured for this course yet</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {exams.map((exam) => {
+                const mark = marks.find(m => m.studentId === selectedStudentForStats._id && m.examId === exam._id);
+                const stats = getClassStatsForExam(exam._id);
+                
+                return (
+                  <div
+                    key={exam._id}
+                    className={`p-4 rounded-lg border transition-all ${
+                      mark 
+                        ? 'border-blue-700/50 bg-gradient-to-br from-blue-900/20 to-purple-900/20 hover:border-blue-500/70' 
+                        : 'border-gray-700/50 bg-gray-900/30 hover:border-gray-600'
+                    }`}
+                  >
+                    {/* Exam Header */}
+                    <div className="mb-4">
+                      <div className="flex items-start justify-between mb-2">
+                        <h4 className="font-semibold text-gray-100 text-lg flex items-center gap-2">
+                          {exam.displayName}
+                        </h4>
+                        {exam.examCategory && (
+                          <span className="px-2 py-1 text-xs rounded bg-gray-700 text-gray-300 flex-shrink-0">
+                            {exam.examCategory}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-xs text-gray-400 space-y-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span>📝 Total: {exam.totalMarks} marks</span>
+                          {exam.scalingTarget && exam.scalingEnabled && (
+                            <span className="text-emerald-400">• Scaled to: {exam.scalingTarget}</span>
+                          )}
+                        </div>
+                        <div>⚖️ Weightage: {exam.weightage}%</div>
+                      </div>
+                    </div>
+
+                    {mark ? (
+                      <>
+                        {/* Marks Display */}
+                        <div className="grid grid-cols-3 gap-2 mb-4">
+                          <div className="p-3 rounded-lg bg-blue-900/40 border border-blue-700/50 text-center">
+                            <div className="text-xs text-gray-400 mb-1">Raw</div>
+                            <div className="text-lg font-bold text-blue-300">
+                              {mark.rawMark}
+                            </div>
+                            <div className="text-xs text-gray-500">/{exam.totalMarks}</div>
+                          </div>
+
+                          {exam.scalingEnabled && mark.scaledMark !== undefined && mark.scaledMark !== null ? (
+                            <div className="p-3 rounded-lg bg-emerald-900/40 border border-emerald-700/50 text-center">
+                              <div className="text-xs text-gray-400 mb-1">Scaled</div>
+                              <div className="text-lg font-bold text-emerald-300">
+                                {mark.scaledMark.toFixed(2)}
+                              </div>
+                              {exam.scalingTarget && (
+                                <div className="text-xs text-gray-500">/{exam.scalingTarget}</div>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="p-3 rounded-lg bg-gray-700/30 border border-gray-600/50 text-center">
+                              <div className="text-xs text-gray-400 mb-1">Scaled</div>
+                              <div className="text-xs text-gray-500 italic">Not scaled</div>
+                            </div>
+                          )}
+
+                          {exam.scalingEnabled && mark.roundedMark !== undefined && mark.roundedMark !== null ? (
+                            <div className="p-3 rounded-lg bg-purple-900/40 border border-purple-700/50 text-center">
+                              <div className="text-xs text-gray-400 mb-1">Final</div>
+                              <div className="text-lg font-bold text-purple-300">
+                                {mark.roundedMark}
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="p-3 rounded-lg bg-gray-700/30 border border-gray-600/50 text-center">
+                              <div className="text-xs text-gray-400 mb-1">Final</div>
+                              <div className="text-xs text-gray-500 italic">N/A</div>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Performance Visualization */}
+                        {stats && stats.count > 0 && (() => {
+                          const studentMark = exam.scalingEnabled && mark.scaledMark !== undefined && mark.scaledMark !== null
+                            ? mark.scaledMark
+                            : mark.rawMark;
+                          const avgPercent = (stats.average / stats.highest) * 100;
+                          const studentPercent = (studentMark / stats.highest) * 100;
+
+                          return (
+                            <div className="p-3 rounded-lg bg-indigo-900/20 border border-indigo-700/50">
+                              <div className="text-xs font-medium text-gray-300 mb-3 flex items-center gap-2">
+                                <span>📊</span>
+                                <span>Class Performance</span>
+                                <span className="ml-auto text-gray-500">({stats.count} students)</span>
+                              </div>
+                              
+                              <div className="space-y-2">
+                                {/* Highest */}
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs text-gray-400 w-12">High</span>
+                                  <div className="flex-1 h-5 bg-gray-800 rounded-full overflow-hidden">
+                                    <div 
+                                      className="h-full bg-gradient-to-r from-green-600 to-green-400 flex items-center justify-end pr-2"
+                                      style={{ width: '100%' }}
+                                    >
+                                      <span className="text-xs font-semibold text-white">{stats.highest.toFixed(1)}</span>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Student */}
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs text-gray-400 w-12 flex items-center gap-1">
+                                    <span>👤</span>
+                                    <span>This</span>
+                                  </span>
+                                  <div className="flex-1 h-6 bg-gray-800 rounded-full overflow-hidden border-2 border-blue-500">
+                                    <div 
+                                      className="h-full bg-gradient-to-r from-blue-600 to-blue-400 flex items-center justify-end pr-2"
+                                      style={{ width: `${studentPercent}%` }}
+                                    >
+                                      <span className="text-xs font-semibold text-white">{studentMark.toFixed(1)}</span>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Average */}
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs text-gray-400 w-12">Avg</span>
+                                  <div className="flex-1 h-5 bg-gray-800 rounded-full overflow-hidden">
+                                    <div 
+                                      className="h-full bg-gradient-to-r from-yellow-600 to-yellow-400 flex items-center justify-end pr-2"
+                                      style={{ width: `${avgPercent}%` }}
+                                    >
+                                      <span className="text-xs font-semibold text-white">{stats.average.toFixed(1)}</span>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Lowest */}
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs text-gray-400 w-12">Low</span>
+                                  <div className="flex-1 h-5 bg-gray-800 rounded-full overflow-hidden">
+                                    <div 
+                                      className="h-full bg-gradient-to-r from-red-600 to-red-400 flex items-center justify-end pr-2"
+                                      style={{ width: `${(stats.lowest / stats.highest) * 100}%` }}
+                                    >
+                                      <span className="text-xs font-semibold text-white">{stats.lowest.toFixed(1)}</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Performance badge */}
+                              <div className="mt-3 text-center">
+                                <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold ${
+                                  studentMark >= stats.average 
+                                    ? 'bg-green-900/40 text-green-300 border border-green-700/50' 
+                                    : 'bg-yellow-900/40 text-yellow-300 border border-yellow-700/50'
+                                }`}>
+                                  {studentMark >= stats.average ? '🎯 Above Average' : '📈 Below Average'}
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })()}
+                      </>
+                    ) : (
+                      <div className="text-center py-8 text-gray-500 italic">
+                        <div className="text-3xl mb-2">📝</div>
+                        <div className="text-sm">Marks not recorded yet</div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Final Grade Summary */}
+          {course.showFinalGrade && getStudentMarks(selectedStudentForStats._id).length > 0 && (() => {
+            const gradeData = calculateFinalGrade(selectedStudentForStats._id);
+            const totalWeightage = calculateTotalWeightage();
+            const studentMarksCount = getStudentMarks(selectedStudentForStats._id).length;
+            
+            return (
+              <div className="mt-6 p-4 rounded-lg bg-gradient-to-r from-blue-900/30 to-purple-900/30 border border-blue-700/50">
+                <h4 className="text-lg font-semibold text-gray-100 mb-3">📈 Final Grade</h4>
+                
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
+                  <div>
+                    <div className="text-xs text-gray-400">Exams Taken</div>
+                    <div className="text-xl font-bold text-blue-300">
+                      {studentMarksCount} / {exams.length}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-gray-400">Total Weightage</div>
+                    <div className="text-xl font-bold text-emerald-300">
+                      {totalWeightage}%
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-gray-400">Points Earned</div>
+                    <div className="text-xl font-bold text-purple-300">
+                      {gradeData.total.toFixed(2)}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-gray-400">Current Grade</div>
+                    <div className="text-2xl font-bold text-cyan-300">
+                      {totalWeightage > 0 
+                        ? `${((gradeData.total / totalWeightage) * 100).toFixed(1)}%`
+                        : 'N/A'}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-gray-400">Letter Grade</div>
+                    <div className="text-2xl font-bold">
+                      {totalWeightage > 0 ? (() => {
+                        const percentage = (gradeData.total / totalWeightage) * 100;
+                        const letterGrade = calculateLetterGrade(percentage, course.gradingScale);
+                        return (
+                          <span className={`${getGradeColor(letterGrade.letter)}`}>
+                            {getGradeDisplay(letterGrade.letter, letterGrade.modifier)}
+                          </span>
+                        );
+                      })() : 'N/A'}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Breakdown Details */}
+                {gradeData.breakdown.length > 0 && (
+                  <div className="mt-4 p-3 bg-gray-900/50 rounded-lg">
+                    <div className="text-sm font-medium text-gray-300 mb-3">Grade Breakdown</div>
+                    <div className="space-y-2">
+                      {gradeData.breakdown.map((item: any, idx: number) => (
+                        <div key={idx} className={`flex items-center justify-between text-xs p-2 rounded ${
+                          item.isAggregated ? 'bg-amber-900/20 border border-amber-700/30' : 'bg-gray-800/50'
+                        }`}>
+                          <div className="flex items-center gap-2">
+                            {item.isAggregated && <span>📊</span>}
+                            <span className="text-gray-300">{item.name}</span>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <span className="text-blue-400">
+                              {item.mark.toFixed(2)}/{item.totalMarks}
+                            </span>
+                            <span className="text-purple-400">
+                              {((item.mark / item.totalMarks) * 100).toFixed(1)}%
+                            </span>
+                            <span className="text-gray-500">×</span>
+                            <span className="text-cyan-400">{item.weightage}%</span>
+                            <span className="text-gray-500">=</span>
+                            <span className="text-green-400 font-semibold min-w-[3rem] text-right">
+                              {item.contribution.toFixed(2)}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                      <div className="flex items-center justify-between text-sm p-2 bg-green-900/20 border border-green-700/50 rounded font-semibold mt-3">
+                        <span className="text-gray-200">Total Contribution:</span>
+                        <span className="text-green-300 text-lg">{gradeData.total.toFixed(2)}%</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
+          {/* Estimated Grade Calculator */}
+          {(() => {
+            const estimate = calculateEstimatedGrade(selectedStudentForStats._id);
+            if (!estimate) return null;
+
+            return (
+              <div className="mt-6 p-4 rounded-lg bg-gradient-to-r from-purple-900/30 to-pink-900/30 border border-purple-700/50">
+                <h4 className="text-lg font-semibold text-gray-100 mb-3 flex items-center gap-2">
+                  <span>🎯</span>
+                  <span>Grade Estimator</span>
+                </h4>
+                
+                <div className="mb-4 grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div className="p-3 bg-purple-900/20 rounded-lg">
+                    <div className="text-xs text-gray-400">Current Progress</div>
+                    <div className="text-lg font-bold text-purple-300">
+                      {estimate.completedExams}/{estimate.totalExams}
+                    </div>
+                    <div className="text-xs text-gray-500">exams</div>
+                  </div>
+                  <div className="p-3 bg-blue-900/20 rounded-lg">
+                    <div className="text-xs text-gray-400">Current Points</div>
+                    <div className="text-lg font-bold text-blue-300">
+                      {estimate.currentPoints.toFixed(1)}
+                    </div>
+                    <div className="text-xs text-gray-500">out of {estimate.completedWeightage}%</div>
+                  </div>
+                  <div className="p-3 bg-amber-900/20 rounded-lg">
+                    <div className="text-xs text-gray-400">Remaining Exams</div>
+                    <div className="text-lg font-bold text-amber-300">
+                      {estimate.remainingExams}
+                    </div>
+                    <div className="text-xs text-gray-500">exams</div>
+                  </div>
+                  <div className="p-3 bg-emerald-900/20 rounded-lg">
+                    <div className="text-xs text-gray-400">Remaining Weight</div>
+                    <div className="text-lg font-bold text-emerald-300">
+                      {estimate.remainingWeightage.toFixed(0)}%
+                    </div>
+                    <div className="text-xs text-gray-500">weightage</div>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="text-sm font-medium text-gray-300 mb-3">
+                    Average % needed in remaining exams to achieve:
+                  </div>
+                  {estimate.estimates.map((est: any, idx: number) => (
+                    <div 
+                      key={idx} 
+                      className={`p-3 rounded-lg border ${
+                        est.achievable 
+                          ? 'bg-gray-800/50 border-gray-700/50' 
+                          : 'bg-red-900/20 border-red-700/30 opacity-50'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <span className={`text-2xl font-bold ${
+                            est.grade === 'A' ? 'text-green-400' :
+                            est.grade === 'B' ? 'text-blue-400' :
+                            est.grade === 'C' ? 'text-yellow-400' :
+                            'text-orange-400'
+                          }`}>
+                            {est.grade}
+                          </span>
+                          <div>
+                            <div className="text-sm text-gray-300">
+                              Grade {est.grade} (≥{est.targetPercentage}%)
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              Need {(est.targetPercentage - estimate.currentPoints).toFixed(1)} more points
+                            </div>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className={`text-2xl font-bold ${
+                            est.achievable ? 'text-cyan-300' : 'text-red-400'
+                          }`}>
+                            {est.averageNeeded.toFixed(1)}%
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            {est.achievable ? 'avg needed' : 'not possible'}
+                          </div>
+                        </div>
+                      </div>
+                      {!est.achievable && (
+                        <div className="mt-2 text-xs text-red-400">
+                          ⚠️ Target not achievable with remaining weightage
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-4 p-3 bg-cyan-900/20 border border-cyan-700/50 rounded-lg">
+                  <p className="text-xs text-cyan-300">
+                    <strong>💡 How to read:</strong> If this student scores the shown percentage (average) in all remaining exams, 
+                    they'll achieve that grade. For example, if "Grade B" shows "75%", scoring an average of 75% 
+                    in the remaining {estimate.remainingExams} exam(s) will result in a B grade overall.
+                  </p>
+                </div>
+              </div>
+            );
+          })()}
+        </div>
+      </div>
+    )}
+    </>
   );
 }
