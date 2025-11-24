@@ -9,6 +9,7 @@ import { parseCSV } from '@/app/utils/csv';
 import AddMarkModal from '@/app/components/AddMarkModal';
 import StudentDetailModal from '@/app/components/StudentDetailModal';
 import OverviewView from './components/OverviewView';
+// Note: Exams, Students, and Marks views remain inline due to complex state dependencies
 import { 
   GradeThreshold, 
   DEFAULT_GRADING_SCALE, 
