@@ -19,6 +19,38 @@ import {
   getGradeColor,
   getGradeBgColor 
 } from '@/app/utils/grading';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Progress } from '@/components/ui/progress';
+import { 
+  Settings, 
+  LogOut, 
+  ArrowLeft, 
+  Plus, 
+  Upload, 
+  Download, 
+  FileUp, 
+  Search,
+  X,
+  ChevronDown,
+  ChevronRight,
+  Loader2,
+  Check,
+  Trash2,
+  BookOpen,
+  FlaskConical,
+  Edit,
+  Menu
+} from 'lucide-react';
 
 interface Student {
   _id: string;
@@ -77,7 +109,6 @@ export default function CoursePage() {
   const [exams, setExams] = useState<Exam[]>([]);
   const [marks, setMarks] = useState<Mark[]>([]);
   const [loading, setLoading] = useState(true);
-  const [theme, setTheme] = useState<'light' | 'dark'>('dark');
 
   // Modal states
   const [showImportModal, setShowImportModal] = useState(false);
@@ -130,31 +161,6 @@ export default function CoursePage() {
   });
   const [scalingTargets, setScalingTargets] = useState<{ [examId: string]: string }>({});
   const [error, setError] = useState('');
-
-  useEffect(() => {
-    const savedTheme = localStorage.getItem('theme') as 'light' | 'dark' | null;
-    if (savedTheme) {
-      setTheme(savedTheme);
-    }
-
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'theme') {
-        setTheme((e.newValue as 'light' | 'dark') || 'dark');
-      }
-    };
-
-    const handleThemeChange = (e: CustomEvent) => {
-      setTheme(e.detail.theme);
-    };
-
-    window.addEventListener('storage', handleStorageChange);
-    window.addEventListener('themeChange' as any, handleThemeChange as any);
-
-    return () => {
-      window.removeEventListener('storage', handleStorageChange);
-      window.removeEventListener('themeChange' as any, handleThemeChange as any);
-    };
-  }, []);
 
   useEffect(() => {
     if (courseId) {
@@ -814,24 +820,23 @@ export default function CoursePage() {
 
   if (loading) {
     return (
-      <div className={`min-h-screen flex items-center justify-center transition-colors ${
-        theme === 'dark'
-          ? 'bg-gradient-to-br from-gray-900 via-slate-900 to-gray-900'
-          : 'bg-gradient-to-br from-gray-100 via-slate-100 to-gray-100'
-      }`}>
-        <div className={theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}>Loading...</div>
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+          <p className="text-muted-foreground">Loading course data...</p>
+        </div>
       </div>
     );
   }
 
   if (!course) {
     return (
-      <div className={`min-h-screen flex items-center justify-center transition-colors ${
-        theme === 'dark'
-          ? 'bg-gradient-to-br from-gray-900 via-slate-900 to-gray-900'
-          : 'bg-gradient-to-br from-gray-100 via-slate-100 to-gray-100'
-      }`}>
-        <div className={theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}>Course not found</div>
+      <div className="min-h-screen flex items-center justify-center">
+        <Card>
+          <CardContent className="pt-6">
+            <p className="text-muted-foreground">Course not found</p>
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -935,17 +940,9 @@ export default function CoursePage() {
 
   return (
     <>
-    <div className={`min-h-screen transition-colors ${
-      theme === 'dark'
-        ? 'bg-gradient-to-br from-gray-900 via-slate-900 to-gray-900'
-        : 'bg-gradient-to-br from-gray-100 via-slate-100 to-gray-100'
-    }`}>
+    <div className="min-h-screen">
       {/* Navbar */}
-      <nav className={`sticky top-0 z-50 backdrop-blur-md border-b transition-colors ${
-        theme === 'dark'
-          ? 'bg-gray-900/80 border-gray-700'
-          : 'bg-white/80 border-gray-300'
-      }`}>
+      <nav className="sticky top-0 z-50 backdrop-blur-md bg-background/80 border-b">
         <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
@@ -959,49 +956,44 @@ export default function CoursePage() {
                 />
               </Link>
               <div>
-                <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent flex items-center gap-2">
-                  {course?.courseType === 'Theory' ? '📖' : '🔬'} {course.name}
+                <h1 className="text-2xl font-bold flex items-center gap-2">
+                  {course?.courseType === 'Theory' ? (
+                    <BookOpen className="w-6 h-6 text-primary" />
+                  ) : (
+                    <FlaskConical className="w-6 h-6 text-primary" />
+                  )}
+                  {course.name}
                 </h1>
-                <p className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-700'}`}>
+                <p className="text-xs mt-1 text-muted-foreground">
                   {course.code} • {course.semester} {course.year} • 
-                  <span className={`ml-1 px-2 py-0.5 rounded text-xs font-medium ${
-                    course?.courseType === 'Theory' 
-                      ? 'bg-blue-900/30 text-blue-300' 
-                      : 'bg-purple-900/30 text-purple-300'
-                  }`}>
+                  <Badge variant="secondary" className="ml-1">
                     {course.courseType}
-                  </span>
+                  </Badge>
                 </p>
               </div>
             </div>
 
-            <div className="flex items-center gap-3">
-              <Link
-                href="/settings"
-                className={`px-4 py-2 rounded-lg transition-all font-medium text-sm ${
-                  theme === 'dark'
-                    ? 'bg-gray-700 hover:bg-gray-600 text-white'
-                    : 'bg-gray-300 hover:bg-gray-400 text-gray-900'
-                }`}
-              >
-                ⚙️ Settings
-              </Link>
-              <Link
-                href="/dashboard"
-                className={`px-4 py-2 rounded-lg transition-all font-medium text-sm ${
-                  theme === 'dark'
-                    ? 'bg-gray-700 hover:bg-gray-600 text-white'
-                    : 'bg-gray-300 hover:bg-gray-400 text-gray-900'
-                }`}
-              >
-                ← Dashboard
-              </Link>
-              <button
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" asChild>
+                <Link href="/settings">
+                  <Settings className="w-4 h-4 mr-2" />
+                  Settings
+                </Link>
+              </Button>
+              <Button variant="outline" size="sm" asChild>
+                <Link href="/dashboard">
+                  <ArrowLeft className="w-4 h-4 mr-2" />
+                  Dashboard
+                </Link>
+              </Button>
+              <Button 
+                variant="destructive" 
+                size="sm"
                 onClick={() => signOut({ callbackUrl: '/auth/signin' })}
-                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-all font-medium text-sm"
               >
+                <LogOut className="w-4 h-4 mr-2" />
                 Sign Out
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -1012,93 +1004,77 @@ export default function CoursePage() {
         {/* Left Sidebar */}
         <aside className={`${
           sidebarOpen ? 'w-64' : 'w-16'
-        } transition-all duration-300 border-r ${
-          theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-300'
-        } flex flex-col`}>
+        } transition-all duration-300 border-r bg-card flex flex-col`}>
           {/* Sidebar Header */}
-          <div className="p-4 border-b ${theme === 'dark' ? 'border-gray-700' : 'border-gray-300'}">
-            <button
+          <div className="p-4 border-b">
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => setSidebarOpen(!sidebarOpen)}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all ${
-                theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-100'
-              }`}
+              className="w-full justify-start"
             >
-              <span className="text-xl">☰</span>
-              {sidebarOpen && <span className={`font-medium ${theme === 'dark' ? 'text-gray-100' : 'text-gray-800'}`}>Menu</span>}
-            </button>
+              <Menu className="w-5 h-5" />
+              {sidebarOpen && <span className="ml-2 font-medium">Menu</span>}
+            </Button>
           </div>
 
           {/* Navigation */}
           <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
-            <button
+            <Button
+              variant={activeView === 'overview' ? 'default' : 'ghost'}
+              size="sm"
               onClick={() => setActiveView('overview')}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all ${
-                activeView === 'overview'
-                  ? 'bg-blue-600 text-white'
-                  : theme === 'dark'
-                  ? 'text-gray-300 hover:bg-gray-700'
-                  : 'text-gray-700 hover:bg-gray-100'
-              }`}
+              className="w-full justify-start"
             >
-              <span className="text-xl">📊</span>
-              {sidebarOpen && <span className="font-medium">Overview</span>}
-            </button>
+              <span className="text-lg">📊</span>
+              {sidebarOpen && <span className="ml-2 font-medium">Overview</span>}
+            </Button>
             
-            <button
+            <Button
+              variant={activeView === 'exams' ? 'default' : 'ghost'}
+              size="sm"
               onClick={() => setActiveView('exams')}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all ${
-                activeView === 'exams'
-                  ? 'bg-emerald-600 text-white'
-                  : theme === 'dark'
-                  ? 'text-gray-300 hover:bg-gray-700'
-                  : 'text-gray-700 hover:bg-gray-100'
-              }`}
+              className="w-full justify-start"
             >
-              <span className="text-xl">📝</span>
+              <span className="text-lg">📝</span>
               {sidebarOpen && (
-                <div className="flex-1 flex items-center justify-between">
+                <div className="flex-1 flex items-center justify-between ml-2">
                   <span className="font-medium">Exams</span>
-                  <span className="px-2 py-0.5 bg-black/20 rounded text-xs">{exams.length}</span>
+                  <Badge variant="secondary" className="ml-2">{exams.length}</Badge>
                 </div>
               )}
-            </button>
+            </Button>
             
-            <button
+            <Button
+              variant={activeView === 'students' ? 'default' : 'ghost'}
+              size="sm"
               onClick={() => setActiveView('students')}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all ${
-                activeView === 'students'
-                  ? 'bg-purple-600 text-white'
-                  : theme === 'dark'
-                  ? 'text-gray-300 hover:bg-gray-700'
-                  : 'text-gray-700 hover:bg-gray-100'
-              }`}
+              className="w-full justify-start"
             >
-              <span className="text-xl">👥</span>
+              <span className="text-lg">👥</span>
               {sidebarOpen && (
-                <div className="flex-1 flex items-center justify-between">
+                <div className="flex-1 flex items-center justify-between ml-2">
                   <span className="font-medium">Students</span>
-                  <span className="px-2 py-0.5 bg-black/20 rounded text-xs">{students.length}</span>
+                  <Badge variant="secondary" className="ml-2">{students.length}</Badge>
                 </div>
               )}
-            </button>
+            </Button>
             
-            <button
+            <Button
+              variant={activeView === 'marks' ? 'default' : 'ghost'}
+              size="sm"
               onClick={() => setActiveView('marks')}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all ${
-                activeView === 'marks'
-                  ? 'bg-amber-600 text-white'
-                  : theme === 'dark'
-                  ? 'text-gray-300 hover:bg-gray-700'
-                  : 'text-gray-700 hover:bg-gray-100'
-              }`}
+              className="w-full justify-start"
             >
-              <span className="text-xl">✏️</span>
-              {sidebarOpen && <span className="font-medium">Marks</span>}
-            </button>
+              <span className="text-lg">✏️</span>
+              {sidebarOpen && <span className="ml-2 font-medium">Marks</span>}
+            </Button>
 
-            {sidebarOpen && <div className="pt-4 mt-4 border-t ${theme === 'dark' ? 'border-gray-700' : 'border-gray-300'}"></div>}
+            {sidebarOpen && <div className="pt-4 mt-4 border-t"></div>}
 
-            <button
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => {
                 setCourseSettingsData({
                   quizAggregation: course?.quizAggregation || 'average',
@@ -1111,67 +1087,73 @@ export default function CoursePage() {
                 });
                 setShowCourseSettings(true);
               }}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all ${
-                theme === 'dark'
-                  ? 'text-gray-300 hover:bg-gray-700'
-                  : 'text-gray-700 hover:bg-gray-100'
-              }`}
+              className="w-full justify-start"
             >
-              <span className="text-xl">⚙️</span>
-              {sidebarOpen && <span className="font-medium">Settings</span>}
-            </button>
+              <Settings className="w-5 h-5" />
+              {sidebarOpen && <span className="ml-2 font-medium">Settings</span>}
+            </Button>
           </nav>
 
           {/* Student Search */}
-          <div className={`px-4 py-3 border-t border-b ${theme === 'dark' ? 'border-gray-700' : 'border-gray-300'}`}>
+          <div className="px-4 py-3 border-t border-b">
             {sidebarOpen ? (
               <form onSubmit={handleStudentSearch} className="space-y-2">
-                <label className={`text-xs font-medium ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
-                  🔍 Search Student
-                </label>
+                <Label className="text-xs font-medium flex items-center gap-1">
+                  <Search className="w-3 h-3" />
+                  Search Student
+                </Label>
                 <div className="flex gap-2">
-                  <input
+                  <Input
                     type="text"
                     value={searchStudentId}
                     onChange={(e) => setSearchStudentId(e.target.value)}
                     placeholder="ID or Name"
-                    className={`flex-1 px-2 py-1.5 text-sm rounded border ${theme === 'dark' ? 'bg-gray-900 border-gray-600 text-gray-100 placeholder-gray-500' : 'bg-white border-gray-300 text-gray-900'}`}
+                    className="flex-1 h-8 text-sm"
                   />
-                  <button
-                    type="submit"
-                    className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm transition-all"
-                  >
-                    →
-                  </button>
+                  <Button type="submit" size="sm" className="h-8 px-3">
+                    <Search className="w-4 h-4" />
+                  </Button>
                 </div>
               </form>
             ) : (
-              <button
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={() => setSidebarOpen(true)}
-                className={`w-full flex items-center justify-center p-2 rounded-lg ${theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-100'} transition-all`}
+                className="w-full"
                 title="Search Student"
               >
-                <span className="text-xl">🔍</span>
-              </button>
+                <Search className="w-5 h-5" />
+              </Button>
             )}
           </div>
 
           {/* Quick Actions */}
           {sidebarOpen && (
-            <div className="p-3 border-t ${theme === 'dark' ? 'border-gray-700' : 'border-gray-300'} space-y-2">
-              <button
+            <div className="p-3 border-t space-y-2">
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={handleExportCourse}
                 disabled={!course || exportingJSON}
-                className="w-full px-3 py-2 bg-cyan-600 hover:bg-cyan-700 text-white rounded-lg text-sm transition-all disabled:opacity-50 flex items-center gap-2 justify-center"
+                className="w-full"
               >
-                {exportingJSON ? '...' : '📤 Export'}
-              </button>
-              <button
+                {exportingJSON ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Download className="w-4 h-4 mr-2" />
+                )}
+                Export
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={() => setShowImportCourseModal(true)}
-                className="w-full px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm transition-all flex items-center gap-2 justify-center"
+                className="w-full"
               >
-                📥 Import
-              </button>
+                <FileUp className="w-4 h-4 mr-2" />
+                Import
+              </Button>
             </div>
           )}
         </aside>
@@ -1183,172 +1165,154 @@ export default function CoursePage() {
             {activeView === 'overview' && (
               <div className="space-y-6">
                 <div>
-                  <h1 className={`text-3xl font-bold ${theme === 'dark' ? 'text-gray-100' : 'text-gray-800'}`}>
-                    Course Overview
-                  </h1>
-                  <p className={`text-sm mt-1 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
+                  <h1 className="text-3xl font-bold">Course Overview</h1>
+                  <p className="text-sm mt-1 text-muted-foreground">
                     Quick stats and actions for {course?.name}
                   </p>
                 </div>
 
                 {/* Stats Cards */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className={`rounded-xl p-6 border ${
-                    theme === 'dark'
-                      ? 'bg-gradient-to-br from-blue-900/20 to-blue-800/10 border-blue-700/50'
-                      : 'bg-blue-50 border-blue-200'
-                  }`}>
-                    <div className="flex items-center gap-3 mb-2">
-                      <span className="text-3xl">👥</span>
-                      <div>
-                        <div className={`text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>Students</div>
-                        <div className={`text-2xl font-bold ${theme === 'dark' ? 'text-gray-100' : 'text-gray-800'}`}>{students.length}</div>
+                  <Card>
+                    <CardHeader>
+                      <div className="flex items-center gap-3">
+                        <span className="text-3xl">👥</span>
+                        <div>
+                          <CardDescription>Students</CardDescription>
+                          <CardTitle className="text-2xl">{students.length}</CardTitle>
+                        </div>
                       </div>
-                    </div>
-                    <button
-                      onClick={() => setShowImportModal(true)}
-                      className="w-full mt-3 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm transition-all"
-                    >
-                      ➕ Import Students
-                    </button>
-                  </div>
+                    </CardHeader>
+                    <CardFooter>
+                      <Button 
+                        onClick={() => setShowImportModal(true)}
+                        className="w-full"
+                        size="sm"
+                      >
+                        <Plus className="w-4 h-4 mr-2" />
+                        Import Students
+                      </Button>
+                    </CardFooter>
+                  </Card>
 
-                  <div className={`rounded-xl p-6 border ${
-                    theme === 'dark'
-                      ? 'bg-gradient-to-br from-emerald-900/20 to-emerald-800/10 border-emerald-700/50'
-                      : 'bg-emerald-50 border-emerald-200'
-                  }`}>
-                    <div className="flex items-center gap-3 mb-2">
-                      <span className="text-3xl">📝</span>
-                      <div>
-                        <div className={`text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>Exams</div>
-                        <div className={`text-2xl font-bold ${theme === 'dark' ? 'text-gray-100' : 'text-gray-800'}`}>{exams.length}</div>
+                  <Card>
+                    <CardHeader>
+                      <div className="flex items-center gap-3">
+                        <span className="text-3xl">📝</span>
+                        <div>
+                          <CardDescription>Exams</CardDescription>
+                          <CardTitle className="text-2xl">{exams.length}</CardTitle>
+                        </div>
                       </div>
-                    </div>
-                    <button
-                      onClick={() => setShowExamModal(true)}
-                      className="w-full mt-3 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm transition-all"
-                    >
-                      ➕ Add Exam
-                    </button>
-                  </div>
+                    </CardHeader>
+                    <CardFooter>
+                      <Button 
+                        onClick={() => setShowExamModal(true)}
+                        className="w-full"
+                        size="sm"
+                      >
+                        <Plus className="w-4 h-4 mr-2" />
+                        Add Exam
+                      </Button>
+                    </CardFooter>
+                  </Card>
 
-                  <div className={`rounded-xl p-6 border ${
-                    theme === 'dark'
-                      ? 'bg-gradient-to-br from-purple-900/20 to-purple-800/10 border-purple-700/50'
-                      : 'bg-purple-50 border-purple-200'
-                  }`}>
-                    <div className="flex items-center gap-3 mb-2">
-                      <span className="text-3xl">✏️</span>
-                      <div>
-                        <div className={`text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>Total Marks</div>
-                        <div className={`text-2xl font-bold ${theme === 'dark' ? 'text-gray-100' : 'text-gray-800'}`}>{marks.length}</div>
+                  <Card>
+                    <CardHeader>
+                      <div className="flex items-center gap-3">
+                        <span className="text-3xl">✏️</span>
+                        <div>
+                          <CardDescription>Total Marks</CardDescription>
+                          <CardTitle className="text-2xl">{marks.length}</CardTitle>
+                        </div>
                       </div>
-                    </div>
-                    <button
-                      onClick={() => {
-                        setInitialExamId(undefined);
-                        setInitialStudentId(undefined);
-                        setShowMarkModal(true);
-                      }}
-                      disabled={students.length === 0 || exams.length === 0}
-                      className="w-full mt-3 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      ➕ Add Mark
-                    </button>
-                  </div>
+                    </CardHeader>
+                    <CardFooter>
+                      <Button 
+                        onClick={() => {
+                          setInitialExamId(undefined);
+                          setInitialStudentId(undefined);
+                          setShowMarkModal(true);
+                        }}
+                        disabled={students.length === 0 || exams.length === 0}
+                        className="w-full"
+                        size="sm"
+                      >
+                        <Plus className="w-4 h-4 mr-2" />
+                        Add Mark
+                      </Button>
+                    </CardFooter>
+                  </Card>
                 </div>
 
                 {/* Quick Actions Grid */}
-                <div className={`rounded-xl p-6 border ${
-                  theme === 'dark'
-                    ? 'bg-gray-800 border-gray-700'
-                    : 'bg-white border-gray-300'
-                }`}>
-                  <h2 className={`text-xl font-semibold mb-4 ${theme === 'dark' ? 'text-gray-100' : 'text-gray-800'}`}>
-                    Quick Actions
-                  </h2>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    <button
-                      onClick={() => setActiveView('students')}
-                      className={`p-4 rounded-lg border transition-all ${
-                        theme === 'dark'
-                          ? 'bg-gray-700/50 border-gray-600 hover:bg-gray-700'
-                          : 'bg-gray-50 border-gray-300 hover:bg-gray-100'
-                      } flex flex-col items-center gap-2`}
-                    >
-                      <span className="text-2xl">👥</span>
-                      <span className={`text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
-                        View Students
-                      </span>
-                    </button>
-                    
-                    <button
-                      onClick={() => setActiveView('exams')}
-                      className={`p-4 rounded-lg border transition-all ${
-                        theme === 'dark'
-                          ? 'bg-gray-700/50 border-gray-600 hover:bg-gray-700'
-                          : 'bg-gray-50 border-gray-300 hover:bg-gray-100'
-                      } flex flex-col items-center gap-2`}
-                    >
-                      <span className="text-2xl">📝</span>
-                      <span className={`text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
-                        Manage Exams
-                      </span>
-                    </button>
-                    
-                    <button
-                      onClick={handleExportCSV}
-                      disabled={exportingCSV}
-                      className={`p-4 rounded-lg border transition-all ${
-                        theme === 'dark'
-                          ? 'bg-gray-700/50 border-gray-600 hover:bg-gray-700'
-                          : 'bg-gray-50 border-gray-300 hover:bg-gray-100'
-                      } flex flex-col items-center gap-2 disabled:opacity-50`}
-                    >
-                      <span className="text-2xl">📊</span>
-                      <span className={`text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
-                        {exportingCSV ? 'Exporting...' : 'Export CSV'}
-                      </span>
-                    </button>
-                    
-                    <button
-                      onClick={() => setActiveView('marks')}
-                      className={`p-4 rounded-lg border transition-all ${
-                        theme === 'dark'
-                          ? 'bg-gray-700/50 border-gray-600 hover:bg-gray-700'
-                          : 'bg-gray-50 border-gray-300 hover:bg-gray-100'
-                      } flex flex-col items-center gap-2`}
-                    >
-                      <span className="text-2xl">✏️</span>
-                      <span className={`text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
-                        Add Marks
-                      </span>
-                    </button>
-                  </div>
-                </div>
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-xl">Quick Actions</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                      <Button
+                        variant="outline"
+                        onClick={() => setActiveView('students')}
+                        className="h-auto py-4 flex-col"
+                      >
+                        <span className="text-2xl mb-2">👥</span>
+                        <span className="text-sm font-medium">View Students</span>
+                      </Button>
+                      
+                      <Button
+                        variant="outline"
+                        onClick={() => setActiveView('exams')}
+                        className="h-auto py-4 flex-col"
+                      >
+                        <span className="text-2xl mb-2">📝</span>
+                        <span className="text-sm font-medium">Manage Exams</span>
+                      </Button>
+                      
+                      <Button
+                        variant="outline"
+                        onClick={handleExportCSV}
+                        disabled={exportingCSV}
+                        className="h-auto py-4 flex-col"
+                      >
+                        {exportingCSV ? (
+                          <Loader2 className="w-6 h-6 mb-2 animate-spin" />
+                        ) : (
+                          <span className="text-2xl mb-2">📊</span>
+                        )}
+                        <span className="text-sm font-medium">
+                          {exportingCSV ? 'Exporting...' : 'Export CSV'}
+                        </span>
+                      </Button>
+                      
+                      <Button
+                        variant="outline"
+                        onClick={() => setActiveView('marks')}
+                        className="h-auto py-4 flex-col"
+                      >
+                        <span className="text-2xl mb-2">✏️</span>
+                        <span className="text-sm font-medium">Add Marks</span>
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
 
                 {/* Recent Activity or Empty State */}
                 {students.length === 0 ? (
-                  <div className={`rounded-xl p-12 text-center border ${
-                    theme === 'dark'
-                      ? 'bg-gray-800 border-gray-700'
-                      : 'bg-white border-gray-300'
-                  }`}>
-                    <div className="text-6xl mb-4">🎓</div>
-                    <h3 className={`text-xl font-semibold mb-2 ${theme === 'dark' ? 'text-gray-100' : 'text-gray-800'}`}>
-                      Get Started
-                    </h3>
-                    <p className={`mb-6 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
-                      Import students to begin managing your course
-                    </p>
-                    <button
-                      onClick={() => setShowImportModal(true)}
-                      className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-all font-medium"
-                    >
-                      📥 Import Students Now
-                    </button>
-                  </div>
+                  <Card>
+                    <CardContent className="pt-12 pb-12 text-center">
+                      <div className="text-6xl mb-4">🎓</div>
+                      <CardTitle className="text-xl mb-2">Get Started</CardTitle>
+                      <CardDescription className="mb-6">
+                        Import students to begin managing your course
+                      </CardDescription>
+                      <Button onClick={() => setShowImportModal(true)}>
+                        <Upload className="w-4 h-4 mr-2" />
+                        Import Students Now
+                      </Button>
+                    </CardContent>
+                  </Card>
                 ) : null}
               </div>
             )}
@@ -1358,115 +1322,98 @@ export default function CoursePage() {
               <div className="space-y-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h1 className={`text-3xl font-bold ${theme === 'dark' ? 'text-gray-100' : 'text-gray-800'}`}>
-                      Exams Management
-                    </h1>
-                    <p className={`text-sm mt-1 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
+                    <h1 className="text-3xl font-bold">Exams Management</h1>
+                    <p className="text-sm mt-1 text-muted-foreground">
                       Configure and manage {exams.length} exam(s)
                     </p>
                   </div>
-                  <button
-                    onClick={() => setShowExamModal(true)}
-                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-all font-medium flex items-center gap-2"
-                  >
-                    ➕ Add New Exam
-                  </button>
+                  <Button onClick={() => setShowExamModal(true)}>
+                    <Plus className="w-4 h-4 mr-2" />
+                    Add New Exam
+                  </Button>
                 </div>
 
                 {exams.length === 0 ? (
-                  <div className={`rounded-xl p-12 text-center border ${
-                    theme === 'dark'
-                      ? 'bg-gray-800 border-gray-700'
-                      : 'bg-white border-gray-300'
-                  }`}>
-                    <div className="text-6xl mb-4">📝</div>
-                    <h3 className={`text-xl font-semibold mb-2 ${theme === 'dark' ? 'text-gray-100' : 'text-gray-800'}`}>
-                      No Exams Yet
-                    </h3>
-                    <p className={`mb-6 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
-                      Create your first exam to start tracking student performance
-                    </p>
-                    <button
-                      onClick={() => setShowExamModal(true)}
-                      className="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-all font-medium"
-                    >
-                      ➕ Create First Exam
-                    </button>
-                  </div>
+                  <Card>
+                    <CardContent className="pt-12 pb-12 text-center">
+                      <div className="text-6xl mb-4">📝</div>
+                      <CardTitle className="text-xl mb-2">No Exams Yet</CardTitle>
+                      <CardDescription className="mb-6">
+                        Create your first exam to start tracking student performance
+                      </CardDescription>
+                      <Button onClick={() => setShowExamModal(true)}>
+                        <Plus className="w-4 h-4 mr-2" />
+                        Create First Exam
+                      </Button>
+                    </CardContent>
+                  </Card>
                 ) : (
                   <div className="space-y-3">
                     {exams.map(exam => (
-                      <div key={exam._id} className={`rounded-lg border transition-all ${
-                        theme === 'dark'
-                          ? 'bg-gray-800 border-gray-700'
-                          : 'bg-white border-gray-300'
-                      }`}>
+                      <Card key={exam._id}>
                         {/* Exam Header - Always Visible */}
-                        <div className="p-4 flex items-center justify-between">
-                          <button
-                            onClick={() => setExpandedExam(expandedExam === exam._id ? null : exam._id)}
-                            className="flex-1 flex items-center gap-3 text-left"
-                          >
-                            <span className="text-xl">
-                              {expandedExam === exam._id ? '▼' : '▶'}
-                            </span>
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2">
-                                <div className={`font-medium text-lg ${theme === 'dark' ? 'text-gray-100' : 'text-gray-800'}`}>
-                                  {exam.displayName}
-                                </div>
-                                {exam.isRequired && (
-                                  <span className="px-2 py-0.5 bg-emerald-900/30 text-emerald-300 text-xs rounded font-medium">
-                                    Required
-                                  </span>
-                                )}
-                                {exam.examCategory && (
-                                  <span className={`px-2 py-0.5 text-xs rounded font-medium ${
-                                    exam.examCategory === 'Quiz' ? 'bg-amber-900/30 text-amber-300' :
-                                    exam.examCategory === 'Assignment' ? 'bg-blue-900/30 text-blue-300' :
-                                    'bg-gray-700 text-gray-300'
-                                  }`}>
-                                    {exam.examCategory}
-                                  </span>
-                                )}
-                              </div>
-                              <div className={`text-sm mt-1 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
-                                {exam.totalMarks} marks • {exam.weightage || 'See Settings'}% weight
-                                {exam.scalingEnabled && <span className="text-emerald-400"> • Scaling On</span>}
-                              </div>
-                            </div>
-                          </button>
-                          <div className="flex items-center gap-2">
-                            <button
-                              onClick={() => {
-                                setShowExamSettings(exam._id);
-                                setExamSettings({
-                                  displayName: exam.displayName,
-                                  weightage: exam.weightage.toString(),
-                                  totalMarks: exam.totalMarks.toString(),
-                                  numberOfCOs: exam.numberOfCOs?.toString() || '',
-                                  numberOfQuestions: exam.numberOfQuestions?.toString() || '',
-                                  examCategory: exam.examCategory || '',
-                                });
-                              }}
-                              className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-white text-xs rounded-lg transition-all"
+                        <CardHeader className="p-4">
+                          <div className="flex items-center justify-between">
+                            <Button
+                              variant="ghost"
+                              onClick={() => setExpandedExam(expandedExam === exam._id ? null : exam._id)}
+                              className="flex-1 justify-start p-0 h-auto hover:bg-transparent"
                             >
-                              ⚙️
-                            </button>
-                            {!exam.isRequired && (
-                              <button
-                                onClick={() => handleDeleteExam(exam._id)}
-                                className="px-3 py-1.5 bg-red-900/30 hover:bg-red-900/50 text-red-300 text-xs rounded-lg transition-all"
+                              {expandedExam === exam._id ? (
+                                <ChevronDown className="w-5 h-5 mr-2" />
+                              ) : (
+                                <ChevronRight className="w-5 h-5 mr-2" />
+                              )}
+                              <div className="flex-1 text-left">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <CardTitle className="text-lg">{exam.displayName}</CardTitle>
+                                  {exam.isRequired && (
+                                    <Badge variant="secondary">Required</Badge>
+                                  )}
+                                  {exam.examCategory && (
+                                    <Badge variant="outline">{exam.examCategory}</Badge>
+                                  )}
+                                </div>
+                                <CardDescription className="mt-1">
+                                  {exam.totalMarks} marks • {exam.weightage || 'See Settings'}% weight
+                                  {exam.scalingEnabled && <span className="text-primary"> • Scaling On</span>}
+                                </CardDescription>
+                              </div>
+                            </Button>
+                            <div className="flex items-center gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  setShowExamSettings(exam._id);
+                                  setExamSettings({
+                                    displayName: exam.displayName,
+                                    weightage: exam.weightage.toString(),
+                                    totalMarks: exam.totalMarks.toString(),
+                                    numberOfCOs: exam.numberOfCOs?.toString() || '',
+                                    numberOfQuestions: exam.numberOfQuestions?.toString() || '',
+                                    examCategory: exam.examCategory || '',
+                                  });
+                                }}
                               >
-                                🗑️
-                              </button>
-                            )}
+                                <Settings className="w-4 h-4" />
+                              </Button>
+                              {!exam.isRequired && (
+                                <Button
+                                  variant="destructive"
+                                  size="sm"
+                                  onClick={() => handleDeleteExam(exam._id)}
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              )}
+                            </div>
                           </div>
-                        </div>
+                        </CardHeader>
 
                         {/* Collapsible Content */}
                         {expandedExam === exam._id && (
-                          <div className={`px-4 pb-4 border-t pt-4 ${theme === 'dark' ? 'border-gray-700' : 'border-gray-300'}`}>
+                          <CardContent className="px-4 pb-4 border-t pt-4">
                             {/* Scaling Toggle */}
                             <div className="mb-4 space-y-3">
                     <label className="flex items-center gap-2 cursor-pointer text-sm">
@@ -1574,9 +1521,9 @@ export default function CoursePage() {
                               </button>
                             </div>
                           )}
-                          </div>
+                          </CardContent>
                         )}
-                      </div>
+                      </Card>
                     ))}
                   </div>
                 )}
@@ -1587,28 +1534,22 @@ export default function CoursePage() {
             {activeView === 'students' && students.length > 0 && (
               <div className="space-y-6">
                 <div>
-                  <h1 className={`text-3xl font-bold ${theme === 'dark' ? 'text-gray-100' : 'text-gray-800'}`}>
-                    Students & Marks
-                  </h1>
-                  <p className={`text-sm mt-1 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
+                  <h1 className="text-3xl font-bold">Students & Marks</h1>
+                  <p className="text-sm mt-1 text-muted-foreground">
                     Managing {students.length} student(s)
                   </p>
                 </div>
-                <div className={`rounded-xl shadow-2xl p-6 border transition-colors ${
-                  theme === 'dark'
-                    ? 'bg-gradient-to-br from-gray-800 to-gray-800/80 border-gray-700/50'
-                    : 'bg-white border-gray-300'
-                }`}>
+                <Card className="p-6">
             <div className="overflow-x-auto">
-              <table className={`min-w-full divide-y ${theme === 'dark' ? 'divide-gray-700' : 'divide-gray-300'}`}>
-                <thead className={theme === 'dark' ? 'bg-gray-900/50' : 'bg-gray-100'}>
+              <table className="min-w-full divide-y divide-border">
+                <thead className="bg-muted/50">
                   <tr>
-                    <th className={`px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider sticky left-0 z-20 ${theme === 'dark' ? 'text-gray-300 bg-gray-900 border-r border-gray-700/50' : 'text-gray-800 bg-gray-100 border-r border-gray-300'}`}>ID</th>
-                    <th className={`px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider sticky left-[100px] z-20 shadow-[2px_0_5px_rgba(0,0,0,0.1)] ${theme === 'dark' ? 'text-gray-300 bg-gray-900 border-r border-gray-700/50' : 'text-gray-800 bg-gray-100 border-r border-gray-300'}`}>Name</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider sticky left-0 z-20 bg-muted/50 border-r">ID</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider sticky left-[100px] z-20 shadow-[2px_0_5px_rgba(0,0,0,0.1)] bg-muted/50 border-r">Name</th>
                     {exams.map(exam => (
-                      <th key={exam._id} className={`px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider ${theme === 'dark' ? 'text-gray-300' : 'text-gray-800'}`}>
+                      <th key={exam._id} className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider">
                         <div>{exam.displayName}</div>
-                        <div className={`text-[10px] font-normal mt-0.5 ${theme === 'dark' ? 'text-gray-500' : 'text-gray-700'}`}>Raw / Scaled / Rounded</div>
+                        <div className="text-[10px] font-normal mt-0.5 text-muted-foreground">Raw / Scaled / Rounded</div>
                       </th>
                     ))}
                     {hasQuizzes && (
@@ -1647,18 +1588,14 @@ export default function CoursePage() {
                         Based on %
                       </div>
                     </th>
-                    <th className={`px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider ${theme === 'dark' ? 'text-gray-300' : 'text-gray-800'}`}>Actions</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider">Actions</th>
                   </tr>
                 </thead>
-                <tbody className={`divide-y ${theme === 'dark' ? 'divide-gray-700/50' : 'divide-gray-300/50'}`}>
+                <tbody className="divide-y divide-border/50">
                   {students.map((student, idx) => (
-                    <tr key={student._id} className={`transition-colors ${
-                      theme === 'dark'
-                        ? `hover:bg-gray-700/30 ${idx % 2 === 0 ? 'bg-gray-800/20' : 'bg-gray-900/20'}`
-                        : `hover:bg-gray-100 ${idx % 2 === 0 ? 'bg-gray-50' : 'bg-white'}`
-                    }`}>
-                      <td className={`px-4 py-3 text-sm font-medium text-blue-400 sticky left-0 z-10 ${theme === 'dark' ? 'border-r border-gray-700/50' : 'border-r border-gray-300'} ${idx % 2 === 0 ? (theme === 'dark' ? 'bg-gray-800' : 'bg-gray-50') : (theme === 'dark' ? 'bg-gray-900' : 'bg-white')}`}>{student.studentId}</td>
-                      <td className={`px-4 py-3 text-sm sticky left-[100px] z-10 shadow-[2px_0_5px_rgba(0,0,0,0.1)] ${theme === 'dark' ? 'text-gray-200 border-r border-gray-700/50' : 'text-gray-800 border-r border-gray-300'} ${idx % 2 === 0 ? (theme === 'dark' ? 'bg-gray-800' : 'bg-gray-50') : (theme === 'dark' ? 'bg-gray-900' : 'bg-white')}`}>
+                    <tr key={student._id} className={`transition-colors hover:bg-muted/50 ${idx % 2 === 0 ? 'bg-muted/20' : 'bg-background'}`}>
+                      <td className={`px-4 py-3 text-sm font-medium text-primary sticky left-0 z-10 border-r ${idx % 2 === 0 ? 'bg-muted/20' : 'bg-background'}`}>{student.studentId}</td>
+                      <td className={`px-4 py-3 text-sm sticky left-[100px] z-10 shadow-[2px_0_5px_rgba(0,0,0,0.1)] border-r ${idx % 2 === 0 ? 'bg-muted/20' : 'bg-background'}`}>
                         <button
                           onClick={() => {
                             setSelectedStudent(student);
@@ -1672,55 +1609,39 @@ export default function CoursePage() {
                       {exams.map(exam => {
                         const mark = getMark(student._id, exam._id);
                         return (
-                          <td key={exam._id} className={`px-4 py-3 text-sm ${theme === 'dark' ? 'text-gray-300' : 'text-gray-800'}`}>
+                          <td key={exam._id} className="px-4 py-3 text-sm">
                             <div className="flex items-center gap-2">
                               <div className="flex-1">
                                 {mark ? (
                                   exam.scalingEnabled ? (
                                     // Scaling is enabled - show Raw/Scaled/Rounded with labels
                                     <div className="flex flex-col gap-1">
-                                      <span className={`px-2 py-1 rounded font-medium text-xs ${
-                                        theme === 'dark'
-                                          ? 'bg-blue-900/30 text-blue-300'
-                                          : 'bg-blue-100 text-blue-700'
-                                      }`}>
+                                      <Badge variant="secondary" className="font-medium justify-start">
                                         Raw: {mark.rawMark}
-                                      </span>
+                                      </Badge>
                                       {mark.scaledMark !== undefined && mark.scaledMark !== null ? (
-                                        <span className={`px-2 py-1 rounded font-medium text-xs ${
-                                          theme === 'dark'
-                                            ? 'bg-emerald-900/30 text-emerald-300'
-                                            : 'bg-emerald-100 text-emerald-700'
-                                        }`}>
+                                        <Badge variant="secondary" className="font-medium bg-emerald-500/20 justify-start">
                                           Scaled: {mark.scaledMark}
-                                        </span>
+                                        </Badge>
                                       ) : (
-                                        <span className={`text-xs italic ${theme === 'dark' ? 'text-gray-600' : 'text-gray-700'}`}>Not scaled</span>
+                                        <span className="text-xs italic text-muted-foreground">Not scaled</span>
                                       )}
                                       {mark.roundedMark !== undefined && mark.roundedMark !== null ? (
-                                        <span className={`px-2 py-1 rounded font-medium text-xs ${
-                                          theme === 'dark'
-                                            ? 'bg-purple-900/30 text-purple-300'
-                                            : 'bg-purple-100 text-purple-700'
-                                        }`}>
+                                        <Badge variant="secondary" className="font-medium bg-purple-500/20">
                                           Rounded: {mark.roundedMark}
-                                        </span>
+                                        </Badge>
                                       ) : mark.scaledMark !== undefined && mark.scaledMark !== null ? (
-                                        <span className={`text-xs italic ${theme === 'dark' ? 'text-gray-600' : 'text-gray-700'}`}>Not rounded</span>
+                                        <span className="text-xs italic text-muted-foreground">Not rounded</span>
                                       ) : null}
                                     </div>
                                   ) : (
                                     // Scaling is not enabled - show only the raw mark without label
-                                    <span className={`px-2 py-1 rounded font-medium text-xs ${
-                                      theme === 'dark'
-                                        ? 'bg-blue-900/30 text-blue-300'
-                                        : 'bg-blue-100 text-blue-700'
-                                    }`}>
+                                    <Badge variant="secondary" className="font-medium">
                                       {mark.rawMark}
-                                    </span>
+                                    </Badge>
                                   )
                                 ) : (
-                                  <span className={theme === 'dark' ? 'text-gray-600' : 'text-gray-400'}>0</span>
+                                  <span className="text-muted-foreground">0</span>
                                 )}
                               </div>
                             </div>
@@ -1892,18 +1813,16 @@ export default function CoursePage() {
                 </tbody>
               </table>
             </div>
-          </div>
-        </div>
-      )}
+                </Card>
+              </div>
+            )}
 
-      {/* Marks View - Shows same table focused on marks management */}
+            {/* Marks View - Shows same table focused on marks management */}
             {activeView === 'marks' && students.length > 0 && exams.length > 0 && (
               <div className="space-y-6">
                 <div>
-                  <h1 className={`text-3xl font-bold ${theme === 'dark' ? 'text-gray-100' : 'text-gray-800'}`}>
-                    Marks Management
-                  </h1>
-                  <p className={`text-sm mt-1 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
+                  <h1 className="text-3xl font-bold">Marks Management</h1>
+                  <p className="text-sm mt-1 text-muted-foreground">
                     Add and manage marks for {students.length} student(s) across {exams.length} exam(s). Click on each mark to add or edit.
                   </p>
                 </div>
@@ -1919,31 +1838,23 @@ export default function CoursePage() {
                     ✏️ Add Mark
                   </button>
                 </div>
-                <div className={`rounded-xl p-6 border ${
-                  theme === 'dark'
-                    ? 'bg-gray-800 border-gray-700'
-                    : 'bg-white border-gray-300'
-                }`}>
+                <Card className="p-6">
                   <div className="overflow-x-auto">
-                    <table className={`min-w-full divide-y ${theme === 'dark' ? 'divide-gray-700' : 'divide-gray-300'}`}>
-                      <thead className={theme === 'dark' ? 'bg-gray-900/50' : 'bg-gray-100'}>
+                    <table className="min-w-full divide-y divide-border">
+                      <thead className="bg-muted/50">
                         <tr>
-                          <th className={`px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider ${theme === 'dark' ? 'text-gray-300' : 'text-gray-800'}`}>Student</th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider">Student</th>
                           {exams.map(exam => (
-                            <th key={exam._id} className={`px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider ${theme === 'dark' ? 'text-gray-300' : 'text-gray-800'}`}>
+                            <th key={exam._id} className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider">
                               {exam.displayName}
                             </th>
                           ))}
                         </tr>
                       </thead>
-                      <tbody className={`divide-y ${theme === 'dark' ? 'divide-gray-700/50' : 'divide-gray-300/50'}`}>
+                      <tbody className="divide-y divide-border/50">
                         {students.map((student, idx) => (
-                          <tr key={student._id} className={`transition-colors ${
-                            theme === 'dark'
-                              ? `hover:bg-gray-700/30 ${idx % 2 === 0 ? 'bg-gray-800/20' : 'bg-gray-900/20'}`
-                              : `hover:bg-gray-100 ${idx % 2 === 0 ? 'bg-gray-50' : 'bg-white'}`
-                          }`}>
-                            <td className={`px-4 py-3 text-sm ${theme === 'dark' ? 'text-gray-200' : 'text-gray-800'}`}>
+                          <tr key={student._id} className={`transition-colors hover:bg-muted/50 ${idx % 2 === 0 ? 'bg-muted/20' : 'bg-background'}`}>
+                            <td className="px-4 py-3 text-sm">
                               {student.name}
                             </td>
                             {exams.map(exam => {
@@ -1958,12 +1869,8 @@ export default function CoursePage() {
                                     }}
                                     className={`w-full text-left px-3 py-2 rounded-lg transition-all ${
                                       mark
-                                        ? theme === 'dark'
-                                          ? 'bg-blue-900/30 text-blue-300 hover:bg-blue-900/50'
-                                          : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
-                                        : theme === 'dark'
-                                        ? 'bg-gray-700 text-gray-400 hover:bg-gray-600'
-                                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                        ? 'bg-primary/20 text-primary hover:bg-primary/30'
+                                        : 'bg-muted text-muted-foreground hover:bg-muted/80'
                                     }`}
                                   >
                                     {mark ? mark.rawMark : '+ Add'}
@@ -1976,31 +1883,25 @@ export default function CoursePage() {
                       </tbody>
                     </table>
                   </div>
-                </div>
+                </Card>
               </div>
             )}
 
             {/* Empty States */}
             {activeView === 'students' && students.length === 0 && (
-              <div className={`rounded-xl p-12 text-center border ${
-                theme === 'dark'
-                  ? 'bg-gray-800 border-gray-700'
-                  : 'bg-white border-gray-300'
-              }`}>
-                <div className="text-6xl mb-4">👨‍🎓</div>
-                <h3 className={`text-xl font-semibold mb-2 ${theme === 'dark' ? 'text-gray-100' : 'text-gray-800'}`}>
-                  No Students Yet
-                </h3>
-                <p className={`mb-6 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
-                  Import students using CSV to get started
-                </p>
-                <button
-                  onClick={() => setShowImportModal(true)}
-                  className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-all font-medium"
-                >
-                  📥 Import Students
-                </button>
-              </div>
+              <Card>
+                <CardContent className="pt-12 pb-12 text-center">
+                  <div className="text-6xl mb-4">👨‍🎓</div>
+                  <CardTitle className="text-xl mb-2">No Students Yet</CardTitle>
+                  <CardDescription className="mb-6">
+                    Import students using CSV to get started
+                  </CardDescription>
+                  <Button onClick={() => setShowImportModal(true)}>
+                    <Upload className="w-4 h-4 mr-2" />
+                    Import Students
+                  </Button>
+                </CardContent>
+              </Card>
             )}
           </div> {/* Close max-w-7xl */}
         </main>
