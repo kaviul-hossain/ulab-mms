@@ -51,6 +51,7 @@ import {
   Edit,
   Menu
 } from 'lucide-react';
+import { ThemeToggle } from '@/components/ui/theme-toggle';
 
 interface Student {
   _id: string;
@@ -974,6 +975,7 @@ export default function CoursePage() {
             </div>
 
             <div className="flex items-center gap-2">
+              <ThemeToggle />
               <Button variant="outline" size="sm" asChild>
                 <Link href="/settings">
                   <Settings className="w-4 h-4 mr-2" />
