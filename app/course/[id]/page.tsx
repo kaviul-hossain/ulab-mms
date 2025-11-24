@@ -1911,185 +1911,182 @@ export default function CoursePage() {
     {/* Modals - Rendered as siblings for proper z-index */}
     <div>
       {/* Import Students Modal */}
-      {showImportModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
-          <div className="bg-gradient-to-br from-gray-800 to-gray-800/80 rounded-2xl shadow-2xl max-w-md w-full border border-gray-700/50 p-6">
-            <h2 className="text-2xl font-bold text-gray-100 mb-6">Import Students</h2>
-            
-            {error && (
-              <div className="mb-4 p-3 bg-red-900/30 border border-red-700 rounded-lg text-red-300 text-sm">
-                {error}
-              </div>
-            )}
+      <Dialog open={showImportModal} onOpenChange={setShowImportModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Import Students</DialogTitle>
+          </DialogHeader>
+          
+          {error && (
+            <Alert variant="destructive">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
 
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              Paste CSV (Format: StudentID, StudentName)
-            </label>
-            <textarea
-              value={csvInput}
-              onChange={(e) => setCsvInput(e.target.value)}
-              className="w-full h-32 px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-100 placeholder-gray-500 mb-4"
-              placeholder="e.g.&#10;S001, John Doe&#10;S002, Jane Smith"
-            />
-
-            <div className="flex gap-3">
-              <button
-                onClick={() => {
-                  setShowImportModal(false);
-                  setError('');
-                }}
-                className="flex-1 px-4 py-3 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 transition-all font-medium"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleImportStudents}
-                className="flex-1 px-4 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all shadow-lg font-medium"
-              >
-                Import
-              </button>
+          <div className="space-y-4">
+            <div>
+              <Label>Paste CSV (Format: StudentID, StudentName)</Label>
+              <textarea
+                value={csvInput}
+                onChange={(e) => setCsvInput(e.target.value)}
+                className="w-full h-32 px-4 py-3 bg-background border rounded-lg focus:ring-2 focus:ring-ring text-foreground placeholder-muted-foreground mt-2"
+                placeholder="e.g.&#10;S001, John Doe&#10;S002, Jane Smith"
+              />
             </div>
           </div>
-        </div>
-      )}
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowImportModal(false);
+                setError('');
+              }}
+            >
+              Cancel
+            </Button>
+            <Button onClick={handleImportStudents}>
+              <Upload className="w-4 h-4 mr-2" />
+              Import
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Add Exam Modal */}
-      {showExamModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
-          <div className="bg-gradient-to-br from-gray-800 to-gray-800/80 rounded-2xl shadow-2xl max-w-md w-full border border-gray-700/50 p-6">
-            <h2 className="text-2xl font-bold text-gray-100 mb-6">Add Exam</h2>
-            
-            {error && (
-              <div className="mb-4 p-3 bg-red-900/30 border border-red-700 rounded-lg text-red-300 text-sm">
-                {error}
+      <Dialog open={showExamModal} onOpenChange={setShowExamModal}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add Exam</DialogTitle>
+          </DialogHeader>
+          
+          {error && (
+            <Alert variant="destructive">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+
+          <form onSubmit={handleAddExam} className="space-y-4">
+            <div>
+              <Label>Exam Name</Label>
+              <Input
+                type="text"
+                required
+                value={examFormData.displayName}
+                onChange={(e) => setExamFormData({ ...examFormData, displayName: e.target.value })}
+                placeholder="e.g., Quiz 1"
+                className="mt-2"
+              />
+            </div>
+
+            <div>
+              <Label>Exam Category</Label>
+              <select
+                required
+                value={examFormData.examCategory}
+                onChange={(e) => setExamFormData({ ...examFormData, examCategory: e.target.value })}
+                className="w-full px-4 py-2 bg-background border rounded-lg focus:ring-2 focus:ring-ring text-foreground mt-2"
+              >
+                <option value="">Select category...</option>
+                <option value="Quiz">Quiz</option>
+                <option value="Assignment">Assignment</option>
+                <option value="Project">Project</option>
+                <option value="Attendance">Attendance</option>
+                <option value="MainExam">Main Exam</option>
+                <option value="ClassPerformance">Class Performance</option>
+                <option value="Others">Others</option>
+              </select>
+              <p className="text-xs text-muted-foreground mt-1">Quiz & Assignment types will be aggregated based on course settings</p>
+            </div>
+
+            <div>
+              <Label>Total Marks</Label>
+              <Input
+                type="number"
+                required
+                min="1"
+                step="0.01"
+                value={examFormData.totalMarks}
+                onChange={(e) => setExamFormData({ ...examFormData, totalMarks: e.target.value })}
+                placeholder="e.g., 100"
+                className="mt-2"
+              />
+            </div>
+
+            <div>
+              <Label>
+                Weightage (%)
+                {(examFormData.examCategory === 'Quiz' || examFormData.examCategory === 'Assignment') && (
+                  <span className="ml-2 text-xs text-amber-500">(Not used for Quiz/Assignment)</span>
+                )}
+              </Label>
+              <Input
+                type="number"
+                required={examFormData.examCategory !== 'Quiz' && examFormData.examCategory !== 'Assignment'}
+                min="0"
+                max="100"
+                step="0.01"
+                value={examFormData.weightage}
+                onChange={(e) => setExamFormData({ ...examFormData, weightage: e.target.value })}
+                placeholder="e.g., 20"
+                disabled={examFormData.examCategory === 'Quiz' || examFormData.examCategory === 'Assignment'}
+                className="mt-2"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                {(examFormData.examCategory === 'Quiz' || examFormData.examCategory === 'Assignment') 
+                  ? 'Weightage is set at course level for aggregated Quiz/Assignment columns'
+                  : 'Percentage contribution to final grade'}
+              </p>
+            </div>
+
+            {course?.courseType === 'Theory' && (
+              <div>
+                <Label>Number of COs (Optional)</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  max="10"
+                  value={examFormData.numberOfCOs}
+                  onChange={(e) => setExamFormData({ ...examFormData, numberOfCOs: e.target.value })}
+                  placeholder="e.g., 3"
+                  className="mt-2"
+                />
+                <p className="text-xs text-muted-foreground mt-1">For exams with CO-wise marks breakdown</p>
               </div>
             )}
 
-            <form onSubmit={handleAddExam} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Exam Name</label>
-                <input
-                  type="text"
-                  required
-                  value={examFormData.displayName}
-                  onChange={(e) => setExamFormData({ ...examFormData, displayName: e.target.value })}
-                  className="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-100 placeholder-gray-500"
-                  placeholder="e.g., Quiz 1"
-                />
-              </div>
+            <div>
+              <Label>Number of Questions (Optional)</Label>
+              <Input
+                type="number"
+                min="0"
+                max="50"
+                value={examFormData.numberOfQuestions}
+                onChange={(e) => setExamFormData({ ...examFormData, numberOfQuestions: e.target.value })}
+                placeholder="e.g., 5 (leave blank if not needed)"
+                className="mt-2"
+              />
+              <p className="text-xs text-muted-foreground mt-1">For question-wise marks breakdown (usually for MainExam category)</p>
+            </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Exam Category</label>
-                <select
-                  required
-                  value={examFormData.examCategory}
-                  onChange={(e) => setExamFormData({ ...examFormData, examCategory: e.target.value })}
-                  className="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-100"
-                >
-                  <option value="">Select category...</option>
-                  <option value="Quiz">Quiz</option>
-                  <option value="Assignment">Assignment</option>
-                  <option value="Project">Project</option>
-                  <option value="Attendance">Attendance</option>
-                  <option value="MainExam">Main Exam</option>
-                  <option value="ClassPerformance">Class Performance</option>
-                  <option value="Others">Others</option>
-                </select>
-                <p className="text-xs text-gray-500 mt-1">Quiz & Assignment types will be aggregated based on course settings</p>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Total Marks</label>
-                <input
-                  type="number"
-                  required
-                  min="1"
-                  step="0.01"
-                  value={examFormData.totalMarks}
-                  onChange={(e) => setExamFormData({ ...examFormData, totalMarks: e.target.value })}
-                  className="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-100 placeholder-gray-500"
-                  placeholder="e.g., 100"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Weightage (%)
-                  {(examFormData.examCategory === 'Quiz' || examFormData.examCategory === 'Assignment') && (
-                    <span className="ml-2 text-xs text-amber-400">(Not used for Quiz/Assignment)</span>
-                  )}
-                </label>
-                <input
-                  type="number"
-                  required={examFormData.examCategory !== 'Quiz' && examFormData.examCategory !== 'Assignment'}
-                  min="0"
-                  max="100"
-                  step="0.01"
-                  value={examFormData.weightage}
-                  onChange={(e) => setExamFormData({ ...examFormData, weightage: e.target.value })}
-                  className="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-100 placeholder-gray-500"
-                  placeholder="e.g., 20"
-                  disabled={examFormData.examCategory === 'Quiz' || examFormData.examCategory === 'Assignment'}
-                />
-                <p className="text-xs text-gray-500 mt-1">
-                  {(examFormData.examCategory === 'Quiz' || examFormData.examCategory === 'Assignment') 
-                    ? 'Weightage is set at course level for aggregated Quiz/Assignment columns'
-                    : 'Percentage contribution to final grade'}
-                </p>
-              </div>
-
-              {course?.courseType === 'Theory' && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Number of COs (Optional)</label>
-                  <input
-                    type="number"
-                    min="0"
-                    max="10"
-                    value={examFormData.numberOfCOs}
-                    onChange={(e) => setExamFormData({ ...examFormData, numberOfCOs: e.target.value })}
-                    className="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-100 placeholder-gray-500"
-                    placeholder="e.g., 3"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">For exams with CO-wise marks breakdown</p>
-                </div>
-              )}
-
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Number of Questions (Optional)</label>
-                <input
-                  type="number"
-                  min="0"
-                  max="50"
-                  value={examFormData.numberOfQuestions}
-                  onChange={(e) => setExamFormData({ ...examFormData, numberOfQuestions: e.target.value })}
-                  className="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-100 placeholder-gray-500"
-                  placeholder="e.g., 5 (leave blank if not needed)"
-                />
-                <p className="text-xs text-gray-500 mt-1">For question-wise marks breakdown (usually for MainExam category)</p>
-              </div>
-
-              <div className="flex gap-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowExamModal(false);
-                    setError('');
-                  }}
-                  className="flex-1 px-4 py-3 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 transition-all font-medium"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 px-4 py-3 bg-gradient-to-r from-emerald-600 to-emerald-700 text-white rounded-lg hover:from-emerald-700 hover:to-emerald-800 transition-all shadow-lg font-medium"
-                >
-                  Create Exam
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setShowExamModal(false);
+                  setError('');
+                }}
+              >
+                Cancel
+              </Button>
+              <Button type="submit">
+                Create Exam
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       {/* Add Mark Modal - New Component */}
       <AddMarkModal
@@ -2109,177 +2106,166 @@ export default function CoursePage() {
       />
 
       {/* Exam Settings Modal */}
-      {showExamSettings && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
-          <div className="bg-gradient-to-br from-gray-800 to-gray-800/80 rounded-2xl shadow-2xl max-w-md w-full border border-gray-700/50 p-6">
-            <h2 className="text-2xl font-bold text-gray-100 mb-6">Exam Settings</h2>
-            
-            {error && (
-              <div className="mb-4 p-3 bg-red-900/30 border border-red-700 rounded-lg text-red-300 text-sm">
-                {error}
+      <Dialog open={!!showExamSettings} onOpenChange={(open) => !open && setShowExamSettings(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Exam Settings</DialogTitle>
+          </DialogHeader>
+          
+          {error && (
+            <Alert variant="destructive">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+
+          <div className="space-y-4">
+            <div>
+              <Label>Display Name</Label>
+              <Input
+                type="text"
+                value={examSettings.displayName}
+                onChange={(e) => setExamSettings({ ...examSettings, displayName: e.target.value })}
+                placeholder="Exam name"
+                className="mt-2"
+              />
+            </div>
+
+            <div>
+              <Label>Exam Category</Label>
+              <select
+                required
+                value={examSettings.examCategory}
+                onChange={(e) => setExamSettings({ ...examSettings, examCategory: e.target.value })}
+                className="w-full px-4 py-2 bg-background border rounded-lg focus:ring-2 focus:ring-ring text-foreground mt-2"
+              >
+                {!examSettings.examCategory && <option value="">Select category...</option>}
+                <option value="Quiz">Quiz</option>
+                <option value="Assignment">Assignment</option>
+                <option value="Project">Project</option>
+                <option value="Attendance">Attendance</option>
+                <option value="MainExam">Main Exam</option>
+                <option value="ClassPerformance">Class Performance</option>
+                <option value="Others">Others</option>
+              </select>
+              <p className="text-xs text-muted-foreground mt-1">Quiz & Assignment types will be aggregated</p>
+            </div>
+
+            <div>
+              <Label>Total Marks</Label>
+              <Input
+                type="number"
+                min="1"
+                step="0.01"
+                value={examSettings.totalMarks}
+                onChange={(e) => setExamSettings({ ...examSettings, totalMarks: e.target.value })}
+                placeholder="e.g., 100"
+                className="mt-2"
+              />
+            </div>
+
+            <div>
+              <Label>
+                Weightage (%)
+                {(examSettings.examCategory === 'Quiz' || examSettings.examCategory === 'Assignment') && (
+                  <span className="ml-2 text-xs text-amber-500">(Set in Course Settings)</span>
+                )}
+              </Label>
+              {(examSettings.examCategory === 'Quiz' || examSettings.examCategory === 'Assignment') ? (
+                <div className="w-full px-4 py-3 bg-muted/50 border rounded-lg text-muted-foreground cursor-not-allowed mt-2">
+                  Not applicable - weightage set at course level
+                </div>
+              ) : (
+                <Input
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.01"
+                  value={examSettings.weightage}
+                  onChange={(e) => setExamSettings({ ...examSettings, weightage: e.target.value })}
+                  placeholder="e.g., 30"
+                  className="mt-2"
+                />
+              )}
+              <p className="text-xs text-muted-foreground mt-1">
+                {(examSettings.examCategory === 'Quiz' || examSettings.examCategory === 'Assignment') 
+                  ? '💡 Use Course Settings button to configure Quiz/Assignment aggregation weightage'
+                  : 'Percentage contribution to final grade'}
+              </p>
+            </div>
+
+            {course?.courseType === 'Theory' && (
+              <div>
+                <Label>Number of COs</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  max="10"
+                  value={examSettings.numberOfCOs}
+                  onChange={(e) => setExamSettings({ ...examSettings, numberOfCOs: e.target.value })}
+                  placeholder="e.g., 3"
+                  className="mt-2"
+                />
+                <p className="text-xs text-muted-foreground mt-1">For CO-wise marks breakdown</p>
               </div>
             )}
 
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Display Name</label>
-                <input
-                  type="text"
-                  value={examSettings.displayName}
-                  onChange={(e) => setExamSettings({ ...examSettings, displayName: e.target.value })}
-                  className="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-100 placeholder-gray-500"
-                  placeholder="Exam name"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Exam Category</label>
-                <select
-                  required
-                  value={examSettings.examCategory}
-                  onChange={(e) => setExamSettings({ ...examSettings, examCategory: e.target.value })}
-                  className="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-100"
-                >
-                  {!examSettings.examCategory && <option value="">Select category...</option>}
-                  <option value="Quiz">Quiz</option>
-                  <option value="Assignment">Assignment</option>
-                  <option value="Project">Project</option>
-                  <option value="Attendance">Attendance</option>
-                  <option value="MainExam">Main Exam</option>
-                  <option value="ClassPerformance">Class Performance</option>
-                  <option value="Others">Others</option>
-                </select>
-                <p className="text-xs text-gray-500 mt-1">Quiz & Assignment types will be aggregated</p>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Total Marks</label>
-                <input
-                  type="number"
-                  min="1"
-                  step="0.01"
-                  value={examSettings.totalMarks}
-                  onChange={(e) => setExamSettings({ ...examSettings, totalMarks: e.target.value })}
-                  className="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-100 placeholder-gray-500"
-                  placeholder="e.g., 100"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Weightage (%)
-                  {(examSettings.examCategory === 'Quiz' || examSettings.examCategory === 'Assignment') && (
-                    <span className="ml-2 text-xs text-amber-400">(Set in Course Settings)</span>
-                  )}
-                </label>
-                {(examSettings.examCategory === 'Quiz' || examSettings.examCategory === 'Assignment') ? (
-                  <div className="w-full px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg text-gray-400 cursor-not-allowed">
-                    Not applicable - weightage set at course level
-                  </div>
-                ) : (
-                  <input
-                    type="number"
-                    min="0"
-                    max="100"
-                    step="0.01"
-                    value={examSettings.weightage}
-                    onChange={(e) => setExamSettings({ ...examSettings, weightage: e.target.value })}
-                    className="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-100 placeholder-gray-500"
-                    placeholder="e.g., 30"
-                  />
-                )}
-                <p className="text-xs text-gray-500 mt-1">
-                  {(examSettings.examCategory === 'Quiz' || examSettings.examCategory === 'Assignment') 
-                    ? '💡 Use Course Settings button to configure Quiz/Assignment aggregation weightage'
-                    : 'Percentage contribution to final grade'}
-                </p>
-              </div>
-
-              {course?.courseType === 'Theory' && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Number of COs</label>
-                  <input
-                    type="number"
-                    min="0"
-                    max="10"
-                    value={examSettings.numberOfCOs}
-                    onChange={(e) => setExamSettings({ ...examSettings, numberOfCOs: e.target.value })}
-                    className="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-100 placeholder-gray-500"
-                    placeholder="e.g., 3"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">For CO-wise marks breakdown</p>
-                </div>
-              )}
-
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Number of Questions</label>
-                <input
-                  type="number"
-                  min="0"
-                  max="50"
-                  value={examSettings.numberOfQuestions}
-                  onChange={(e) => setExamSettings({ ...examSettings, numberOfQuestions: e.target.value })}
-                  className="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-100 placeholder-gray-500"
-                  placeholder="e.g., 5 (leave blank if not needed)"
-                />
-                <p className="text-xs text-gray-500 mt-1">For question-wise marks breakdown (usually for MainExam category)</p>
-              </div>
-
-              <div className="flex gap-3 pt-4">
-                <button
-                  onClick={() => {
-                    setShowExamSettings(null);
-                    setError('');
-                  }}
-                  className="flex-1 px-4 py-3 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 transition-all font-medium"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleUpdateExamSettings}
-                  className="flex-1 px-4 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all shadow-lg font-medium"
-                >
-                  Save Changes
-                </button>
-              </div>
+            <div>
+              <Label>Number of Questions</Label>
+              <Input
+                type="number"
+                min="0"
+                max="50"
+                value={examSettings.numberOfQuestions}
+                onChange={(e) => setExamSettings({ ...examSettings, numberOfQuestions: e.target.value })}
+                placeholder="e.g., 5 (leave blank if not needed)"
+                className="mt-2"
+              />
+              <p className="text-xs text-muted-foreground mt-1">For question-wise marks breakdown (usually for MainExam category)</p>
             </div>
+
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowExamSettings(null);
+                  setError('');
+                }}
+              >
+                Cancel
+              </Button>
+              <Button onClick={handleUpdateExamSettings}>
+                Save Changes
+              </Button>
+            </DialogFooter>
           </div>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
 
       {/* Course Settings Modal */}
-      {showCourseSettings && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[100]">
-          <div className="h-full w-full bg-gradient-to-br from-gray-900 via-slate-900 to-gray-900">
-            {/* Header */}
-            <div className="border-b border-gray-700/50 bg-gray-800/50 backdrop-blur-md">
-              <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-                <h2 className="text-2xl font-bold text-gray-100 flex items-center gap-3">
-                  <span className="text-3xl">⚙️</span>
-                  <span>Course Settings</span>
-                </h2>
-                <button
-                  onClick={() => {
-                    setShowCourseSettings(false);
-                    setError('');
-                    setCourseSettingsTab('aggregation');
-                  }}
-                  className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-all font-medium"
-                >
-                  ✕ Close
-                </button>
+      <Dialog open={showCourseSettings} onOpenChange={setShowCourseSettings}>
+        <DialogContent className="max-w-7xl h-[90vh] flex flex-col p-0">
+          <div className="flex-1 flex flex-col overflow-hidden">
+            {/* Header with Tabs */}
+            <div className="border-b bg-muted/50">
+              <div className="px-6 py-4">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-3 text-2xl">
+                    <span className="text-3xl">⚙️</span>
+                    <span>Course Settings</span>
+                  </DialogTitle>
+                </DialogHeader>
               </div>
               
               {/* Tabs */}
-              <div className="max-w-7xl mx-auto px-6">
+              <div className="px-6">
                 <div className="flex gap-2 -mb-px">
                   <button
                     type="button"
                     onClick={() => setCourseSettingsTab('aggregation')}
                     className={`px-6 py-3 font-medium text-sm transition-all border-b-2 ${
                       courseSettingsTab === 'aggregation'
-                        ? 'border-blue-500 text-blue-400 bg-gray-800/50'
-                        : 'border-transparent text-gray-400 hover:text-gray-300 hover:bg-gray-800/30'
+                        ? 'border-primary text-primary bg-muted/50'
+                        : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/30'
                     }`}
                   >
                     📊 Quiz & Assignment Settings
@@ -2289,8 +2275,8 @@ export default function CoursePage() {
                     onClick={() => setCourseSettingsTab('grading')}
                     className={`px-6 py-3 font-medium text-sm transition-all border-b-2 ${
                       courseSettingsTab === 'grading'
-                        ? 'border-purple-500 text-purple-400 bg-gray-800/50'
-                        : 'border-transparent text-gray-400 hover:text-gray-300 hover:bg-gray-800/30'
+                        ? 'border-primary text-primary bg-muted/50'
+                        : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/30'
                     }`}
                   >
                     🏆 Grading Scale
@@ -2300,98 +2286,104 @@ export default function CoursePage() {
             </div>
 
             {/* Content */}
-            <div className="max-w-7xl mx-auto px-6 py-8 h-[calc(100vh-180px)] overflow-y-auto">
+            <div className="flex-1 overflow-y-auto px-6 py-8">
               {error && (
-                <div className="mb-6 p-4 bg-red-900/30 border border-red-700 rounded-lg text-red-300">
-                  {error}
-                </div>
+                <Alert variant="destructive" className="mb-6">
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
               )}
 
-              <form onSubmit={handleSaveCourseSettings} className="space-y-6">
+              <form onSubmit={handleSaveCourseSettings} className="space-y-6 max-w-7xl mx-auto">
                 {/* Quiz & Assignment Settings Tab */}
                 {courseSettingsTab === 'aggregation' && (
                   <div className="space-y-6">
                     {/* Quiz Settings */}
-                    <div className="p-6 bg-gray-800/50 rounded-xl border border-gray-700/50">
-                      <h3 className="text-xl font-semibold text-gray-100 mb-6 flex items-center gap-2">
-                        📝 Quiz Aggregation
-                      </h3>
-                      
-                      <div className="grid md:grid-cols-2 gap-6">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-300 mb-2">Aggregation Method</label>
-                          <select
-                            value={courseSettingsData.quizAggregation}
-                            onChange={(e) => setCourseSettingsData({ ...courseSettingsData, quizAggregation: e.target.value as 'average' | 'best' })}
-                            className="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-100"
-                          >
-                            <option value="average">Average of all quizzes</option>
-                            <option value="best">Best quiz score</option>
-                          </select>
-                          <p className="text-xs text-gray-500 mt-1">How to calculate the aggregated Quiz column</p>
-                        </div>
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                          📝 Quiz Aggregation
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="grid md:grid-cols-2 gap-6">
+                          <div>
+                            <Label>Aggregation Method</Label>
+                            <select
+                              value={courseSettingsData.quizAggregation}
+                              onChange={(e) => setCourseSettingsData({ ...courseSettingsData, quizAggregation: e.target.value as 'average' | 'best' })}
+                              className="w-full px-4 py-2 bg-background border rounded-lg focus:ring-2 focus:ring-ring text-foreground mt-2"
+                            >
+                              <option value="average">Average of all quizzes</option>
+                              <option value="best">Best quiz score</option>
+                            </select>
+                            <p className="text-xs text-muted-foreground mt-1">How to calculate the aggregated Quiz column</p>
+                          </div>
 
-                        <div>
-                          <label className="block text-sm font-medium text-gray-300 mb-2">Quiz Weightage (%)</label>
-                          <input
-                            type="number"
-                            min="0"
-                            max="100"
-                            step="0.01"
-                            value={courseSettingsData.quizWeightage}
-                            onChange={(e) => setCourseSettingsData({ ...courseSettingsData, quizWeightage: e.target.value })}
-                            className="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-100 placeholder-gray-500"
-                            placeholder="e.g., 20"
-                          />
-                          <p className="text-xs text-gray-500 mt-1">Weightage for the aggregated Quiz column in final grade</p>
+                          <div>
+                            <Label>Quiz Weightage (%)</Label>
+                            <Input
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="0.01"
+                              value={courseSettingsData.quizWeightage}
+                              onChange={(e) => setCourseSettingsData({ ...courseSettingsData, quizWeightage: e.target.value })}
+                              placeholder="e.g., 20"
+                              className="mt-2"
+                            />
+                            <p className="text-xs text-muted-foreground mt-1">Weightage for the aggregated Quiz column in final grade</p>
+                          </div>
                         </div>
-                      </div>
-                    </div>
+                      </CardContent>
+                    </Card>
 
                     {/* Assignment Settings */}
-                    <div className="p-6 bg-gray-800/50 rounded-xl border border-gray-700/50">
-                      <h3 className="text-xl font-semibold text-gray-100 mb-6 flex items-center gap-2">
-                        📋 Assignment Aggregation
-                      </h3>
-                      
-                      <div className="grid md:grid-cols-2 gap-6">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-300 mb-2">Aggregation Method</label>
-                          <select
-                            value={courseSettingsData.assignmentAggregation}
-                            onChange={(e) => setCourseSettingsData({ ...courseSettingsData, assignmentAggregation: e.target.value as 'average' | 'best' })}
-                            className="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-100"
-                          >
-                            <option value="average">Average of all assignments</option>
-                            <option value="best">Best assignment score</option>
-                          </select>
-                          <p className="text-xs text-gray-500 mt-1">How to calculate the aggregated Assignment column</p>
-                        </div>
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                          📋 Assignment Aggregation
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="grid md:grid-cols-2 gap-6">
+                          <div>
+                            <Label>Aggregation Method</Label>
+                            <select
+                              value={courseSettingsData.assignmentAggregation}
+                              onChange={(e) => setCourseSettingsData({ ...courseSettingsData, assignmentAggregation: e.target.value as 'average' | 'best' })}
+                              className="w-full px-4 py-2 bg-background border rounded-lg focus:ring-2 focus:ring-ring text-foreground mt-2"
+                            >
+                              <option value="average">Average of all assignments</option>
+                              <option value="best">Best assignment score</option>
+                            </select>
+                            <p className="text-xs text-muted-foreground mt-1">How to calculate the aggregated Assignment column</p>
+                          </div>
 
-                        <div>
-                          <label className="block text-sm font-medium text-gray-300 mb-2">Assignment Weightage (%)</label>
-                          <input
-                            type="number"
-                            min="0"
-                            max="100"
-                            step="0.01"
-                            value={courseSettingsData.assignmentWeightage}
-                            onChange={(e) => setCourseSettingsData({ ...courseSettingsData, assignmentWeightage: e.target.value })}
-                            className="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-100 placeholder-gray-500"
-                            placeholder="e.g., 15"
-                          />
-                          <p className="text-xs text-gray-500 mt-1">Weightage for the aggregated Assignment column in final grade</p>
+                          <div>
+                            <Label>Assignment Weightage (%)</Label>
+                            <Input
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="0.01"
+                              value={courseSettingsData.assignmentWeightage}
+                              onChange={(e) => setCourseSettingsData({ ...courseSettingsData, assignmentWeightage: e.target.value })}
+                              placeholder="e.g., 15"
+                              className="mt-2"
+                            />
+                            <p className="text-xs text-muted-foreground mt-1">Weightage for the aggregated Assignment column in final grade</p>
+                          </div>
                         </div>
-                      </div>
-                    </div>
+                      </CardContent>
+                    </Card>
 
                     {/* Info Box */}
-                    <div className="p-4 bg-blue-900/20 border border-blue-700/50 rounded-lg">
-                      <p className="text-sm text-blue-300">
+                    <Alert className="border-primary/50 bg-primary/10">
+                      <AlertDescription className="text-sm">
                         💡 <strong>Note:</strong> Individual Quiz/Assignment exams don't need weightages. 
                         The aggregated column will use the weightage you set here.
-                      </p>
-                    </div>
+                      </AlertDescription>
+                    </Alert>
                   </div>
                 )}
 
@@ -2399,147 +2391,152 @@ export default function CoursePage() {
                 {courseSettingsTab === 'grading' && (
                   <div className="space-y-6">
                     <div className="flex items-center justify-between">
-                      <h3 className="text-2xl font-semibold text-gray-100 flex items-center gap-3">
+                      <h3 className="text-2xl font-semibold flex items-center gap-3">
                         <span className="text-3xl">📊</span>
                         <span>Grading Scale Management</span>
                       </h3>
-                      <button
+                      <Button
                         type="button"
+                        variant="outline"
                         onClick={() => {
                           setCourseSettingsData({ ...courseSettingsData, gradingScale: DEFAULT_GRADING_SCALE });
                         }}
-                        className="px-4 py-2 bg-gradient-to-r from-gray-700 to-gray-600 hover:from-gray-600 hover:to-gray-500 text-white rounded-lg text-sm font-medium transition-all shadow-lg flex items-center gap-2"
                       >
                         🔄 Reset to Default
-                      </button>
+                      </Button>
                     </div>
 
-                    <div className="bg-gray-800/50 rounded-xl p-6 border border-gray-700/50">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-gray-700">
-                          <th className="text-left py-2 px-3 text-gray-300 font-semibold">Grade</th>
-                          <th className="text-left py-2 px-3 text-gray-300 font-semibold">Minimum %</th>
-                          <th className="text-left py-2 px-3 text-gray-300 font-semibold">Range Preview</th>
-                          <th className="text-right py-2 px-3 text-gray-300 font-semibold">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {courseSettingsData.gradingScale
-                          .sort((a, b) => b.threshold - a.threshold)
-                          .map((grade, index) => {
-                            const nextGrade = courseSettingsData.gradingScale
-                              .sort((a, b) => b.threshold - a.threshold)[index + 1];
-                            const upperBound = nextGrade ? nextGrade.threshold - 0.01 : 100;
-                            
-                            return (
-                              <tr key={index} className="border-b border-gray-800/50 hover:bg-gray-800/30">
-                                <td className="py-2 px-3">
-                                  <span className={`inline-block px-2 py-1 rounded font-semibold text-sm ${getGradeBgColor(grade.letter)} ${getGradeColor(grade.letter)}`}>
-                                    {getGradeDisplay(grade.letter, grade.modifier)}
-                                  </span>
-                                </td>
-                                <td className="py-2 px-3">
-                                  <input
-                                    type="number"
-                                    min="0"
-                                    max="100"
-                                    step="0.01"
-                                    value={grade.threshold}
-                                    onChange={(e) => {
-                                      const newThreshold = parseFloat(e.target.value);
-                                      if (!isNaN(newThreshold)) {
-                                        const updated = [...courseSettingsData.gradingScale];
-                                        updated[courseSettingsData.gradingScale.indexOf(grade)] = {
-                                          ...grade,
-                                          threshold: newThreshold
-                                        };
-                                        setCourseSettingsData({ ...courseSettingsData, gradingScale: updated });
-                                      }
-                                    }}
-                                    className="w-24 px-2 py-1 bg-gray-800 border border-gray-600 rounded text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                  />
-                                </td>
-                                <td className="py-2 px-3 text-gray-400">
-                                  {grade.threshold.toFixed(2)}% - {upperBound.toFixed(2)}%
-                                </td>
-                                <td className="py-2 px-3 text-right">
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      const updated = courseSettingsData.gradingScale.filter(g => g !== grade);
-                                      setCourseSettingsData({ ...courseSettingsData, gradingScale: updated });
-                                    }}
-                                    className="px-2 py-1 bg-red-900/30 hover:bg-red-900/50 text-red-300 rounded text-xs transition-all"
-                                  >
-                                    🗑️ Delete
-                                  </button>
-                                </td>
+                    <Card>
+                      <CardContent>
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="border-b">
+                                <th className="text-left py-2 px-3 font-semibold">Grade</th>
+                                <th className="text-left py-2 px-3 font-semibold">Minimum %</th>
+                                <th className="text-left py-2 px-3 font-semibold">Range Preview</th>
+                                <th className="text-right py-2 px-3 font-semibold">Actions</th>
                               </tr>
-                            );
-                          })}
-                      </tbody>
-                    </table>
-                  </div>
-                  
-                      <div className="mt-4 pt-4 border-t border-gray-700">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const newGrade: GradeThreshold = {
-                              threshold: 0,
-                              letter: 'F',
-                              modifier: '0'
-                            };
-                            setCourseSettingsData({ 
-                              ...courseSettingsData, 
-                              gradingScale: [...courseSettingsData.gradingScale, newGrade].sort((a, b) => a.threshold - b.threshold)
-                            });
-                          }}
-                          className="px-4 py-2 bg-emerald-900/30 hover:bg-emerald-900/50 text-emerald-300 rounded-lg font-medium transition-all flex items-center gap-2"
-                        >
-                          ➕ Add Grade Threshold
-                        </button>
-                      </div>
-                    </div>
+                            </thead>
+                            <tbody>
+                              {courseSettingsData.gradingScale
+                                .sort((a, b) => b.threshold - a.threshold)
+                                .map((grade, index) => {
+                                  const nextGrade = courseSettingsData.gradingScale
+                                    .sort((a, b) => b.threshold - a.threshold)[index + 1];
+                                  const upperBound = nextGrade ? nextGrade.threshold - 0.01 : 100;
+                                  
+                                  return (
+                                    <tr key={index} className="border-b hover:bg-muted/30">
+                                      <td className="py-2 px-3">
+                                        <Badge variant="outline" className={`${getGradeBgColor(grade.letter)} ${getGradeColor(grade.letter)}`}>
+                                          {getGradeDisplay(grade.letter, grade.modifier)}
+                                        </Badge>
+                                      </td>
+                                      <td className="py-2 px-3">
+                                        <Input
+                                          type="number"
+                                          min="0"
+                                          max="100"
+                                          step="0.01"
+                                          value={grade.threshold}
+                                          onChange={(e) => {
+                                            const newThreshold = parseFloat(e.target.value);
+                                            if (!isNaN(newThreshold)) {
+                                              const updated = [...courseSettingsData.gradingScale];
+                                              updated[courseSettingsData.gradingScale.indexOf(grade)] = {
+                                                ...grade,
+                                                threshold: newThreshold
+                                              };
+                                              setCourseSettingsData({ ...courseSettingsData, gradingScale: updated });
+                                            }
+                                          }}
+                                          className="w-24"
+                                        />
+                                      </td>
+                                      <td className="py-2 px-3 text-muted-foreground">
+                                        {grade.threshold.toFixed(2)}% - {upperBound.toFixed(2)}%
+                                      </td>
+                                      <td className="py-2 px-3 text-right">
+                                        <Button
+                                          type="button"
+                                          variant="destructive"
+                                          size="sm"
+                                          onClick={() => {
+                                            const updated = courseSettingsData.gradingScale.filter(g => g !== grade);
+                                            setCourseSettingsData({ ...courseSettingsData, gradingScale: updated });
+                                          }}
+                                        >
+                                          <Trash2 className="w-3 h-3" />
+                                        </Button>
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                            </tbody>
+                          </table>
+                        </div>
+                        
+                        <div className="mt-4 pt-4 border-t">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => {
+                              const newGrade: GradeThreshold = {
+                                threshold: 0,
+                                letter: 'F',
+                                modifier: '0'
+                              };
+                              setCourseSettingsData({ 
+                                ...courseSettingsData, 
+                                gradingScale: [...courseSettingsData.gradingScale, newGrade].sort((a, b) => a.threshold - b.threshold)
+                              });
+                            }}
+                          >
+                            <Plus className="w-4 h-4 mr-2" />
+                            Add Grade Threshold
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
 
-                    <div className="p-4 bg-amber-900/20 border border-amber-700/50 rounded-lg">
-                      <p className="text-sm text-amber-300">
+                    <Alert className="border-amber-500/50 bg-amber-500/10">
+                      <AlertDescription className="text-sm">
                         ⚠️ <strong>Important:</strong> Grade thresholds define the minimum percentage needed for each letter grade. 
                         Ensure there are no overlaps or gaps between grades. The system validates automatically when you save.
-                      </p>
-                    </div>
+                      </AlertDescription>
+                    </Alert>
                   </div>
                 )}
 
                 {/* Action Buttons - Fixed at bottom */}
-                <div className="sticky bottom-0 bg-gray-900/95 backdrop-blur-md border-t border-gray-700/50 px-6 py-4 -mx-6 -mb-8 mt-8">
+                <div className="sticky bottom-0 bg-background/95 backdrop-blur-md border-t px-6 py-4 -mx-6 -mb-8 mt-8">
                   <div className="flex gap-4 max-w-7xl mx-auto">
-                    <button
+                    <Button
                       type="button"
+                      variant="outline"
+                      className="flex-1"
                       onClick={() => {
                         setShowCourseSettings(false);
                         setError('');
                         setCourseSettingsTab('aggregation');
                       }}
-                      className="flex-1 px-6 py-3 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 transition-all font-medium"
                     >
                       Cancel
-                    </button>
-                    <button
+                    </Button>
+                    <Button
                       type="submit"
-                      className="flex-1 px-6 py-3 bg-gradient-to-r from-emerald-600 to-emerald-700 text-white rounded-lg hover:from-emerald-700 hover:to-emerald-800 transition-all shadow-lg font-medium"
+                      className="flex-1"
                     >
                       💾 Save All Settings
-                    </button>
+                    </Button>
                   </div>
                 </div>
               </form>
             </div>
           </div>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
 
       {/* Student Detail Modal */}
       <StudentDetailModal
