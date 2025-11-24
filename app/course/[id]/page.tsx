@@ -1917,17 +1917,17 @@ export default function CoursePage() {
                   </p>
                 </div>
                 <div className="flex gap-3 flex-wrap">
-                  <button
+                  <Button
                     onClick={() => {
                       setInitialExamId(undefined);
                       setInitialStudentId(undefined);
                       setShowMarkModal(true);
                     }}
-                    className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-all font-medium flex items-center gap-2"
+                    className="gap-2"
                   >
                     <Plus className="w-5 h-5" />
                     Add Mark
-                  </button>
+                  </Button>
                   <Button
                     onClick={() => {
                       setSelectedExamsForAction([]);
@@ -1958,10 +1958,11 @@ export default function CoursePage() {
                     <table className="min-w-full divide-y divide-border">
                       <thead className="bg-muted/50">
                         <tr>
-                          <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider">Student</th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider sticky left-0 z-20 bg-muted/50 border-r">Student</th>
                           {exams.map(exam => (
                             <th key={exam._id} className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider">
-                              {exam.displayName}
+                              <div>{exam.displayName}</div>
+                              <div className="text-[10px] font-normal mt-0.5 text-muted-foreground">{exam.totalMarks} marks</div>
                             </th>
                           ))}
                         </tr>
@@ -1969,27 +1970,32 @@ export default function CoursePage() {
                       <tbody className="divide-y divide-border/50">
                         {students.map((student, idx) => (
                           <tr key={student._id} className={`transition-colors hover:bg-muted/50 ${idx % 2 === 0 ? 'bg-muted/20' : 'bg-background'}`}>
-                            <td className="px-4 py-3 text-sm">
-                              {student.name}
+                            <td className={`px-4 py-3 text-sm font-medium sticky left-0 z-10 border-r ${idx % 2 === 0 ? 'bg-muted/20' : 'bg-background'}`}>
+                              <div className="flex flex-col">
+                                <span className="text-primary">{student.studentId}</span>
+                                <span className="text-xs text-muted-foreground">{student.name}</span>
+                              </div>
                             </td>
                             {exams.map(exam => {
                               const mark = getMark(student._id, exam._id);
                               return (
                                 <td key={exam._id} className={`px-4 py-3 text-sm`}>
-                                  <button
+                                  <Button
                                     onClick={() => {
                                       setInitialExamId(exam._id);
                                       setInitialStudentId(student._id);
                                       setShowMarkModal(true);
                                     }}
-                                    className={`w-full text-left px-3 py-2 rounded-lg transition-all ${
-                                      mark
-                                        ? 'bg-primary/20 text-primary hover:bg-primary/30'
-                                        : 'bg-muted text-muted-foreground hover:bg-muted/80'
-                                    }`}
+                                    variant={mark ? "secondary" : "outline"}
+                                    size="sm"
+                                    className="w-full justify-center"
                                   >
-                                    {mark ? mark.rawMark : '+ Add'}
-                                  </button>
+                                    {mark ? (
+                                      <span className="font-semibold">{mark.rawMark}</span>
+                                    ) : (
+                                      <span className="text-muted-foreground">+ Add</span>
+                                    )}
+                                  </Button>
                                 </td>
                               );
                             })}
