@@ -172,16 +172,16 @@ export default function UserFilesPage({ params }: { params: Promise<{ username: 
                 </div>
               ) : (
                 <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Filename</TableHead>
-                        <TableHead>Size</TableHead>
-                        <TableHead>Uploaded By</TableHead>
-                        <TableHead>Uploaded At</TableHead>
-                        <TableHead className="text-right">Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-slate-100 dark:bg-slate-800">
+                      <TableHead className="text-black dark:text-white font-bold">Filename</TableHead>
+                      <TableHead className="text-black dark:text-white font-bold">Size</TableHead>
+                      <TableHead className="text-black dark:text-white font-bold">Uploaded By</TableHead>
+                      <TableHead className="text-black dark:text-white font-bold">Uploaded At</TableHead>
+                      <TableHead className="text-right text-black dark:text-white font-bold">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
                     <TableBody>
                       {files.map((file) => (
                         <TableRow key={file.id}>
