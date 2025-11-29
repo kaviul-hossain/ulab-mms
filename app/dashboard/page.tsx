@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Loader2, Settings, LogOut, Plus, Upload, Copy, Edit, Trash2, BookOpen, FlaskConical } from 'lucide-react';
+import { Loader2, Settings, LogOut, Plus, Upload, Copy, Edit, Trash2, BookOpen, FlaskConical, FileText, Shield } from 'lucide-react';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 
 interface Course {
@@ -61,6 +61,10 @@ export default function Dashboard() {
     courseType: 'Theory' as 'Theory' | 'Lab',
   });
   const [error, setError] = useState('');
+  const [showUploadFileModal, setShowUploadFileModal] = useState(false);
+  const [uploadingFile, setUploadingFile] = useState(false);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadSuccess, setUploadSuccess] = useState('');
 
   useEffect(() => {
     if (status === 'authenticated') {
@@ -285,6 +289,43 @@ export default function Dashboard() {
     }
   };
 
+  const handleUploadFile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setUploadSuccess('');
+
+    if (!uploadFile) {
+      setError('Please select a file to upload');
+      return;
+    }
+
+    setUploadingFile(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', uploadFile);
+
+      const response = await fetch('/api/files', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to upload file');
+      }
+
+      const data = await response.json();
+      setUploadSuccess(`File "${data.file.originalName}" uploaded successfully!`);
+      setUploadFile(null);
+      setShowUploadFileModal(false);
+      setTimeout(() => setUploadSuccess(''), 3000);
+    } catch (err: any) {
+      setError(err.message || 'Failed to upload file');
+    } finally {
+      setUploadingFile(false);
+    }
+  };
+
   if (status === 'loading' || loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -319,6 +360,22 @@ export default function Dashboard() {
 
             <div className="flex items-center gap-3">
               <ThemeToggle />
+              {session?.user?.isAdmin && (
+                <Button 
+                  variant="outline" 
+                  className="bg-amber-50 dark:bg-amber-950 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900"
+                  onClick={() => setShowUploadFileModal(true)}
+                >
+                  <Upload className="h-4 w-4 mr-2" />
+                  Upload Files
+                </Button>
+              )}
+              <Button variant="outline" asChild>
+                <Link href={`/${session?.user?.name?.replace(/\s+/g, '-')}/files`}>
+                  <FileText className="h-4 w-4 mr-2" />
+                  Download Files
+                </Link>
+              </Button>
               <Button variant="outline" asChild>
                 <Link href="/settings">
                   <Settings className="h-4 w-4 mr-2" />
@@ -364,6 +421,29 @@ export default function Dashboard() {
             </Button>
           </div>
         </div>
+
+        {/* Quick Access Card for Files */}
+        <Card className="mb-8 bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-blue-950 dark:to-cyan-950 border-blue-200 dark:border-blue-800">
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-lg bg-blue-600 flex items-center justify-center">
+                  <FileText className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-lg">Admin Resources</h3>
+                  <p className="text-sm text-muted-foreground">Download files uploaded by administrators</p>
+                </div>
+              </div>
+              <Button asChild size="lg">
+                <Link href={`/${session?.user?.name?.replace(/\s+/g, '-')}/files`}>
+                  <FileText className="h-4 w-4 mr-2" />
+                  View Files
+                </Link>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Courses Grid */}
         {courses.length === 0 ? (
@@ -853,6 +933,75 @@ export default function Dashboard() {
                   </>
                 ) : (
                   'Duplicate Course'
+                )}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* File Upload Modal - Admin Only */}
+      <Dialog open={showUploadFileModal} onOpenChange={setShowUploadFileModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Upload File</DialogTitle>
+            <DialogDescription>
+              Upload a file to make it available for all students to download
+            </DialogDescription>
+          </DialogHeader>
+
+          {error && (
+            <div className="p-3 bg-destructive/10 border border-destructive rounded-lg text-destructive text-sm">
+              {error}
+            </div>
+          )}
+
+          {uploadSuccess && (
+            <div className="p-3 bg-green-100 border border-green-400 rounded-lg text-green-700 text-sm">
+              {uploadSuccess}
+            </div>
+          )}
+
+          <form onSubmit={handleUploadFile} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="file-input">Select File</Label>
+              <Input
+                id="file-input"
+                type="file"
+                accept=".pdf,.doc,.docx,.xls,.xlsx"
+                onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
+                disabled={uploadingFile}
+              />
+              <p className="text-xs text-muted-foreground">
+                Allowed formats: PDF, Word, Excel (Max 50MB)
+              </p>
+            </div>
+
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setShowUploadFileModal(false);
+                  setUploadFile(null);
+                  setError('');
+                  setUploadSuccess('');
+                }}
+                disabled={uploadingFile}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={uploadingFile || !uploadFile}>
+                {uploadingFile ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Uploading...
+                  </>
+                ) : (
+                  <>
+                    <Upload className="h-4 w-4 mr-2" />
+                    Upload File
+                  </>
                 )}
               </Button>
             </DialogFooter>
