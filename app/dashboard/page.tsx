@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Loader2, Settings, LogOut, Plus, Upload, Copy, Edit, Trash2, BookOpen, FlaskConical, FileText, Shield } from 'lucide-react';
+import { Loader2, Settings, LogOut, Plus, Copy, Edit, Trash2, BookOpen, FlaskConical, FileText, Upload } from 'lucide-react';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 
 interface Course {
@@ -66,6 +66,9 @@ export default function Dashboard() {
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadSuccess, setUploadSuccess] = useState('');
 
+  // Check if user is admin (kaviuln@gmail.com)
+  const isAdmin = session?.user?.email === 'kaviuln@gmail.com';
+
   useEffect(() => {
     if (status === 'authenticated') {
       fetchCourses();
@@ -81,6 +84,43 @@ export default function Dashboard() {
       console.error('Error fetching courses:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleUploadFile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setUploadSuccess('');
+
+    if (!uploadFile) {
+      setError('Please select a file to upload');
+      return;
+    }
+
+    setUploadingFile(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', uploadFile);
+
+      const response = await fetch('/api/files', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to upload file');
+      }
+
+      const data = await response.json();
+      setUploadSuccess(`File "${data.file.originalName}" uploaded successfully!`);
+      setUploadFile(null);
+      setShowUploadFileModal(false);
+      setTimeout(() => setUploadSuccess(''), 3000);
+    } catch (err: any) {
+      setError(err.message || 'Failed to upload file');
+    } finally {
+      setUploadingFile(false);
     }
   };
 
@@ -289,42 +329,7 @@ export default function Dashboard() {
     }
   };
 
-  const handleUploadFile = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setUploadSuccess('');
 
-    if (!uploadFile) {
-      setError('Please select a file to upload');
-      return;
-    }
-
-    setUploadingFile(true);
-    try {
-      const formData = new FormData();
-      formData.append('file', uploadFile);
-
-      const response = await fetch('/api/files', {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to upload file');
-      }
-
-      const data = await response.json();
-      setUploadSuccess(`File "${data.file.originalName}" uploaded successfully!`);
-      setUploadFile(null);
-      setShowUploadFileModal(false);
-      setTimeout(() => setUploadSuccess(''), 3000);
-    } catch (err: any) {
-      setError(err.message || 'Failed to upload file');
-    } finally {
-      setUploadingFile(false);
-    }
-  };
 
   if (status === 'loading' || loading) {
     return (
@@ -360,7 +365,7 @@ export default function Dashboard() {
 
             <div className="flex items-center gap-3">
               <ThemeToggle />
-              {session?.user?.isAdmin && (
+              {isAdmin && (
                 <Button 
                   variant="outline" 
                   className="bg-amber-50 dark:bg-amber-950 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900"
@@ -1008,6 +1013,7 @@ export default function Dashboard() {
           </form>
         </DialogContent>
       </Dialog>
+
     </div>
   );
 }
