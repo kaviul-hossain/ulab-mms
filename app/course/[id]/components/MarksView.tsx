@@ -1,8 +1,9 @@
 'use client';
 
+import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, ChevronDown } from 'lucide-react';
 
 interface Student {
   _id: string;
@@ -29,6 +30,7 @@ interface MarksViewProps {
   marks: Mark[];
   getMark: (studentId: string, examId: string) => Mark | undefined;
   onShowMarkModal: (examId: string | undefined, studentId: string | undefined) => void;
+  onShowBulkMarkModal: () => void;
   onShowSetZeroModal: () => void;
   onShowResetMarksModal: () => void;
 }
@@ -39,9 +41,30 @@ export default function MarksView({
   marks,
   getMark,
   onShowMarkModal,
+  onShowBulkMarkModal,
   onShowSetZeroModal,
   onShowResetMarksModal,
 }: MarksViewProps) {
+  const [showDropdown, setShowDropdown] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setShowDropdown(false);
+      }
+    };
+
+    if (showDropdown) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showDropdown]);
+
   if (students.length === 0 || exams.length === 0) {
     return null;
   }
@@ -55,13 +78,51 @@ export default function MarksView({
         </p>
       </div>
       <div className="flex gap-3 flex-wrap">
-        <Button
-          onClick={() => onShowMarkModal(undefined, undefined)}
-          className="gap-2"
-        >
-          <Plus className="w-5 h-5" />
-          Add Mark
-        </Button>
+        <div className="relative" ref={dropdownRef}>
+          <Button
+            onClick={() => setShowDropdown(!showDropdown)}
+            className="gap-2"
+          >
+            <Plus className="w-5 h-5" />
+            Add Mark
+            <ChevronDown className="w-4 h-4 ml-1" />
+          </Button>
+          
+          {showDropdown && (
+            <div className="absolute top-full left-0 mt-1 w-56 bg-popover border rounded-lg shadow-lg z-50 overflow-hidden">
+              <button
+                onClick={() => {
+                  setShowDropdown(false);
+                  onShowBulkMarkModal();
+                }}
+                className="w-full px-4 py-3 text-left hover:bg-accent transition-colors flex items-start gap-3 border-b"
+              >
+                <span className="text-xl">📊</span>
+                <div>
+                  <div className="font-medium">Add All (Sequential)</div>
+                  <div className="text-xs text-muted-foreground mt-0.5">
+                    Excel-like entry for all students
+                  </div>
+                </div>
+              </button>
+              <button
+                onClick={() => {
+                  setShowDropdown(false);
+                  onShowMarkModal(undefined, undefined);
+                }}
+                className="w-full px-4 py-3 text-left hover:bg-accent transition-colors flex items-start gap-3"
+              >
+                <span className="text-xl">🔍</span>
+                <div>
+                  <div className="font-medium">Add Individual (Filter)</div>
+                  <div className="text-xs text-muted-foreground mt-0.5">
+                    Search and add one at a time
+                  </div>
+                </div>
+              </button>
+            </div>
+          )}
+        </div>
         <Button
           onClick={onShowSetZeroModal}
           variant="outline"

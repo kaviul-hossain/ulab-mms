@@ -12,6 +12,7 @@ import OverviewView from './components/OverviewView';
 import ExamsView from './components/ExamsView';
 import StudentsView from './components/StudentsView';
 import MarksView from './components/MarksView';
+import BulkMarkEntryModal from './components/BulkMarkEntryModal';
 import { 
   GradeThreshold, 
   DEFAULT_GRADING_SCALE, 
@@ -152,6 +153,7 @@ export default function CoursePage() {
   const [studentToDelete, setStudentToDelete] = useState<Student | null>(null);
   const [deleteConfirmationStep, setDeleteConfirmationStep] = useState(0);
   const [newStudentData, setNewStudentData] = useState({ studentId: '', name: '' });
+  const [showBulkMarkModal, setShowBulkMarkModal] = useState(false);
   
   const [csvInput, setCsvInput] = useState('');
   const [examFormData, setExamFormData] = useState({
@@ -1480,6 +1482,7 @@ export default function CoursePage() {
                   setInitialStudentId(studentId);
                   setShowMarkModal(true);
                 }}
+                onShowBulkMarkModal={() => setShowBulkMarkModal(true)}
                 onShowSetZeroModal={() => {
                   setSelectedExamsForAction([]);
                   setConfirmationStep(0);
@@ -1709,6 +1712,17 @@ export default function CoursePage() {
         onMarkSaved={fetchCourseData}
         initialExamId={initialExamId}
         initialStudentId={initialStudentId}
+      />
+
+      {/* Bulk Mark Entry Modal */}
+      <BulkMarkEntryModal
+        isOpen={showBulkMarkModal}
+        onClose={() => setShowBulkMarkModal(false)}
+        students={students}
+        exams={exams}
+        marks={marks}
+        courseId={courseId}
+        onMarksSaved={fetchCourseData}
       />
 
       {/* Exam Settings Modal */}
