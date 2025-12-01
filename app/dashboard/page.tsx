@@ -14,6 +14,7 @@ import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, Settings, LogOut, Plus, Upload, Copy, Edit, Trash2, BookOpen, FlaskConical } from 'lucide-react';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
+import { toast } from 'sonner';
 
 interface Course {
   _id: string;
@@ -192,7 +193,7 @@ export default function Dashboard() {
 
   const handleImportCourse = async () => {
     if (!importFile) {
-      alert('Please select a file to import');
+      toast.error('Please select a file to import');
       return;
     }
 
@@ -203,7 +204,7 @@ export default function Dashboard() {
 
       // Validate the import file structure
       if (!courseData.version || !courseData.course || !courseData.students || !courseData.exams) {
-        alert('Invalid import file format. Please select a valid course backup file.');
+        toast.error('Invalid import file format. Please select a valid course backup file.');
         return;
       }
 
@@ -215,17 +216,17 @@ export default function Dashboard() {
 
       if (response.ok) {
         const data = await response.json();
-        alert(`Course "${data.course.name}" imported successfully!`);
+        toast.success(`Course "${data.course.name}" imported successfully!`);
         setShowImportModal(false);
         setImportFile(null);
         await fetchCourses(); // Refresh the course list
       } else {
         const data = await response.json();
-        alert(data.error || 'Error importing course');
+        toast.error(data.error || 'Error importing course');
       }
     } catch (err) {
       console.error('Import error:', err);
-      alert('Error importing course. Please ensure the file is a valid JSON backup.');
+      toast.error('Error importing course. Please ensure the file is a valid JSON backup.');
     } finally {
       setImporting(false);
     }
@@ -262,7 +263,7 @@ export default function Dashboard() {
 
       if (importResponse.ok) {
         const data = await importResponse.json();
-        alert(`Course "${data.course.name}" duplicated successfully!`);
+        toast.success(`Course "${data.course.name}" duplicated successfully!`);
         setShowDuplicateModal(false);
         setDuplicatingCourse(null);
         setDuplicateFormData({

@@ -57,6 +57,7 @@ import {
   Menu
 } from 'lucide-react';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
+import { toast } from 'sonner';
 
 interface Student {
   _id: string;
@@ -267,20 +268,20 @@ export default function CoursePage() {
         await fetchCourseData();
         setShowAddStudentModal(false);
         setNewStudentData({ studentId: '', name: '' });
-        alert('Student added successfully!');
+        toast.success('Student added successfully!');
       } else {
-        alert(`Error: ${data.error || 'Failed to add student'}`);
+        toast.error(`Error: ${data.error || 'Failed to add student'}`);
       }
     } catch (err) {
       console.error('Error adding student:', err);
-      alert('Error adding student');
+      toast.error('Error adding student');
     }
   };
 
   const handleEditStudent = async () => {
     try {
       if (!editStudentData.studentId.trim() || !editStudentData.name.trim()) {
-        alert('Please fill in both Student ID and Name');
+        toast.error('Please fill in both Student ID and Name');
         return;
       }
 
@@ -302,13 +303,13 @@ export default function CoursePage() {
         setShowEditStudentModal(false);
         setStudentToEdit(null);
         setEditStudentData({ studentId: '', name: '' });
-        alert('Student updated successfully!');
+        toast.success('Student updated successfully!');
       } else {
-        alert(`Error: ${data.error || 'Failed to update student'}`);
+        toast.error(`Error: ${data.error || 'Failed to update student'}`);
       }
     } catch (err) {
       console.error('Error updating student:', err);
-      alert('Error updating student');
+      toast.error('Error updating student');
     }
   };
 
@@ -317,7 +318,7 @@ export default function CoursePage() {
       const parsedStudents = parseCSV(csvInput);
       
       if (parsedStudents.length === 0) {
-        alert('No valid student data found');
+        toast.error('No valid student data found');
         return;
       }
 
@@ -339,13 +340,13 @@ export default function CoursePage() {
         await fetchCourseData();
         setShowBulkAddStudentModal(false);
         setCsvInput('');
-        alert(`Successfully imported ${parsedStudents.length} students!`);
+        toast.success(`Successfully imported ${parsedStudents.length} students!`);
       } else {
-        alert(`Error: ${data.error || 'Failed to import students'}`);
+        toast.error(`Error: ${data.error || 'Failed to import students'}`);
       }
     } catch (err) {
       console.error('Error importing students:', err);
-      alert('Error importing students');
+      toast.error('Error importing students');
     }
   };
 
@@ -362,14 +363,14 @@ export default function CoursePage() {
         setShowDeleteStudentModal(false);
         setStudentToDelete(null);
         setDeleteConfirmationStep(0);
-        alert('Student deleted successfully!');
+        toast.success('Student deleted successfully!');
       } else {
         const data = await response.json();
-        alert(`Error: ${data.error || 'Failed to delete student'}`);
+        toast.error(`Error: ${data.error || 'Failed to delete student'}`);
       }
     } catch (err) {
       console.error('Error deleting student:', err);
-      alert('Error deleting student');
+      toast.error('Error deleting student');
     }
   };
 
@@ -437,11 +438,11 @@ export default function CoursePage() {
       if (response.ok) {
         // Refresh course data to get updated marks
         await fetchCourseData();
-        alert('Scaling applied successfully!');
+        toast.success('Scaling applied successfully!');
       }
     } catch (err) {
       console.error('Error applying scaling:', err);
-      alert('Error applying scaling');
+      toast.error('Error applying scaling');
     }
   };
 
@@ -481,16 +482,16 @@ export default function CoursePage() {
 
       if (response.ok) {
         await fetchCourseData();
-        alert(`Successfully set ${marksToCreate.length} empty marks to 0!`);
+        toast.success(`Successfully set ${marksToCreate.length} empty marks to 0!`);
         setShowSetZeroModal(false);
         setConfirmationStep(0);
       } else {
         const data = await response.json();
-        alert(`Error: ${data.error || 'Failed to set marks'}`);
+        toast.error(`Error: ${data.error || 'Failed to set marks'}`);
       }
     } catch (err) {
       console.error('Error setting empty marks to zero:', err);
-      alert('Error setting empty marks to zero');
+      toast.error('Error setting empty marks to zero');
     }
   };
 
@@ -502,7 +503,7 @@ export default function CoursePage() {
       const marksToDelete = marks.filter(m => examIdsToDelete.includes(m.examId));
 
       if (marksToDelete.length === 0) {
-        alert('No marks found for selected exams!');
+        toast.error('No marks found for selected exams!');
         setShowResetMarksModal(false);
         setConfirmationStep(0);
         return;
@@ -516,16 +517,16 @@ export default function CoursePage() {
 
       if (response.ok) {
         await fetchCourseData();
-        alert(`Successfully deleted ${marksToDelete.length} marks!`);
+        toast.success(`Successfully deleted ${marksToDelete.length} marks!`);
         setShowResetMarksModal(false);
         setConfirmationStep(0);
       } else {
         const data = await response.json();
-        alert(`Error: ${data.error || 'Failed to delete marks'}`);
+        toast.error(`Error: ${data.error || 'Failed to delete marks'}`);
       }
     } catch (err) {
       console.error('Error resetting marks:', err);
-      alert('Error resetting marks');
+      toast.error('Error resetting marks');
     }
   };
 
@@ -540,23 +541,23 @@ export default function CoursePage() {
       if (response.ok) {
         await fetchCourseData();
       } else {
-        alert('Error updating scaling setting');
+        toast.error('Error updating scaling setting');
       }
     } catch (err) {
       console.error('Error toggling scaling:', err);
-      alert('Error toggling scaling');
+      toast.error('Error toggling scaling');
     }
   };
 
   const handleUpdateScalingTarget = async (examId: string, target: number) => {
     if (isNaN(target) || target <= 0) {
-      alert('Please enter a valid scaling target value');
+      toast.error('Please enter a valid scaling target value');
       return;
     }
 
     const exam = exams.find(e => e._id === examId);
     if (exam && target > exam.totalMarks) {
-      alert(`Scaling target cannot exceed total marks (${exam.totalMarks})`);
+      toast.error(`Scaling target cannot exceed total marks (${exam.totalMarks})`);
       return;
     }
 
@@ -585,9 +586,9 @@ export default function CoursePage() {
               delete updated[examId];
               return updated;
             });
-            alert('Scaling target updated and marks recalculated successfully!');
+            toast.success('Scaling target updated and marks recalculated successfully!');
           } else {
-            alert('Scaling target updated but failed to recalculate marks');
+            toast.error('Scaling target updated but failed to recalculate marks');
             await fetchCourseData();
           }
         } else {
@@ -598,14 +599,14 @@ export default function CoursePage() {
             delete updated[examId];
             return updated;
           });
-          alert('Scaling target updated successfully!');
+          toast.success('Scaling target updated successfully!');
         }
       } else {
-        alert('Error updating scaling target');
+        toast.error('Error updating scaling target');
       }
     } catch (err) {
       console.error('Error updating scaling target:', err);
-      alert('Error updating scaling target');
+      toast.error('Error updating scaling target');
     }
   };
 
@@ -653,13 +654,14 @@ export default function CoursePage() {
 
       if (response.ok) {
         await fetchCourseData();
+        toast.success('Exam deleted successfully!');
       } else {
         const data = await response.json();
-        alert(data.error);
+        toast.error(data.error);
       }
     } catch (err) {
       console.error('Error deleting exam:', err);
-      alert('Error deleting exam');
+      toast.error('Error deleting exam');
     }
   };
 
@@ -667,7 +669,7 @@ export default function CoursePage() {
     try {
       const exam = exams.find(e => e._id === examId);
       if (!exam?.scalingMethod) {
-        alert('Please apply a scaling method first');
+        toast.error('Please apply a scaling method first');
         return;
       }
 
@@ -679,11 +681,11 @@ export default function CoursePage() {
 
       if (response.ok) {
         await fetchCourseData();
-        alert('Rounding applied successfully!');
+        toast.success('Rounding applied successfully!');
       }
     } catch (err) {
       console.error('Error applying rounding:', err);
-      alert('Error applying rounding');
+      toast.error('Error applying rounding');
     }
   };
 
