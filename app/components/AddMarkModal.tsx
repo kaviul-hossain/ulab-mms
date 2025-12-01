@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, useRef, KeyboardEvent } from 'react';
-import { scrollToErrorBox } from '@/app/utils/errorBox';
 
 interface Student {
   _id: string;
@@ -67,7 +66,6 @@ export default function AddMarkModal({
   const coMarkRefs = useRef<(HTMLInputElement | null)[]>([]);
   const questionMarkRefs = useRef<(HTMLInputElement | null)[]>([]);
   const saveButtonRef = useRef<HTMLButtonElement>(null);
-  const errorBoxRef = useRef<HTMLDivElement>(null);
 
   const selectedExam = exams.find(e => e._id === selectedExamId);
   const numberOfCOs = selectedExam?.numberOfCOs || 0;
@@ -97,13 +95,6 @@ export default function AddMarkModal({
       setQuestionMarks([]);
     }
   }, [selectedExamId, numberOfCOs, numberOfQuestions]);
-
-  // Scroll to and glow error box when error changes
-  useEffect(() => {
-    if (error && errorBoxRef.current) {
-      scrollToErrorBox('add-mark-error-box');
-    }
-  }, [error]);
 
   // Load existing marks when student is selected
   useEffect(() => {
@@ -473,11 +464,7 @@ export default function AddMarkModal({
             </div>
 
             {error && (
-              <div 
-                ref={errorBoxRef}
-                id="add-mark-error-box"
-                className="mb-4 p-3 bg-red-900/30 border border-red-700 rounded-lg text-red-300 text-sm"
-              >
+              <div className="mb-4 p-3 bg-red-900/30 border border-red-700 rounded-lg text-red-300 text-sm">
                 {error}
               </div>
             )}

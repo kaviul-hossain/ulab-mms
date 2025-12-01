@@ -1,11 +1,10 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
-import { scrollToErrorBox } from '@/app/utils/errorBox';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -23,13 +22,6 @@ export default function SignUp() {
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const errorBoxRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (error && errorBoxRef.current) {
-      scrollToErrorBox('signup-error-box');
-    }
-  }, [error]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -110,11 +102,7 @@ export default function SignUp() {
           </CardHeader>
           <CardContent>
             {error && (
-              <div 
-                ref={errorBoxRef}
-                id="signup-error-box"
-                className="mb-4 p-3 bg-destructive/10 border border-destructive rounded-lg text-destructive text-sm"
-              >
+              <div className="mb-4 p-3 bg-destructive/10 border border-destructive rounded-lg text-destructive text-sm">
                 {error}
               </div>
             )}
