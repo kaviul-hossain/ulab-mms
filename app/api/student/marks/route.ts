@@ -105,6 +105,7 @@ export async function GET(request: NextRequest) {
             semester: course.semester,
             year: course.year,
             courseType: course.courseType,
+            isArchived: course.isArchived,
             showFinalGrade: course.showFinalGrade,
             quizAggregation: course.quizAggregation,
             quizWeightage: course.quizWeightage,

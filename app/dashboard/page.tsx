@@ -12,9 +12,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Loader2, Settings, LogOut, Plus, Upload, Copy, Edit, Trash2, BookOpen, FlaskConical } from 'lucide-react';
+import { Loader2, Settings, LogOut, Plus, Upload, Copy, Edit, Trash2, BookOpen, FlaskConical, Archive, MoreVertical } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
-import { toast } from 'sonner';
+import { notify } from '@/app/utils/notifications';
 
 interface Course {
   _id: string;
@@ -23,6 +24,7 @@ interface Course {
   semester: string;
   year: number;
   courseType: 'Theory' | 'Lab';
+  isArchived: boolean;
   createdAt: string;
 }
 
@@ -38,6 +40,7 @@ export default function Dashboard() {
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importing, setImporting] = useState(false);
   const [duplicating, setDuplicating] = useState(false);
+  const [archiving, setArchiving] = useState<string | null>(null);
   const [editingCourse, setEditingCourse] = useState<Course | null>(null);
   const [duplicatingCourse, setDuplicatingCourse] = useState<Course | null>(null);
   const [formData, setFormData] = useState({
@@ -95,10 +98,12 @@ export default function Dashboard() {
       const data = await response.json();
 
       if (!response.ok) {
+        notify.course.createError(data.error);
         setError(data.error || 'Failed to create course');
         return;
       }
 
+      notify.course.created(data.course.name);
       setCourses([data.course, ...courses]);
       setShowAddModal(false);
       setFormData({
@@ -113,6 +118,30 @@ export default function Dashboard() {
     }
   };
 
+  const handleArchiveCourse = async (courseId: string, courseName: string) => {
+    setArchiving(courseId);
+    try {
+      const response = await fetch(`/api/courses/${courseId}/archive`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isArchived: true }),
+      });
+
+      if (response.ok) {
+        notify.course.archived(courseName);
+        setCourses(courses.filter(c => c._id !== courseId));
+      } else {
+        const data = await response.json();
+        notify.course.archiveError(data.error);
+      }
+    } catch (err) {
+      console.error('Error archiving course:', err);
+      notify.course.archiveError();
+    } finally {
+      setArchiving(null);
+    }
+  };
+
   const handleDeleteCourse = async (courseId: string) => {
     if (!confirm('Are you sure you want to delete this course? All students, exams, and marks will be deleted.')) {
       return;
@@ -124,10 +153,15 @@ export default function Dashboard() {
       });
 
       if (response.ok) {
+        const deletedCourse = courses.find(c => c._id === courseId);
+        notify.course.deleted(deletedCourse?.name);
         setCourses(courses.filter((c) => c._id !== courseId));
+      } else {
+        notify.course.deleteError();
       }
     } catch (err) {
       console.error('Error deleting course:', err);
+      notify.course.deleteError();
     }
   };
 
@@ -147,10 +181,12 @@ export default function Dashboard() {
       const data = await response.json();
 
       if (!response.ok) {
+        notify.course.updateError(data.error);
         setError(data.error || 'Failed to update course');
         return;
       }
 
+      notify.course.updated(data.course.name);
       // Update the course in the list
       setCourses(courses.map(c => c._id === editingCourse._id ? data.course : c));
       setShowEditModal(false);
@@ -193,7 +229,7 @@ export default function Dashboard() {
 
   const handleImportCourse = async () => {
     if (!importFile) {
-      toast.error('Please select a file to import');
+      notify.exportImport.noFileSelected();
       return;
     }
 
@@ -204,7 +240,7 @@ export default function Dashboard() {
 
       // Validate the import file structure
       if (!courseData.version || !courseData.course || !courseData.students || !courseData.exams) {
-        toast.error('Invalid import file format. Please select a valid course backup file.');
+        notify.exportImport.invalidFile();
         return;
       }
 
@@ -216,17 +252,17 @@ export default function Dashboard() {
 
       if (response.ok) {
         const data = await response.json();
-        toast.success(`Course "${data.course.name}" imported successfully!`);
+        notify.exportImport.importSuccess(`Course "${data.course.name}"`);
         setShowImportModal(false);
         setImportFile(null);
         await fetchCourses(); // Refresh the course list
       } else {
         const data = await response.json();
-        toast.error(data.error || 'Error importing course');
+        notify.exportImport.importError(data.error);
       }
     } catch (err) {
       console.error('Import error:', err);
-      toast.error('Error importing course. Please ensure the file is a valid JSON backup.');
+      notify.exportImport.importError();
     } finally {
       setImporting(false);
     }
@@ -263,7 +299,7 @@ export default function Dashboard() {
 
       if (importResponse.ok) {
         const data = await importResponse.json();
-        toast.success(`Course "${data.course.name}" duplicated successfully!`);
+        notify.course.duplicated(data.course.name);
         setShowDuplicateModal(false);
         setDuplicatingCourse(null);
         setDuplicateFormData({
@@ -276,10 +312,12 @@ export default function Dashboard() {
         await fetchCourses(); // Refresh the course list
       } else {
         const data = await importResponse.json();
+        notify.course.duplicateError(data.error);
         setError(data.error || 'Error duplicating course');
       }
     } catch (err) {
       console.error('Duplicate error:', err);
+      notify.course.duplicateError();
       setError('Error duplicating course. Please try again.');
     } finally {
       setDuplicating(false);
@@ -320,6 +358,12 @@ export default function Dashboard() {
 
             <div className="flex items-center gap-3">
               <ThemeToggle />
+              <Button variant="outline" asChild>
+                <Link href="/dashboard/archived">
+                  <Archive className="h-4 w-4 mr-2" />
+                  Archived
+                </Link>
+              </Button>
               <Button variant="outline" asChild>
                 <Link href="/settings">
                   <Settings className="h-4 w-4 mr-2" />
@@ -405,33 +449,37 @@ export default function Dashboard() {
                         <FlaskConical className="h-6 w-6 text-white" />
                       )}
                     </div>
-                    <div className="flex items-center gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => openDuplicateModal(course)}
-                        title="Duplicate course"
-                      >
-                        <Copy className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => openEditModal(course)}
-                        title="Edit course"
-                      >
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleDeleteCourse(course._id)}
-                        title="Delete course"
-                        className="text-destructive hover:text-destructive"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon">
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => openEditModal(course)}>
+                          <Edit className="h-4 w-4 mr-2" />
+                          Edit
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => openDuplicateModal(course)}>
+                          <Copy className="h-4 w-4 mr-2" />
+                          Duplicate
+                        </DropdownMenuItem>
+                        <DropdownMenuItem 
+                          onClick={() => handleArchiveCourse(course._id, course.name)}
+                          disabled={archiving === course._id}
+                        >
+                          <Archive className="h-4 w-4 mr-2" />
+                          {archiving === course._id ? 'Archiving...' : 'Archive'}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem 
+                          onClick={() => handleDeleteCourse(course._id)}
+                          className="text-destructive"
+                        >
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          Delete
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
                   <CardTitle className="mt-4">{course.name}</CardTitle>
                   <CardDescription>{course.code}</CardDescription>

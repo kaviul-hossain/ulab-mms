@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { notify } from '@/app/utils/notifications';
 import Link from 'next/link';
 import Image from 'next/image';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
@@ -58,8 +59,9 @@ export default function SignUp() {
         return;
       }
 
-      // Redirect to sign in page
-      router.push('/auth/signin?registered=true');
+      // Show success notification and redirect to sign in page
+      notify.auth.signUpSuccess();
+      router.push('/auth/signin');
     } catch (err) {
       setError('An error occurred. Please try again.');
     } finally {

@@ -57,6 +57,7 @@ import {
   Menu
 } from 'lucide-react';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
+import { notify } from '@/app/utils/notifications';
 import { toast } from 'sonner';
 
 interface Student {
@@ -246,7 +247,7 @@ export default function CoursePage() {
   const handleAddIndividualStudent = async () => {
     try {
       if (!newStudentData.studentId.trim() || !newStudentData.name.trim()) {
-        alert('Please fill in both Student ID and Name');
+        notify.student.validationError('Please fill in both Student ID and Name');
         return;
       }
 
@@ -267,21 +268,21 @@ export default function CoursePage() {
       if (response.ok) {
         await fetchCourseData();
         setShowAddStudentModal(false);
+        notify.student.added(newStudentData.name);
         setNewStudentData({ studentId: '', name: '' });
-        toast.success('Student added successfully!');
       } else {
-        toast.error(`Error: ${data.error || 'Failed to add student'}`);
+        notify.student.addError(data.error);
       }
     } catch (err) {
       console.error('Error adding student:', err);
-      toast.error('Error adding student');
+      notify.student.addError();
     }
   };
 
   const handleEditStudent = async () => {
     try {
       if (!editStudentData.studentId.trim() || !editStudentData.name.trim()) {
-        toast.error('Please fill in both Student ID and Name');
+        notify.student.validationError('Please fill in both Student ID and Name');
         return;
       }
 
@@ -302,14 +303,14 @@ export default function CoursePage() {
         await fetchCourseData();
         setShowEditStudentModal(false);
         setStudentToEdit(null);
+        notify.student.updated(editStudentData.name);
         setEditStudentData({ studentId: '', name: '' });
-        toast.success('Student updated successfully!');
       } else {
-        toast.error(`Error: ${data.error || 'Failed to update student'}`);
+        notify.student.updateError(data.error);
       }
     } catch (err) {
       console.error('Error updating student:', err);
-      toast.error('Error updating student');
+      notify.student.updateError();
     }
   };
 
@@ -318,7 +319,7 @@ export default function CoursePage() {
       const parsedStudents = parseCSV(csvInput);
       
       if (parsedStudents.length === 0) {
-        toast.error('No valid student data found');
+        notify.validation.noData('student');
         return;
       }
 
@@ -340,13 +341,13 @@ export default function CoursePage() {
         await fetchCourseData();
         setShowBulkAddStudentModal(false);
         setCsvInput('');
-        toast.success(`Successfully imported ${parsedStudents.length} students!`);
+        notify.student.bulkImported(parsedStudents.length);
       } else {
-        toast.error(`Error: ${data.error || 'Failed to import students'}`);
+        notify.student.bulkImportError(data.error);
       }
     } catch (err) {
       console.error('Error importing students:', err);
-      toast.error('Error importing students');
+      notify.student.bulkImportError();
     }
   };
 
@@ -361,16 +362,16 @@ export default function CoursePage() {
       if (response.ok) {
         await fetchCourseData();
         setShowDeleteStudentModal(false);
+        notify.student.deleted(studentToDelete.name);
         setStudentToDelete(null);
         setDeleteConfirmationStep(0);
-        toast.success('Student deleted successfully!');
       } else {
         const data = await response.json();
-        toast.error(`Error: ${data.error || 'Failed to delete student'}`);
+        notify.student.deleteError(data.error);
       }
     } catch (err) {
       console.error('Error deleting student:', err);
-      toast.error('Error deleting student');
+      notify.student.deleteError();
     }
   };
 
@@ -416,10 +417,12 @@ export default function CoursePage() {
       const data = await response.json();
 
       if (response.ok) {
+        notify.exam.created(data.exam.displayName);
         setExams([...exams, data.exam]);
         setShowExamModal(false);
         setExamFormData({ displayName: '', totalMarks: '', weightage: '', numberOfCOs: '', numberOfQuestions: '', examCategory: '' });
       } else {
+        notify.exam.createError(data.error);
         setError(data.error);
       }
     } catch (err) {
@@ -438,11 +441,13 @@ export default function CoursePage() {
       if (response.ok) {
         // Refresh course data to get updated marks
         await fetchCourseData();
-        toast.success('Scaling applied successfully!');
+        notify.scaling.applied(method);
+      } else {
+        notify.scaling.applyError();
       }
     } catch (err) {
       console.error('Error applying scaling:', err);
-      toast.error('Error applying scaling');
+      notify.scaling.applyError();
     }
   };
 
@@ -468,7 +473,7 @@ export default function CoursePage() {
       }
 
       if (marksToCreate.length === 0) {
-        alert('All students already have marks for selected exams!');
+        notify.mark.allMarksExist();
         setShowSetZeroModal(false);
         setConfirmationStep(0);
         return;
@@ -482,16 +487,16 @@ export default function CoursePage() {
 
       if (response.ok) {
         await fetchCourseData();
-        toast.success(`Successfully set ${marksToCreate.length} empty marks to 0!`);
+        notify.mark.emptyMarksSet(marksToCreate.length);
         setShowSetZeroModal(false);
         setConfirmationStep(0);
       } else {
         const data = await response.json();
-        toast.error(`Error: ${data.error || 'Failed to set marks'}`);
+        notify.mark.emptyMarksError(data.error);
       }
     } catch (err) {
       console.error('Error setting empty marks to zero:', err);
-      toast.error('Error setting empty marks to zero');
+      notify.mark.emptyMarksError();
     }
   };
 
@@ -503,7 +508,7 @@ export default function CoursePage() {
       const marksToDelete = marks.filter(m => examIdsToDelete.includes(m.examId));
 
       if (marksToDelete.length === 0) {
-        toast.error('No marks found for selected exams!');
+        notify.mark.noMarksToReset();
         setShowResetMarksModal(false);
         setConfirmationStep(0);
         return;
@@ -517,16 +522,16 @@ export default function CoursePage() {
 
       if (response.ok) {
         await fetchCourseData();
-        toast.success(`Successfully deleted ${marksToDelete.length} marks!`);
+        notify.mark.marksReset(marksToDelete.length);
         setShowResetMarksModal(false);
         setConfirmationStep(0);
       } else {
         const data = await response.json();
-        toast.error(`Error: ${data.error || 'Failed to delete marks'}`);
+        notify.mark.resetError(data.error);
       }
     } catch (err) {
       console.error('Error resetting marks:', err);
-      toast.error('Error resetting marks');
+      notify.mark.resetError();
     }
   };
 
@@ -540,24 +545,30 @@ export default function CoursePage() {
 
       if (response.ok) {
         await fetchCourseData();
+        const exam = exams.find(e => e._id === examId);
+        if (exam && !currentValue) {
+          notify.scaling.toggledOn();
+        } else if (exam && currentValue) {
+          notify.scaling.toggledOff();
+        }
       } else {
-        toast.error('Error updating scaling setting');
+        notify.scaling.toggleError();
       }
     } catch (err) {
       console.error('Error toggling scaling:', err);
-      toast.error('Error toggling scaling');
+      notify.scaling.toggleError();
     }
   };
 
   const handleUpdateScalingTarget = async (examId: string, target: number) => {
     if (isNaN(target) || target <= 0) {
-      toast.error('Please enter a valid scaling target value');
+      notify.scaling.invalidTarget();
       return;
     }
 
     const exam = exams.find(e => e._id === examId);
     if (exam && target > exam.totalMarks) {
-      toast.error(`Scaling target cannot exceed total marks (${exam.totalMarks})`);
+      notify.scaling.targetExceedsTotal(exam.totalMarks);
       return;
     }
 
@@ -586,9 +597,9 @@ export default function CoursePage() {
               delete updated[examId];
               return updated;
             });
-            toast.success('Scaling target updated and marks recalculated successfully!');
+            notify.scaling.targetUpdatedAndRecalculated();
           } else {
-            toast.error('Scaling target updated but failed to recalculate marks');
+            notify.scaling.recalculateError();
             await fetchCourseData();
           }
         } else {
@@ -599,14 +610,14 @@ export default function CoursePage() {
             delete updated[examId];
             return updated;
           });
-          toast.success('Scaling target updated successfully!');
+          notify.scaling.targetUpdated();
         }
       } else {
-        toast.error('Error updating scaling target');
+        notify.scaling.targetError();
       }
     } catch (err) {
       console.error('Error updating scaling target:', err);
-      toast.error('Error updating scaling target');
+      notify.scaling.targetError();
     }
   };
 
@@ -630,11 +641,13 @@ export default function CoursePage() {
 
       if (response.ok) {
         await fetchCourseData();
+        notify.exam.settingsUpdated();
         setShowExamSettings(null);
         setExamSettings({ displayName: '', weightage: '', numberOfCOs: '', numberOfQuestions: '', totalMarks: '', examCategory: '' });
         setError('');
       } else {
         const data = await response.json();
+        notify.exam.settingsError(data.error);
         setError(data.error);
       }
     } catch (err) {
@@ -654,14 +667,15 @@ export default function CoursePage() {
 
       if (response.ok) {
         await fetchCourseData();
-        toast.success('Exam deleted successfully!');
+        const exam = exams.find(e => e._id === examId);
+        notify.exam.deleted(exam?.displayName);
       } else {
         const data = await response.json();
-        toast.error(data.error);
+        notify.exam.deleteError(data.error);
       }
     } catch (err) {
       console.error('Error deleting exam:', err);
-      toast.error('Error deleting exam');
+      notify.exam.deleteError();
     }
   };
 
@@ -669,7 +683,7 @@ export default function CoursePage() {
     try {
       const exam = exams.find(e => e._id === examId);
       if (!exam?.scalingMethod) {
-        toast.error('Please apply a scaling method first');
+        notify.scaling.methodRequired();
         return;
       }
 
@@ -681,11 +695,13 @@ export default function CoursePage() {
 
       if (response.ok) {
         await fetchCourseData();
-        toast.success('Rounding applied successfully!');
+        notify.scaling.roundingApplied();
+      } else {
+        notify.scaling.roundingError();
       }
     } catch (err) {
       console.error('Error applying rounding:', err);
-      toast.error('Error applying rounding');
+      notify.scaling.roundingError();
     }
   };
 
@@ -723,9 +739,10 @@ export default function CoursePage() {
       if (response.ok) {
         await fetchCourseData();
         setShowCourseSettings(false);
-        alert('Course settings updated successfully!');
+        notify.course.settingsSaved();
       } else {
         const data = await response.json();
+        notify.course.settingsError(data.error);
         setError(data.error);
       }
     } catch (err) {
@@ -748,14 +765,14 @@ export default function CoursePage() {
         a.click();
         window.URL.revokeObjectURL(url);
         document.body.removeChild(a);
-        alert('Course exported as JSON successfully!');
+        notify.exportImport.exportSuccess('JSON', `${course?.code}_${course?.name}`);
       } else {
         const data = await response.json();
-        alert(data.error || 'Error exporting course');
+        notify.exportImport.exportError(data.error);
       }
     } catch (err) {
       console.error('Export error:', err);
-      alert('Error exporting course');
+      notify.exportImport.exportError();
     } finally {
       setExportingJSON(false);
     }
@@ -776,14 +793,14 @@ export default function CoursePage() {
         a.click();
         window.URL.revokeObjectURL(url);
         document.body.removeChild(a);
-        alert('Course exported as CSV successfully!');
+        notify.exportImport.exportSuccess('CSV', `${course?.code}_${course?.name}`);
       } else {
         const data = await response.json();
-        alert(data.error || 'Error exporting course');
+        notify.exportImport.exportError(data.error);
       }
     } catch (err) {
       console.error('Export error:', err);
-      alert('Error exporting course');
+      notify.exportImport.exportError();
     } finally {
       setExportingCSV(false);
     }
@@ -791,7 +808,7 @@ export default function CoursePage() {
 
   const handleImportCourse = async () => {
     if (!importCourseFile) {
-      alert('Please select a file to import');
+      notify.exportImport.noFileSelected();
       return;
     }
 
@@ -810,14 +827,14 @@ export default function CoursePage() {
         await fetchCourseData();
         setShowImportCourseModal(false);
         setImportCourseFile(null);
-        alert('Course imported successfully!');
+        notify.exportImport.importSuccess('Course data');
       } else {
         const data = await response.json();
-        alert(data.error || 'Error importing course');
+        notify.exportImport.importError(data.error);
       }
     } catch (err) {
       console.error('Import error:', err);
-      alert('Error importing course. Please ensure the file is valid.');
+      notify.exportImport.importError();
     } finally {
       setImportingCourse(false);
     }
@@ -1091,9 +1108,10 @@ export default function CoursePage() {
     if (student) {
       setSelectedStudent(student);
       setShowStudentDetail(true);
+      notify.student.searchSuccess(student.name);
       setSearchStudentId('');
     } else {
-      alert('Student not found in this course');
+      notify.student.notFound(searchStudentId);
     }
   };
 

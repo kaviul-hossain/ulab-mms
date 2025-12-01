@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, KeyboardEvent } from 'react';
 import { Button } from '@/components/ui/button';
 import { X, Save, Loader2 } from 'lucide-react';
+import { notify } from '@/app/utils/notifications';
 
 interface Student {
   _id: string;
@@ -358,13 +359,16 @@ export default function BulkMarkEntryModal({
       setSaving(false);
       
       if (successCount > 0) {
+        notify.mark.bulkSaved(successCount);
         onMarksSaved();
         onClose();
       } else {
+        notify.mark.bulkSaveError();
         setError('Failed to save marks. Please try again.');
       }
     } catch (err) {
       console.error('Error saving marks:', err);
+      notify.mark.bulkSaveError();
       setError('An error occurred while saving marks');
       setSaving(false);
     }

@@ -4,6 +4,7 @@ import { useState, useMemo } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Search, Loader2, TrendingUp, Award } from 'lucide-react';
+import { notify } from '@/app/utils/notifications';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -36,6 +37,7 @@ interface Course {
   semester: string;
   year: number;
   courseType: 'Theory' | 'Lab';
+  isArchived: boolean;
   showFinalGrade: boolean;
   quizAggregation?: 'average' | 'best';
   quizWeightage?: number;
@@ -109,7 +111,11 @@ export default function StudentCheckMarks() {
         setCourses(data.courses);
         setStudentName(data.studentName);
         setSearched(true);
+        if (data.courses.length > 0) {
+          notify.success(`Found ${data.courses.length} course${data.courses.length !== 1 ? 's' : ''} for ${data.studentName}`);
+        }
       } else {
+        notify.student.notFound(studentId);
         setError(data.error || 'Student ID not found');
         setSearched(true);
       }
@@ -545,6 +551,11 @@ export default function StudentCheckMarks() {
                         <Badge variant={courseData.course.courseType === 'Theory' ? 'default' : 'secondary'}>
                           {courseData.course.courseType}
                         </Badge>
+                        {courseData.course.isArchived && (
+                          <Badge variant="outline" className="bg-amber-500/10 text-amber-600 border-amber-500/20">
+                            📦 Past Semester
+                          </Badge>
+                        )}
                         <span className="text-sm text-muted-foreground">
                           {marksCount}/{examsCount} exams
                         </span>
