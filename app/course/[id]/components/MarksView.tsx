@@ -46,6 +46,7 @@ export default function MarksView({
   onShowResetMarksModal,
 }: MarksViewProps) {
   const [showDropdown, setShowDropdown] = useState(false);
+  const [showFloatingButtons, setShowFloatingButtons] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Close dropdown when clicking outside
@@ -64,6 +65,16 @@ export default function MarksView({
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [showDropdown]);
+
+  // Show floating buttons on scroll
+  useEffect(() => {
+    const handleScroll = () => {
+      setShowFloatingButtons(window.scrollY > 200);
+    };
+
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   if (students.length === 0 || exams.length === 0) {
     return null;
@@ -141,11 +152,12 @@ export default function MarksView({
         </Button>
       </div>
       <Card className="p-6">
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto max-h-[calc(100vh-200px)] sticky top-0">
           <table className="min-w-full divide-y divide-border">
-            <thead className="bg-muted/50">
+            <thead className="bg-muted sticky top-0 z-20">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider sticky left-0 z-20 bg-muted/50 border-r">Student</th>
+                <th className="px-3 py-3 text-center text-xs font-semibold uppercase tracking-wider sticky left-0 z-30 bg-muted border-r w-[50px]">#</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider sticky left-0 z-30 bg-muted border-r min-w-[200px]">Student</th>
                 {exams.map(exam => (
                   <th key={exam._id} className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider">
                     <div>{exam.displayName}</div>
@@ -157,7 +169,8 @@ export default function MarksView({
             <tbody className="divide-y divide-border/50">
               {students.map((student, idx) => (
                 <tr key={student._id} className={`transition-colors hover:bg-muted/50 ${idx % 2 === 0 ? 'bg-muted/20' : 'bg-background'}`}>
-                  <td className={`px-4 py-3 text-sm font-medium sticky left-0 z-10 border-r ${idx % 2 === 0 ? 'bg-muted/20' : 'bg-background'}`}>
+                  <td className={`px-3 py-3 text-sm font-medium text-center sticky left-0 z-10 border-r w-[50px] ${idx % 2 === 0 ? 'bg-muted' : 'bg-background'}`}>{idx + 1}</td>
+                  <td className={`px-4 py-3 text-sm font-medium sticky left-0 z-10 border-r min-w-[200px] ${idx % 2 === 0 ? 'bg-muted' : 'bg-background'}`}>
                     <div className="flex flex-col">
                       <span className="text-primary">{student.studentId}</span>
                       <span className="text-xs text-muted-foreground">{student.name}</span>
@@ -188,6 +201,38 @@ export default function MarksView({
           </table>
         </div>
       </Card>
+
+      {/* Floating Action Buttons */}
+      {showFloatingButtons && (
+        <div className="fixed bottom-6 right-6 flex flex-col gap-3 z-50">
+          <Button
+            onClick={onShowBulkMarkModal}
+            className="gap-2 shadow-lg hover:shadow-xl transition-shadow"
+            size="lg"
+          >
+            <Plus className="w-5 h-5" />
+            Add All
+          </Button>
+          <Button
+            onClick={onShowSetZeroModal}
+            variant="secondary"
+            className="gap-2 shadow-lg hover:shadow-xl transition-shadow"
+            size="lg"
+          >
+            0️⃣
+            Set Empty to 0
+          </Button>
+          <Button
+            onClick={onShowResetMarksModal}
+            variant="destructive"
+            className="gap-2 shadow-lg hover:shadow-xl transition-shadow"
+            size="lg"
+          >
+            <Trash2 className="w-5 h-5" />
+            Reset Marks
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
