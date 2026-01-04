@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useSession, signOut } from 'next-auth/react';
+import { notify } from '@/app/utils/notifications';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -42,17 +43,20 @@ export default function SettingsPage() {
     const final = parseFloat(defaultFinalWeightage);
 
     if (isNaN(mid) || isNaN(final)) {
+      notify.settings.invalidInput();
       setSettingsError('Please enter valid numbers');
       return;
     }
 
     if (mid < 0 || final < 0 || mid > 100 || final > 100) {
+      notify.settings.invalidWeightage();
       setSettingsError('Weightages must be between 0 and 100');
       return;
     }
 
     localStorage.setItem('defaultMidWeightage', defaultMidWeightage);
     localStorage.setItem('defaultFinalWeightage', defaultFinalWeightage);
+    notify.settings.weightagesSaved();
     setSettingsSuccess('Default weightages saved successfully!');
     setSettingsError('');
 
@@ -89,12 +93,14 @@ export default function SettingsPage() {
       const data = await response.json();
 
       if (response.ok) {
+        notify.auth.passwordChanged();
         setPasswordSuccess('Password changed successfully!');
         setCurrentPassword('');
         setNewPassword('');
         setConfirmPassword('');
         setTimeout(() => setPasswordSuccess(''), 3000);
       } else {
+        notify.auth.passwordChangeError(data.error);
         setPasswordError(data.error || 'Failed to change password');
       }
     } catch (err) {

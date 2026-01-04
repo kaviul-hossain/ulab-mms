@@ -12,6 +12,8 @@ export interface ICourse extends Document {
   assignmentAggregation: 'average' | 'best'; // How to aggregate assignment marks
   assignmentWeightage: number; // Weightage for aggregated assignment column
   gradingScale?: string; // Encoded grading scale (e.g., "0:F:0|50:D:0|55:C:1|...")
+  isArchived: boolean; // Whether the course is archived
+  archivedAt?: Date; // When the course was archived
   userId: mongoose.Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
@@ -74,6 +76,13 @@ const CourseSchema: Schema = new Schema(
     gradingScale: {
       type: String,
       default: '0:F:0|50:D:0|55:C:1|60:C:2|65:B:1|70:B:0|75:B:2|80:A:1|85:A:0|95:A:2',
+    },
+    isArchived: {
+      type: Boolean,
+      default: false,
+    },
+    archivedAt: {
+      type: Date,
     },
     userId: {
       type: Schema.Types.ObjectId,

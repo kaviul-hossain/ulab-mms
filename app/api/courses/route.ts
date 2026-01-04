@@ -6,7 +6,7 @@ import Course from '@/models/Course';
 import Exam from '@/models/Exam';
 
 // GET all courses for the authenticated user
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
 
@@ -16,7 +16,14 @@ export async function GET() {
 
     await dbConnect();
 
-    const courses = await Course.find({ userId: session.user.id }).sort({
+    // Check if requesting archived courses
+    const { searchParams } = new URL(request.url);
+    const archived = searchParams.get('archived') === 'true';
+
+    const courses = await Course.find({ 
+      userId: session.user.id,
+      isArchived: archived ? true : { $ne: true }
+    }).sort({
       createdAt: -1,
     });
 

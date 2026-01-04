@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { signIn } from 'next-auth/react';
+import { notify } from '@/app/utils/notifications';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -38,6 +39,7 @@ export default function SignIn() {
       if (result?.error) {
         setError(result.error);
       } else {
+        notify.auth.signInSuccess();
         router.push('/dashboard');
         router.refresh();
       }

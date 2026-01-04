@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -101,6 +102,18 @@ export default function StudentsView({
   onShowGradeBreakdown,
   onDeleteStudent,
 }: StudentsViewProps) {
+  const [showFloatingButtons, setShowFloatingButtons] = useState(false);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      // Show floating buttons when scrolled down more than 200px
+      setShowFloatingButtons(window.scrollY > 200);
+    };
+
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
   if (students.length === 0) {
     return null;
   }
@@ -134,12 +147,12 @@ export default function StudentsView({
         </div>
       </div>
       <Card className="p-6">
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto max-h-[calc(100vh-200px)] sticky top-0">
           <table className="min-w-full divide-y divide-border">
-            <thead className="bg-muted/50">
+            <thead className="bg-muted sticky top-0 z-20">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider sticky left-0 z-20 bg-muted border-r">ID</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider sticky left-[100px] z-20 shadow-[2px_0_5px_rgba(0,0,0,0.1)] bg-muted border-r">Name</th>
+                <th className="px-3 py-3 text-center text-xs font-semibold uppercase tracking-wider sticky left-0 z-30 bg-muted border-r w-[50px]">#</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider sticky left-0 z-30 shadow-[2px_0_5px_rgba(0,0,0,0.1)] bg-muted border-r min-w-[200px]">Student</th>
                 {exams.map(exam => (
                   <th key={exam._id} className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider">
                     <div>{exam.displayName}</div>
@@ -188,14 +201,17 @@ export default function StudentsView({
             <tbody className="divide-y divide-border/50">
               {students.map((student, idx) => (
                 <tr key={student._id} className={`transition-colors hover:bg-muted/50 ${idx % 2 === 0 ? 'bg-muted/20' : 'bg-background'}`}>
-                  <td className={`px-4 py-3 text-sm font-medium text-primary sticky left-0 z-10 border-r ${idx % 2 === 0 ? 'bg-muted' : 'bg-background'}`}>{student.studentId}</td>
-                  <td className={`px-4 py-3 text-sm sticky left-[100px] z-10 shadow-[2px_0_5px_rgba(0,0,0,0.1)] border-r ${idx % 2 === 0 ? 'bg-muted' : 'bg-background'}`}>
-                    <button
-                      onClick={() => onShowStudentDetail(student)}
-                      className="hover:text-blue-400 hover:underline transition-colors cursor-pointer text-left"
-                    >
-                      {student.name}
-                    </button>
+                  <td className={`px-3 py-3 text-sm font-medium text-center sticky left-0 z-10 border-r w-[50px] ${idx % 2 === 0 ? 'bg-muted' : 'bg-background'}`}>{idx + 1}</td>
+                  <td className={`px-4 py-3 text-sm font-medium sticky left-0 z-10 shadow-[2px_0_5px_rgba(0,0,0,0.1)] border-r min-w-[200px] ${idx % 2 === 0 ? 'bg-muted' : 'bg-background'}`}>
+                    <div className="flex flex-col">
+                      <span className="text-primary font-semibold">{student.studentId}</span>
+                      <button
+                        onClick={() => onShowStudentDetail(student)}
+                        className="text-xs text-muted-foreground hover:text-blue-400 hover:underline transition-colors cursor-pointer text-left"
+                      >
+                        {student.name}
+                      </button>
+                    </div>
                   </td>
                   {exams.map(exam => {
                     const mark = getMark(student._id, exam._id);
@@ -400,6 +416,29 @@ export default function StudentsView({
           </table>
         </div>
       </Card>
+
+      {/* Floating Action Buttons */}
+      {showFloatingButtons && (
+        <div className="fixed bottom-6 right-6 flex flex-col gap-3 z-50">
+          <Button
+            onClick={onShowAddStudentModal}
+            className="gap-2 shadow-lg hover:shadow-xl transition-shadow"
+            size="lg"
+          >
+            <Plus className="w-5 h-5" />
+            Add Student
+          </Button>
+          <Button
+            onClick={onShowBulkAddStudentModal}
+            variant="secondary"
+            className="gap-2 shadow-lg hover:shadow-xl transition-shadow"
+            size="lg"
+          >
+            <Upload className="w-5 h-5" />
+            Bulk Import
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

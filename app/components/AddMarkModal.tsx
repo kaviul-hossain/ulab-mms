@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, KeyboardEvent } from 'react';
+import { notify } from '@/app/utils/notifications';
 
 interface Student {
   _id: string;
@@ -252,6 +253,9 @@ export default function AddMarkModal({
       const data = await response.json();
 
       if (response.ok) {
+        const student = students.find(s => s._id === selectedStudentId);
+        const exam = exams.find(e => e._id === selectedExamId);
+        notify.mark.added(student?.name, exam?.displayName);
         setSuccess('✓ Mark saved successfully!');
         onMarkSaved();
         
@@ -271,9 +275,11 @@ export default function AddMarkModal({
           setFocusedCOIndex(-1);
         }, 800);
       } else {
+        notify.mark.addError(data.error);
         setError(data.error || 'Error saving mark');
       }
     } catch (err) {
+      notify.mark.addError();
       setError('Error saving mark');
     }
   };
