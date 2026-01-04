@@ -82,10 +82,11 @@ export async function DELETE(
       );
     }
 
-    // Check if user is the uploader or an admin
-    if (file.uploadedBy.toString() !== token.id) {
+    // Check if user is the uploader OR the admin (kaviuln@gmail.com)
+    const isAdmin = token.email === 'kaviuln@gmail.com';
+    if (file.uploadedBy.toString() !== token.id && !isAdmin) {
       return NextResponse.json(
-        { error: 'You can only delete files you uploaded' },
+        { error: 'You do not have permission to delete this file' },
         { status: 403 }
       );
     }

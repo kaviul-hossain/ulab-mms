@@ -7,7 +7,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { AlertCircle, Download, FileText, ArrowLeft } from 'lucide-react';
+import { AlertCircle, Download, FileText, ArrowLeft, Trash2, Loader2 } from 'lucide-react';
 
 interface FileItem {
   id: string;
@@ -26,6 +26,11 @@ export default function UserFilesPage({ params }: { params: Promise<{ username: 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [downloadingId, setDownloadingId] = useState('');
+  const [deletingId, setDeletingId] = useState('');
+  const [deleteError, setDeleteError] = useState('');
+
+  // Check if user is admin (kaviuln@gmail.com)
+  const isAdmin = session?.user?.email === 'kaviuln@gmail.com';
 
   useEffect(() => {
     const getParams = async () => {
@@ -80,6 +85,32 @@ export default function UserFilesPage({ params }: { params: Promise<{ username: 
       setError(err.message || 'Failed to download file');
     } finally {
       setDownloadingId('');
+    }
+  };
+
+  const handleDeleteFile = async (fileId: string) => {
+    if (!confirm('Are you sure you want to delete this file? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      setDeletingId(fileId);
+      setDeleteError('');
+      const response = await fetch(`/api/files/${fileId}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to delete file');
+      }
+
+      // Remove the deleted file from the list
+      setFiles(files.filter((f) => f.id !== fileId));
+    } catch (err: any) {
+      setDeleteError(err.message || 'Failed to delete file');
+    } finally {
+      setDeletingId('');
     }
   };
 
@@ -162,6 +193,13 @@ export default function UserFilesPage({ params }: { params: Promise<{ username: 
               </div>
             )}
 
+            {deleteError && (
+              <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3">
+                <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+                <p className="text-red-700">{deleteError}</p>
+              </div>
+            )}
+
             <div>
               {isLoading ? (
                 <div className="text-center py-8 text-slate-600">Loading files...</div>
@@ -193,14 +231,36 @@ export default function UserFilesPage({ params }: { params: Promise<{ username: 
                           <TableCell className="text-slate-600">{file.uploadedBy}</TableCell>
                           <TableCell className="text-slate-600">{formatDate(file.uploadedAt)}</TableCell>
                           <TableCell className="text-right">
-                            <Button
-                              onClick={() => handleDownload(file.id, file.originalName)}
-                              disabled={downloadingId === file.id}
-                              className="gap-2"
-                            >
-                              <Download className="w-4 h-4" />
-                              {downloadingId === file.id ? 'Downloading...' : 'Download'}
-                            </Button>
+                            <div className="flex gap-2 justify-end">
+                              <Button
+                                onClick={() => handleDownload(file.id, file.originalName)}
+                                disabled={downloadingId === file.id}
+                                className="gap-2"
+                              >
+                                <Download className="w-4 h-4" />
+                                {downloadingId === file.id ? 'Downloading...' : 'Download'}
+                              </Button>
+                              {isAdmin && (
+                                <Button
+                                  onClick={() => handleDeleteFile(file.id)}
+                                  disabled={deletingId === file.id}
+                                  variant="destructive"
+                                  className="gap-2"
+                                >
+                                  {deletingId === file.id ? (
+                                    <>
+                                      <Loader2 className="w-4 h-4 animate-spin" />
+                                      Deleting...
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Trash2 className="w-4 h-4" />
+                                      Delete
+                                    </>
+                                  )}
+                                </Button>
+                              )}
+                            </div>
                           </TableCell>
                         </TableRow>
                       ))}
