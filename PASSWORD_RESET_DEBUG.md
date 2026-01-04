@@ -3,7 +3,7 @@
 ## How to Test the Password Reset Feature
 
 ### Step 1: Test Request Email
-1. Go to `http://localhost:3001/auth/signin`
+1. Go to `http://localhost:3000/auth/signin`
 2. Click "Forgot Password?"
 3. Enter an email that exists in your database
 4. Watch the server console for logs:
@@ -13,7 +13,7 @@
 ### Step 2: Check the Reset Link
 The server console should show something like:
 ```
-Reset Link (if not configured): http://localhost:3001/auth/reset-password?token=abc123def456...&email=user@example.com
+Reset Link (if not configured): http://localhost:3000/auth/reset-password?token=abc123def456...&email=user@example.com
 ```
 
 ### Step 3: Click the Email Link

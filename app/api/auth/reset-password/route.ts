@@ -39,6 +39,7 @@ export async function POST(request: NextRequest) {
     console.log('Received plain token:', token);
     console.log('Calculated hash:', tokenHash);
     console.log('Received email:', normalizedEmail);
+    console.log('Token length:', token.length);
 
     const user = await User.findOne({
       email: normalizedEmail,
@@ -52,9 +53,13 @@ export async function POST(request: NextRequest) {
       if (userByEmail) {
         console.log('User exists:', userByEmail.name);
         console.log('User has reset token:', !!userByEmail.passwordResetToken);
-        console.log('Stored token hash:', userByEmail.passwordResetToken?.substring(0, 20) + '...');
-        console.log('Calculated token hash:', tokenHash.substring(0, 20) + '...');
-        console.log('Hashes match?:', userByEmail.passwordResetToken === tokenHash);
+        if (userByEmail.passwordResetToken) {
+          console.log('Stored token hash:', userByEmail.passwordResetToken.substring(0, 20) + '...');
+          console.log('Stored token length:', userByEmail.passwordResetToken.length);
+          console.log('Calculated token hash:', tokenHash.substring(0, 20) + '...');
+          console.log('Calculated token length:', tokenHash.length);
+          console.log('Hashes match?:', userByEmail.passwordResetToken === tokenHash);
+        }
         console.log('Token expiry:', userByEmail.passwordResetTokenExpiry);
         console.log('Current time:', new Date());
         if (userByEmail.passwordResetTokenExpiry) {
@@ -77,10 +82,11 @@ export async function POST(request: NextRequest) {
 
     // Update password and clear reset token
     user.password = hashedPassword;
-    user.passwordResetToken = undefined;
-    user.passwordResetTokenExpiry = undefined;
+    user.passwordResetToken = null;
+    user.passwordResetTokenExpiry = null;
     await user.save();
 
+    console.log('Password reset successful for user:', user.email);
     return NextResponse.json(
       { message: 'Password has been reset successfully' },
       { status: 200 }

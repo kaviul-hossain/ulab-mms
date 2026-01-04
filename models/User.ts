@@ -5,8 +5,8 @@ export interface IUser extends Document {
   email: string;
   password: string;
   isAdmin: boolean;
-  passwordResetToken?: string;
-  passwordResetTokenExpiry?: Date;
+  passwordResetToken?: string | null;
+  passwordResetTokenExpiry?: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -40,11 +40,11 @@ const UserSchema: Schema = new Schema(
     },
     passwordResetToken: {
       type: String,
-      default: undefined,
+      default: null,
     },
     passwordResetTokenExpiry: {
       type: Date,
-      default: undefined,
+      default: null,
     },
   },
   {
