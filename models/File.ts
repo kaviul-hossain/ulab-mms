@@ -8,6 +8,9 @@ export interface IFile extends Document {
   uploadedBy: mongoose.Types.ObjectId;
   uploadedAt: Date;
   gridfsId: mongoose.Types.ObjectId;
+  isFolder: boolean;
+  parentFolderId?: mongoose.Types.ObjectId | null;
+  folderPath: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -42,7 +45,19 @@ const FileSchema: Schema = new Schema(
     },
     gridfsId: {
       type: Schema.Types.ObjectId,
-      required: [true, 'Please provide the GridFS file ID'],
+    },
+    isFolder: {
+      type: Boolean,
+      default: false,
+    },
+    parentFolderId: {
+      type: Schema.Types.ObjectId,
+      ref: 'File',
+      default: null,
+    },
+    folderPath: {
+      type: String,
+      default: '/',
     },
   },
   {

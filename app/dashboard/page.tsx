@@ -13,7 +13,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Loader2, Settings, LogOut, Plus, Upload, Copy, Edit, Trash2, BookOpen, FlaskConical, FileText, MoreVertical, Archive } from 'lucide-react';
+import { Loader2, Settings, LogOut, Plus, Upload, Copy, Edit, Trash2, BookOpen, FlaskConical, FileText, MoreVertical, Archive, Folder, FolderPlus, Trash2 as TrashIcon } from 'lucide-react';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { notify } from '@/app/utils/notifications';
 
@@ -65,10 +65,22 @@ export default function Dashboard() {
     courseType: 'Theory' as 'Theory' | 'Lab',
   });
   const [error, setError] = useState('');
-  const [showUploadFileModal, setShowUploadFileModal] = useState(false);
+  const [showResourceManager, setShowResourceManager] = useState(false);
   const [uploadingFile, setUploadingFile] = useState(false);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadSuccess, setUploadSuccess] = useState('');
+  const [folderName, setFolderName] = useState('');
+  const [creatingFolder, setCreatingFolder] = useState(false);
+  const [folders, setFolders] = useState<any[]>([]);
+  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
+  const [currentFolderPath, setCurrentFolderPath] = useState<string>('/');
+  const [folderFiles, setFolderFiles] = useState<Record<string, any[]>>({});
+  const [currentBrowseFolderId, setCurrentBrowseFolderId] = useState<string | null>(null);
+  const [currentBrowseFiles, setCurrentBrowseFiles] = useState<any[]>([]);
+  const [currentBrowseFolders, setCurrentBrowseFolders] = useState<any[]>([]);
+  const [folderBreadcrumbs, setFolderBreadcrumbs] = useState<Array<{ id: string | null; name: string }>>([
+    { id: null, name: 'Root' },
+  ]);
 
   // Check if user is admin (kaviuln@gmail.com)
   const isAdmin = session?.user?.email === 'kaviuln@gmail.com';
@@ -76,8 +88,110 @@ export default function Dashboard() {
   useEffect(() => {
     if (status === 'authenticated') {
       fetchCourses();
+      if (isAdmin) {
+        fetchFolders();
+      }
     }
-  }, [status]);
+  }, [status, isAdmin]);
+
+  const fetchFolders = async (parentFolderId: string | null = null) => {
+    try {
+      const url = new URL('/api/files/folders', window.location.origin);
+      if (parentFolderId) {
+        url.searchParams.append('parentFolderId', parentFolderId);
+      }
+      const response = await fetch(url.toString());
+      const data = await response.json();
+      setFolders(data.folders || []);
+      
+      // Fetch files for each folder
+      if (data.folders && data.folders.length > 0) {
+        for (const folder of data.folders) {
+          const filesUrl = new URL('/api/files', window.location.origin);
+          filesUrl.searchParams.append('folderId', folder.id);
+          const filesResponse = await fetch(filesUrl.toString());
+          const filesData = await filesResponse.json();
+          setFolderFiles((prev) => ({
+            ...prev,
+            [folder.id]: filesData.files || [],
+          }));
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching folders:', err);
+    }
+  };
+
+  const browseFolderContents = async (folderId: string | null) => {
+    try {
+      setCurrentBrowseFolderId(folderId);
+
+      // Fetch subfolders
+      const foldersUrl = new URL('/api/files/folders', window.location.origin);
+      if (folderId) {
+        foldersUrl.searchParams.append('parentFolderId', folderId);
+      }
+      const foldersResponse = await fetch(foldersUrl.toString());
+      const foldersData = await foldersResponse.json();
+      setCurrentBrowseFolders(foldersData.folders || []);
+
+      // Fetch files in this folder
+      const filesUrl = new URL('/api/files', window.location.origin);
+      if (folderId) {
+        filesUrl.searchParams.append('folderId', folderId);
+      }
+      const filesResponse = await fetch(filesUrl.toString());
+      const filesData = await filesResponse.json();
+      setCurrentBrowseFiles(filesData.files || []);
+    } catch (err) {
+      console.error('Error browsing folder:', err);
+    }
+  };
+
+  const navigateToFolder = (folderId: string | null, folderName: string) => {
+    browseFolderContents(folderId);
+    
+    if (folderId === null) {
+      // Navigate to root
+      setFolderBreadcrumbs([{ id: null, name: 'Root' }]);
+    } else {
+      // Check if we're navigating back via breadcrumb
+      const existingIndex = folderBreadcrumbs.findIndex(b => b.id === folderId);
+      if (existingIndex !== -1) {
+        // We're clicking on a breadcrumb - go back to that level
+        setFolderBreadcrumbs(folderBreadcrumbs.slice(0, existingIndex + 1));
+      } else {
+        // We're going deeper - add this folder to breadcrumbs
+        setFolderBreadcrumbs([
+          ...folderBreadcrumbs,
+          { id: folderId, name: folderName },
+        ]);
+      }
+    }
+  };
+
+  const handleDeleteFile = async (fileId: string, fileName: string) => {
+    if (!confirm(`Are you sure you want to delete "${fileName}"?`)) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/files/${fileId}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to delete file');
+      }
+
+      setUploadSuccess('File deleted successfully!');
+      browseFolderContents(currentBrowseFolderId);
+      setTimeout(() => setUploadSuccess(''), 3000);
+    } catch (err: any) {
+      setError(err.message || 'Failed to delete file');
+    }
+  };
 
   const fetchCourses = async () => {
     try {
@@ -88,6 +202,68 @@ export default function Dashboard() {
       console.error('Error fetching courses:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleCreateFolder = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+
+    if (!folderName.trim()) {
+      setError('Please enter a folder name');
+      return;
+    }
+
+    setCreatingFolder(true);
+    try {
+      const response = await fetch('/api/files/folders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          folderName: folderName.trim(),
+          parentFolderId: currentBrowseFolderId || selectedFolderId,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to create folder');
+      }
+
+      setFolderName('');
+      setUploadSuccess(`Folder "${folderName}" created successfully!`);
+      // Refresh the current browse folder to show new folder
+      browseFolderContents(currentBrowseFolderId);
+      // Also refresh the main folders list
+      fetchFolders(selectedFolderId);
+      setTimeout(() => setUploadSuccess(''), 3000);
+    } catch (err: any) {
+      setError(err.message || 'Failed to create folder');
+    } finally {
+      setCreatingFolder(false);
+    }
+  };
+
+  const handleDeleteFolder = async (folderId: string, folderName: string) => {
+    if (!confirm(`Are you sure you want to delete the folder "${folderName}" and all its contents?`)) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/files/folders/${folderId}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to delete folder');
+      }
+
+      setUploadSuccess('Folder deleted successfully!');
+      fetchFolders(selectedFolderId);
+      setTimeout(() => setUploadSuccess(''), 3000);
+    } catch (err: any) {
+      setError(err.message || 'Failed to delete folder');
     }
   };
 
@@ -105,6 +281,10 @@ export default function Dashboard() {
     try {
       const formData = new FormData();
       formData.append('file', uploadFile);
+      const targetFolderId = currentBrowseFolderId || selectedFolderId;
+      if (targetFolderId) {
+        formData.append('folderId', targetFolderId);
+      }
 
       const response = await fetch('/api/files', {
         method: 'POST',
@@ -119,7 +299,10 @@ export default function Dashboard() {
       const data = await response.json();
       setUploadSuccess(`File "${data.file.originalName}" uploaded successfully!`);
       setUploadFile(null);
-      setShowUploadFileModal(false);
+      // Refresh the current browse folder to show new file
+      browseFolderContents(currentBrowseFolderId);
+      // Also refresh the main folders list
+      fetchFolders(selectedFolderId);
       setTimeout(() => setUploadSuccess(''), 3000);
     } catch (err: any) {
       setError(err.message || 'Failed to upload file');
@@ -450,28 +633,56 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Quick Access Card for Files */}
-        <Card className="mb-8 bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-blue-950 dark:to-cyan-950 border-blue-200 dark:border-blue-800">
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-lg bg-blue-600 flex items-center justify-center">
-                  <FileText className="w-6 h-6 text-white" />
+        {/* Quick Access Card for Files - Admin Only */}
+        {isAdmin && (
+          <Card className="mb-8 bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-950 dark:to-pink-950 border-purple-200 dark:border-purple-800">
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-lg bg-purple-600 flex items-center justify-center">
+                    <Folder className="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-lg">Manage Resources</h3>
+                    <p className="text-sm text-muted-foreground">Create folders, upload files, and manage all resources</p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="font-semibold text-lg">Admin Resources</h3>
-                  <p className="text-sm text-muted-foreground">Download files uploaded by administrators</p>
-                </div>
+                <Button size="lg" onClick={() => {
+                  setShowResourceManager(true);
+                  browseFolderContents(null); // Initialize with root folder
+                }}>
+                  <Folder className="h-4 w-4 mr-2" />
+                  Open Manager
+                </Button>
               </div>
-              <Button asChild size="lg">
-                <Link href={`/${session?.user?.name?.replace(/\s+/g, '-')}/files`}>
-                  <FileText className="h-4 w-4 mr-2" />
-                  View Files
-                </Link>
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Resources Card for Non-Admin Users */}
+        {!isAdmin && (
+          <Card className="mb-8 bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-blue-950 dark:to-cyan-950 border-blue-200 dark:border-blue-800">
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-lg bg-blue-600 flex items-center justify-center">
+                    <FileText className="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-lg">Resources</h3>
+                    <p className="text-sm text-muted-foreground">Download files uploaded by administrators</p>
+                  </div>
+                </div>
+                <Button asChild size="lg">
+                  <Link href={`/${session?.user?.name?.replace(/\s+/g, '-')}/files`}>
+                    <FileText className="h-4 w-4 mr-2" />
+                    View Files
+                  </Link>
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Courses Grid */}
         {courses.length === 0 ? (
@@ -972,13 +1183,16 @@ export default function Dashboard() {
         </DialogContent>
       </Dialog>
 
-      {/* File Upload Modal - Admin Only */}
-      <Dialog open={showUploadFileModal} onOpenChange={setShowUploadFileModal}>
-        <DialogContent>
+      {/* Unified Resource Manager Modal - Admin Only */}
+      <Dialog open={showResourceManager} onOpenChange={setShowResourceManager}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Upload File</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <Folder className="h-5 w-5" />
+              Resource Manager
+            </DialogTitle>
             <DialogDescription>
-              Upload a file to make it available for all students to download
+              Create folders, upload files, and manage all your resources in one place
             </DialogDescription>
           </DialogHeader>
 
@@ -994,50 +1208,245 @@ export default function Dashboard() {
             </div>
           )}
 
-          <form onSubmit={handleUploadFile} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="file-input">Select File</Label>
-              <Input
-                id="file-input"
-                type="file"
-                accept=".pdf,.doc,.docx,.xls,.xlsx"
-                onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
-                disabled={uploadingFile}
-              />
-              <p className="text-xs text-muted-foreground">
-                Allowed formats: PDF, Word, Excel (Max 50MB)
-              </p>
+          <div className="space-y-6">
+            {/* Create Folder Section */}
+            <div className="border rounded-lg p-4 bg-slate-50 dark:bg-slate-900/20">
+              <h3 className="font-semibold mb-3 flex items-center gap-2">
+                <FolderPlus className="h-4 w-4" />
+                Create New Folder
+              </h3>
+              <form onSubmit={handleCreateFolder} className="flex gap-2">
+                <Input
+                  placeholder="Folder name (e.g., Lecture Notes)"
+                  value={folderName}
+                  onChange={(e) => setFolderName(e.target.value)}
+                  disabled={creatingFolder}
+                />
+                <Button type="submit" disabled={creatingFolder || !folderName.trim()}>
+                  {creatingFolder ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Creating...
+                    </>
+                  ) : (
+                    <>
+                      <FolderPlus className="h-4 w-4" />
+                    </>
+                  )}
+                </Button>
+              </form>
             </div>
 
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => {
-                  setShowUploadFileModal(false);
-                  setUploadFile(null);
-                  setError('');
-                  setUploadSuccess('');
-                }}
-                disabled={uploadingFile}
-              >
-                Cancel
-              </Button>
-              <Button type="submit" disabled={uploadingFile || !uploadFile}>
-                {uploadingFile ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Uploading...
-                  </>
-                ) : (
-                  <>
-                    <Upload className="h-4 w-4 mr-2" />
-                    Upload File
-                  </>
-                )}
-              </Button>
-            </DialogFooter>
-          </form>
+            {/* Upload File Section */}
+            <div className="border rounded-lg p-4 bg-slate-50 dark:bg-slate-900/20">
+              <h3 className="font-semibold mb-3 flex items-center gap-2">
+                <Upload className="h-4 w-4" />
+                Upload File
+              </h3>
+              <form onSubmit={handleUploadFile} className="space-y-3">
+                <div>
+                  <Label htmlFor="folder-select" className="text-sm mb-1">
+                    Select Folder (Optional)
+                  </Label>
+                  <select
+                    id="folder-select"
+                    value={selectedFolderId || ''}
+                    onChange={(e) => setSelectedFolderId(e.target.value || null)}
+                    disabled={uploadingFile}
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  >
+                    <option value="">Root Folder</option>
+                    {folders.map((folder) => (
+                      <option key={folder.id} value={folder.id}>
+                        📁 {folder.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <Label htmlFor="file-input" className="text-sm mb-1">
+                    Select File
+                  </Label>
+                  <Input
+                    id="file-input"
+                    type="file"
+                    accept=".pdf,.doc,.docx,.xls,.xlsx"
+                    onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
+                    disabled={uploadingFile}
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Allowed: PDF, Word, Excel (Max 50MB)
+                  </p>
+                </div>
+
+                <Button type="submit" disabled={uploadingFile || !uploadFile} className="w-full">
+                  {uploadingFile ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Uploading...
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="h-4 w-4 mr-2" />
+                      Upload File
+                    </>
+                  )}
+                </Button>
+              </form>
+            </div>
+
+            {/* Folders & Files Section */}
+            <div className="border rounded-lg p-4">
+              <h3 className="font-semibold mb-3 flex items-center gap-2">
+                <Folder className="h-4 w-4" />
+                Your Folders & Files ({folders.length} folder{folders.length !== 1 ? 's' : ''})
+              </h3>
+              
+              {folders.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Folder className="h-10 w-10 mx-auto mb-2 opacity-50" />
+                  <p>No folders created yet. Create one to get started!</p>
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-96 overflow-y-auto">
+                  {folders.map((folder) => (
+                    <div
+                      key={folder.id}
+                      className="p-3 border rounded-lg bg-yellow-50 dark:bg-yellow-950/10 hover:shadow-sm transition-shadow"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3 flex-1">
+                          <Folder className="h-5 w-5 text-yellow-500 flex-shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium">{folder.name}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {folderFiles[folder.id]?.length || 0} file(s)
+                            </p>
+                          </div>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDeleteFolder(folder.id, folder.name)}
+                          className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+
+                      {/* Files in folder */}
+                      {folderFiles[folder.id] && folderFiles[folder.id].length > 0 && (
+                        <div className="mt-2 ml-8 space-y-1 text-sm">
+                          {folderFiles[folder.id].map((file: any) => (
+                            <div key={file.id} className="flex items-center gap-2 text-muted-foreground">
+                              <FileText className="h-3 w-3" />
+                              <span className="truncate">{file.originalName}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Browse Resources Section */}
+            <div className="border rounded-lg p-4 bg-blue-50 dark:bg-blue-950/10">
+              <h3 className="font-semibold mb-3 flex items-center gap-2">
+                <FileText className="h-4 w-4" />
+                Browse & Manage Files
+              </h3>
+
+              {/* Breadcrumb Navigation */}
+              <div className="mb-3 flex items-center gap-2 flex-wrap">
+                {folderBreadcrumbs.map((crumb, index) => (
+                  <div key={index} className="flex items-center gap-2">
+                    <button
+                      onClick={() => navigateToFolder(crumb.id, crumb.name)}
+                      className="text-blue-600 hover:text-blue-800 text-sm"
+                    >
+                      {crumb.name}
+                    </button>
+                    {index < folderBreadcrumbs.length - 1 && (
+                      <span className="text-muted-foreground">/</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {/* Subfolders */}
+              {currentBrowseFolders.length > 0 && (
+                <div className="mb-4">
+                  <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase">Folders</p>
+                  <div className="space-y-1">
+                    {currentBrowseFolders.map((folder) => (
+                      <button
+                        key={folder.id}
+                        onClick={() => navigateToFolder(folder.id, folder.name)}
+                        className="w-full text-left p-2 hover:bg-blue-100 dark:hover:bg-blue-900 rounded text-sm flex items-center gap-2 group"
+                      >
+                        <Folder className="h-4 w-4 text-yellow-500" />
+                        <span className="group-hover:font-medium">{folder.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Files */}
+              {currentBrowseFiles.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase">Files</p>
+                  <div className="space-y-1 max-h-48 overflow-y-auto">
+                    {currentBrowseFiles.map((file) => (
+                      <div
+                        key={file.id}
+                        className="p-2 hover:bg-blue-100 dark:hover:bg-blue-900 rounded text-sm flex items-center justify-between group"
+                      >
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                          <FileText className="h-4 w-4 text-blue-500 flex-shrink-0" />
+                          <span className="truncate">{file.originalName}</span>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDeleteFile(file.id, file.originalName)}
+                          className="text-destructive hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {currentBrowseFolders.length === 0 && currentBrowseFiles.length === 0 && (
+                <div className="text-center py-4 text-muted-foreground text-sm">
+                  This folder is empty
+                </div>
+              )}
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowResourceManager(false);
+                setError('');
+                setUploadSuccess('');
+                setFolderName('');
+                setUploadFile(null);
+                setCurrentBrowseFolderId(null);
+                setFolderBreadcrumbs([{ id: null, name: 'Root' }]);
+              }}
+            >
+              Close
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

@@ -36,12 +36,28 @@ export async function POST(request: NextRequest) {
 
     const formData = await request.formData();
     const file = formData.get('file') as File;
+    const folderId = formData.get('folderId') as string;
 
     if (!file) {
       return NextResponse.json(
         { error: 'No file provided' },
         { status: 400 }
       );
+    }
+
+    // Validate folder if provided
+    let folderPath = '/';
+    let parentFolderId = null;
+    if (folderId) {
+      const folder = await File.findById(folderId);
+      if (!folder || !folder.isFolder) {
+        return NextResponse.json(
+          { error: 'Invalid folder' },
+          { status: 400 }
+        );
+      }
+      folderPath = `${folder.folderPath}${folder.originalName}/`;
+      parentFolderId = folderId;
     }
 
     // Validate file type
@@ -91,6 +107,9 @@ export async function POST(request: NextRequest) {
       size: file.size,
       uploadedBy: token.id,
       gridfsId: gridfsId,
+      isFolder: false,
+      parentFolderId: parentFolderId,
+      folderPath: folderPath,
     });
 
     return NextResponse.json(
@@ -130,11 +149,32 @@ export async function GET(request: NextRequest) {
 
     await dbConnect();
 
-    // Get all files (users can view files uploaded by admins)
-    const files = await File.find()
-      .select('-gridfsId')
-      .populate('uploadedBy', 'name email')
-      .sort({ uploadedAt: -1 });
+    const { searchParams } = new URL(request.url);
+    const folderId = searchParams.get('folderId');
+    const includeAllFiles = searchParams.get('includeAll') === 'true';
+
+    let files: any[] = [];
+
+    if (includeAllFiles) {
+      // Get all files (for backward compatibility)
+      files = await File.find({ isFolder: false })
+        .select('-gridfsId')
+        .populate('uploadedBy', 'name email')
+        .sort({ uploadedAt: -1 });
+    } else {
+      // Get files in specific folder
+      const query: any = { isFolder: false };
+      if (folderId) {
+        query.parentFolderId = folderId;
+      } else {
+        query.parentFolderId = null;
+      }
+
+      files = await File.find(query)
+        .select('-gridfsId')
+        .populate('uploadedBy', 'name email')
+        .sort({ uploadedAt: -1 });
+    }
 
     return NextResponse.json(
       {
@@ -143,8 +183,9 @@ export async function GET(request: NextRequest) {
           originalName: f.originalName,
           mimeType: f.mimeType,
           size: f.size,
-          uploadedBy: f.uploadedBy.name,
+          uploadedBy: f.uploadedBy?.name || 'Unknown',
           uploadedAt: f.uploadedAt,
+          parentFolderId: f.parentFolderId,
         })),
       },
       { status: 200 }
