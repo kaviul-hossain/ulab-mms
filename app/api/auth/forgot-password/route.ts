@@ -2,11 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import dbConnect from '@/lib/mongodb';
 import User from '@/models/User';
+import { isValidEmail } from '@/lib/utils';
 
 export async function POST(request: NextRequest) {
   try {
     const { email } = await request.json();
 
+    // Validate email is provided
     if (!email) {
       return NextResponse.json(
         { error: 'Email is required' },
@@ -14,16 +16,24 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Validate email format
+    if (!isValidEmail(email)) {
+      return NextResponse.json(
+        { error: 'Please enter a valid email address' },
+        { status: 400 }
+      );
+    }
+
     await dbConnect();
 
-    const user = await User.findOne({ email: email.toLowerCase() });
+    // Check if user with this email exists in the system
+    const user = await User.findOne({ email: email.toLowerCase().trim() });
 
     if (!user) {
-      // Don't reveal if email exists or not for security, but don't send email
       console.log('Password reset requested for non-existent email:', email.toLowerCase());
       return NextResponse.json(
-        { message: 'If an account exists with this email, a reset link has been sent.' },
-        { status: 200 }
+        { error: 'User with this email does not exist in the records' },
+        { status: 404 }
       );
     }
 

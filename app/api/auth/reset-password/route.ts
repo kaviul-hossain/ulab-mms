@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import dbConnect from '@/lib/mongodb';
 import User from '@/models/User';
+import { isValidEmail } from '@/lib/utils';
 
 export async function POST(request: NextRequest) {
   try {
@@ -11,6 +12,14 @@ export async function POST(request: NextRequest) {
     if (!token || !email || !newPassword || !confirmPassword) {
       return NextResponse.json(
         { error: 'Missing required fields' },
+        { status: 400 }
+      );
+    }
+
+    // Validate email format
+    if (!isValidEmail(email)) {
+      return NextResponse.json(
+        { error: 'Invalid email address' },
         { status: 400 }
       );
     }
@@ -41,6 +50,7 @@ export async function POST(request: NextRequest) {
     console.log('Received email:', normalizedEmail);
     console.log('Token length:', token.length);
 
+    // Verify that the user exists and has a valid reset token
     const user = await User.findOne({
       email: normalizedEmail,
       passwordResetToken: tokenHash,

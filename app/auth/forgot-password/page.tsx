@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Loader2, ArrowLeft, CheckCircle } from 'lucide-react';
+import { Loader2, ArrowLeft, CheckCircle, AlertCircle } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,16 +12,54 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 
+// Email validation function
+const isValidEmail = (email: string): boolean => {
+  if (!email || typeof email !== 'string') {
+    return false;
+  }
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const trimmedEmail = email.trim();
+  const isValidFormat = emailRegex.test(trimmedEmail);
+  const hasValidLength = trimmedEmail.length >= 5 && trimmedEmail.length <= 254;
+  const hasValidLocalPart = trimmedEmail.split('@')[0].length <= 64;
+  
+  return isValidFormat && hasValidLength && hasValidLocalPart;
+};
+
 export default function ForgotPassword() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [validationError, setValidationError] = useState('');
   const [success, setSuccess] = useState(false);
+
+  const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setEmail(value);
+    
+    // Clear validation error if user corrects the email
+    if (validationError && isValidEmail(value)) {
+      setValidationError('');
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setValidationError('');
+    
+    // Validate email format before sending
+    if (!email) {
+      setValidationError('Email is required');
+      return;
+    }
+
+    if (!isValidEmail(email)) {
+      setValidationError('Please enter a valid email address');
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -87,8 +125,9 @@ export default function ForgotPassword() {
           </CardHeader>
           <CardContent>
             {error && (
-              <div className="mb-4 p-3 bg-destructive/10 border border-destructive rounded-lg text-destructive text-sm">
-                {error}
+              <div className="mb-4 p-3 bg-destructive/10 border border-destructive rounded-lg text-destructive text-sm flex gap-2 items-start">
+                <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                <span>{error}</span>
               </div>
             )}
 
@@ -116,13 +155,24 @@ export default function ForgotPassword() {
                     type="email"
                     placeholder="your.email@example.com"
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    onChange={handleEmailChange}
                     required
                     disabled={loading}
+                    className={validationError ? 'border-destructive' : ''}
                   />
+                  {validationError && (
+                    <p className="text-sm text-destructive flex gap-1 items-center mt-1">
+                      <AlertCircle className="h-3 w-3" />
+                      {validationError}
+                    </p>
+                  )}
                 </div>
 
-                <Button type="submit" className="w-full" disabled={loading}>
+                <Button 
+                  type="submit" 
+                  className="w-full" 
+                  disabled={loading || !!validationError}
+                >
                   {loading ? (
                     <>
                       <Loader2 className="h-4 w-4 animate-spin mr-2" />
