@@ -4,7 +4,6 @@ export interface IUser extends Document {
   name: string;
   email: string;
   password: string;
-  isAdmin: boolean;
   passwordResetToken?: string | null;
   passwordResetTokenExpiry?: Date | null;
   createdAt: Date;
@@ -33,10 +32,6 @@ const UserSchema: Schema = new Schema(
       type: String,
       required: [true, 'Please provide a password'],
       minlength: [6, 'Password should be at least 6 characters'],
-    },
-    isAdmin: {
-      type: Boolean,
-      default: false,
     },
     passwordResetToken: {
       type: String,

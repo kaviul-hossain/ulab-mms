@@ -27,12 +27,8 @@ export default function UserFilesPage({ params }: { params: Promise<{ username: 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [downloadingId, setDownloadingId] = useState('');
-  const [deletingId, setDeletingId] = useState('');
   const [deleteError, setDeleteError] = useState('');
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
-
-  // Check if user is admin (kaviuln@gmail.com)
-  const isAdmin = session?.user?.email === 'kaviuln@gmail.com';
 
   useEffect(() => {
     const getParams = async () => {
@@ -108,29 +104,7 @@ export default function UserFilesPage({ params }: { params: Promise<{ username: 
   };
 
   const handleDeleteFile = async (fileId: string) => {
-    if (!confirm('Are you sure you want to delete this file? This action cannot be undone.')) {
-      return;
-    }
-
-    try {
-      setDeletingId(fileId);
-      setDeleteError('');
-      const response = await fetch(`/api/files/${fileId}`, {
-        method: 'DELETE',
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to delete file');
-      }
-
-      // Remove the deleted file from the list
-      setFiles(files.filter((f) => f.id !== fileId));
-    } catch (err: any) {
-      setDeleteError(err.message || 'Failed to delete file');
-    } finally {
-      setDeletingId('');
-    }
+    // This function is no longer used - file deletion is handled from the admin dashboard
   };
 
   const formatFileSize = (bytes: number) => {
@@ -293,26 +267,6 @@ export default function UserFilesPage({ params }: { params: Promise<{ username: 
                                 <Download className="w-4 h-4" />
                                 {downloadingId === file.id ? 'Downloading...' : 'Download'}
                               </Button>
-                              {isAdmin && (
-                                <Button
-                                  onClick={() => handleDeleteFile(file.id)}
-                                  disabled={deletingId === file.id}
-                                  variant="destructive"
-                                  className="gap-2"
-                                >
-                                  {deletingId === file.id ? (
-                                    <>
-                                      <Loader2 className="w-4 h-4 animate-spin" />
-                                      Deleting...
-                                    </>
-                                  ) : (
-                                    <>
-                                      <Trash2 className="w-4 h-4" />
-                                      Delete
-                                    </>
-                                  )}
-                                </Button>
-                              )}
                             </div>
                           </TableCell>
                         </TableRow>

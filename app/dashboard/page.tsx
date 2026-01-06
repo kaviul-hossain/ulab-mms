@@ -37,6 +37,11 @@ export default function Dashboard() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDuplicateModal, setShowDuplicateModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
+  const [showAdminPasswordModal, setShowAdminPasswordModal] = useState(false);
+  const [adminPassword, setAdminPassword] = useState('');
+  const [adminPasswordError, setAdminPasswordError] = useState('');
+  const [adminPasswordSubmitting, setAdminPasswordSubmitting] = useState(false);
+  const [isAdminUnlocked, setIsAdminUnlocked] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importing, setImporting] = useState(false);
   const [duplicating, setDuplicating] = useState(false);
@@ -82,17 +87,43 @@ export default function Dashboard() {
     { id: null, name: 'Root' },
   ]);
 
-  // Check if user is admin (kaviuln@gmail.com)
-  const isAdmin = session?.user?.email === 'kaviuln@gmail.com';
+  // Password-protected admin feature - available to all users
+  const handleAdminAccess = () => {
+    setShowAdminPasswordModal(true);
+    setAdminPassword('');
+    setAdminPasswordError('');
+  };
+
+  const handleAdminPasswordSubmit = async () => {
+    if (!adminPassword.trim()) {
+      setAdminPasswordError('Please enter the admin password');
+      return;
+    }
+
+    setAdminPasswordSubmitting(true);
+    try {
+      // Verify password
+      const expectedPassword = process.env.NEXT_PUBLIC_ADMIN_PASSWORD || 'Admin@123';
+      if (adminPassword === expectedPassword) {
+        setIsAdminUnlocked(true);
+        setShowAdminPasswordModal(false);
+        setAdminPassword('');
+        setAdminPasswordError('');
+        // Fetch folders when admin is unlocked
+        fetchFolders();
+      } else {
+        setAdminPasswordError('Incorrect password. Please try again.');
+      }
+    } finally {
+      setAdminPasswordSubmitting(false);
+    }
+  };
 
   useEffect(() => {
     if (status === 'authenticated') {
       fetchCourses();
-      if (isAdmin) {
-        fetchFolders();
-      }
     }
-  }, [status, isAdmin]);
+  }, [status]);
 
   const fetchFolders = async (parentFolderId: string | null = null) => {
     try {
@@ -178,6 +209,9 @@ export default function Dashboard() {
     try {
       const response = await fetch(`/api/files/${fileId}`, {
         method: 'DELETE',
+        headers: {
+          'x-admin-password': adminPassword,
+        },
       });
 
       if (!response.ok) {
@@ -218,7 +252,10 @@ export default function Dashboard() {
     try {
       const response = await fetch('/api/files/folders', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-admin-password': adminPassword,
+        },
         body: JSON.stringify({
           folderName: folderName.trim(),
           parentFolderId: currentBrowseFolderId || selectedFolderId,
@@ -252,6 +289,9 @@ export default function Dashboard() {
     try {
       const response = await fetch(`/api/files/folders/${folderId}`, {
         method: 'DELETE',
+        headers: {
+          'x-admin-password': adminPassword,
+        },
       });
 
       if (!response.ok) {
@@ -288,6 +328,9 @@ export default function Dashboard() {
 
       const response = await fetch('/api/files', {
         method: 'POST',
+        headers: {
+          'x-admin-password': adminPassword,
+        },
         body: formData,
       });
 
@@ -568,13 +611,15 @@ export default function Dashboard() {
         <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <Image
-                src="/ulab.svg"
-                alt="ULAB Logo"
-                width={100}
-                height={100}
-                className="drop-shadow-lg"
-              />
+              <Link href="/dashboard">
+                <Image
+                  src="/ulab.svg"
+                  alt="ULAB Logo"
+                  width={100}
+                  height={100}
+                  className="drop-shadow-lg cursor-pointer hover:opacity-80 transition-opacity"
+                />
+              </Link>
               <div>
                 <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">
                   Marks Management System
@@ -587,6 +632,20 @@ export default function Dashboard() {
 
             <div className="flex items-center gap-3">
               <ThemeToggle />
+              <Button variant="default" asChild>
+                <Link href="/capstone">
+                  <FlaskConical className="h-4 w-4 mr-2" />
+                  Capstone
+                </Link>
+              </Button>
+              <Button 
+                variant="outline"
+                onClick={handleAdminAccess}
+                className={isAdminUnlocked ? "border-orange-500 text-orange-500" : ""}
+              >
+                <Settings className="h-4 w-4 mr-2" />
+                {isAdminUnlocked ? 'Admin (Unlocked)' : 'Admin'}
+              </Button>
               <Button variant="outline" asChild>
                 <Link href="/settings">
                   <Settings className="h-4 w-4 mr-2" />
@@ -595,7 +654,10 @@ export default function Dashboard() {
               </Button>
               <Button
                 variant="destructive"
-                onClick={() => signOut({ callbackUrl: '/auth/signin' })}
+                onClick={() => {
+                  setIsAdminUnlocked(false);
+                  signOut({ callbackUrl: '/auth/signin' });
+                }}
               >
                 <LogOut className="h-4 w-4 mr-2" />
                 Sign Out
@@ -634,7 +696,7 @@ export default function Dashboard() {
         </div>
 
         {/* Quick Access Card for Files - Admin Only */}
-        {isAdmin && (
+        {isAdminUnlocked && (
           <Card className="mb-8 bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-950 dark:to-pink-950 border-purple-200 dark:border-purple-800">
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
@@ -660,7 +722,7 @@ export default function Dashboard() {
         )}
 
         {/* Resources Card for Non-Admin Users */}
-        {!isAdmin && (
+        {!isAdminUnlocked && (
           <Card className="mb-8 bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-blue-950 dark:to-cyan-950 border-blue-200 dark:border-blue-800">
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
@@ -1445,6 +1507,69 @@ export default function Dashboard() {
               }}
             >
               Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Admin Password Modal */}
+      <Dialog open={showAdminPasswordModal} onOpenChange={setShowAdminPasswordModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Admin Access</DialogTitle>
+            <DialogDescription>
+              Enter the admin password to access resource management features
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {adminPasswordError && (
+              <Alert variant="destructive">
+                <AlertDescription>{adminPasswordError}</AlertDescription>
+              </Alert>
+            )}
+            
+            <div className="space-y-2">
+              <Label htmlFor="admin-password">Password</Label>
+              <Input
+                id="admin-password"
+                type="password"
+                placeholder="Enter admin password"
+                value={adminPassword}
+                onChange={(e) => {
+                  setAdminPassword(e.target.value);
+                  setAdminPasswordError('');
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleAdminPasswordSubmit();
+                  }
+                }}
+                disabled={adminPasswordSubmitting}
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowAdminPasswordModal(false)}
+              disabled={adminPasswordSubmitting}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleAdminPasswordSubmit}
+              disabled={adminPasswordSubmitting}
+            >
+              {adminPasswordSubmitting ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Verifying...
+                </>
+              ) : (
+                'Unlock Admin'
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -82,8 +82,12 @@ export async function DELETE(
       );
     }
 
-    // Check if user is the uploader OR the admin (kaviuln@gmail.com)
-    const isAdmin = token.email === 'kaviuln@gmail.com';
+    // Verify admin password via request header
+    const adminPassword = request.headers.get('x-admin-password');
+    const expectedPassword = process.env.NEXT_PUBLIC_ADMIN_PASSWORD || 'Admin@123';
+    const isAdmin = adminPassword === expectedPassword;
+
+    // Only the uploader or admin can delete the file
     if (file.uploadedBy.toString() !== token.id && !isAdmin) {
       return NextResponse.json(
         { error: 'You do not have permission to delete this file' },

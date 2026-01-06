@@ -26,11 +26,13 @@ export async function DELETE(
 
     await dbConnect();
 
-    // Check if user is admin
-    const user = await User.findById(token.id);
-    if (!user || !user.isAdmin) {
+    // Verify admin password via request header
+    const adminPassword = request.headers.get('x-admin-password');
+    const expectedPassword = process.env.NEXT_PUBLIC_ADMIN_PASSWORD || 'Admin@123';
+    
+    if (!adminPassword || adminPassword !== expectedPassword) {
       return NextResponse.json(
-        { error: 'Only admins can delete folders' },
+        { error: 'Admin password required to delete folders' },
         { status: 403 }
       );
     }

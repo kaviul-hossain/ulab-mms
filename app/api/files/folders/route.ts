@@ -21,11 +21,13 @@ export async function POST(request: NextRequest) {
 
     await dbConnect();
 
-    // Check if user is admin
-    const user = await User.findById(token.id);
-    if (!user || !user.isAdmin) {
+    // Verify admin password via request header
+    const adminPassword = request.headers.get('x-admin-password');
+    const expectedPassword = process.env.NEXT_PUBLIC_ADMIN_PASSWORD || 'Admin@123';
+    
+    if (!adminPassword || adminPassword !== expectedPassword) {
       return NextResponse.json(
-        { error: 'Only admins can create folders' },
+        { error: 'Admin password required to create folders' },
         { status: 403 }
       );
     }
