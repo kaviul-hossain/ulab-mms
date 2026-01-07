@@ -94,6 +94,10 @@ export default function Dashboard() {
     setAdminPasswordError('');
   };
 
+  const getAdminPassword = () => {
+    return localStorage.getItem('adminPassword') || '';
+  };
+
   const handleAdminPasswordSubmit = async () => {
     if (!adminPassword.trim()) {
       setAdminPasswordError('Please enter the admin password');
@@ -105,6 +109,8 @@ export default function Dashboard() {
       // Verify password
       const expectedPassword = process.env.NEXT_PUBLIC_ADMIN_PASSWORD || 'Admin@123';
       if (adminPassword === expectedPassword) {
+        // Store the admin password in localStorage for the session
+        localStorage.setItem('adminPassword', adminPassword);
         setIsAdminUnlocked(true);
         setShowAdminPasswordModal(false);
         setAdminPassword('');
@@ -122,6 +128,11 @@ export default function Dashboard() {
   useEffect(() => {
     if (status === 'authenticated') {
       fetchCourses();
+      // Check if admin password is already unlocked in localStorage
+      const storedAdminPassword = localStorage.getItem('adminPassword');
+      if (storedAdminPassword) {
+        setIsAdminUnlocked(true);
+      }
     }
   }, [status]);
 
@@ -210,7 +221,7 @@ export default function Dashboard() {
       const response = await fetch(`/api/files/${fileId}`, {
         method: 'DELETE',
         headers: {
-          'x-admin-password': adminPassword,
+          'x-admin-password': getAdminPassword(),
         },
       });
 
@@ -254,7 +265,7 @@ export default function Dashboard() {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
-          'x-admin-password': adminPassword,
+          'x-admin-password': getAdminPassword(),
         },
         body: JSON.stringify({
           folderName: folderName.trim(),
@@ -290,7 +301,7 @@ export default function Dashboard() {
       const response = await fetch(`/api/files/folders/${folderId}`, {
         method: 'DELETE',
         headers: {
-          'x-admin-password': adminPassword,
+          'x-admin-password': getAdminPassword(),
         },
       });
 
@@ -329,7 +340,7 @@ export default function Dashboard() {
       const response = await fetch('/api/files', {
         method: 'POST',
         headers: {
-          'x-admin-password': adminPassword,
+          'x-admin-password': getAdminPassword(),
         },
         body: formData,
       });
@@ -638,14 +649,37 @@ export default function Dashboard() {
                   Capstone
                 </Link>
               </Button>
-              <Button 
-                variant="outline"
-                onClick={handleAdminAccess}
-                className={isAdminUnlocked ? "border-orange-500 text-orange-500" : ""}
-              >
-                <Settings className="h-4 w-4 mr-2" />
-                {isAdminUnlocked ? 'Admin (Unlocked)' : 'Admin'}
-              </Button>
+              {isAdminUnlocked ? (
+                <>
+                  <Button 
+                    variant="outline"
+                    disabled
+                    className="border-orange-500 text-orange-500 cursor-not-allowed opacity-70"
+                  >
+                    <Settings className="h-4 w-4 mr-2" />
+                    Admin (Unlocked)
+                  </Button>
+                  <Button 
+                    variant="outline"
+                    onClick={() => {
+                      localStorage.removeItem('adminPassword');
+                      setIsAdminUnlocked(false);
+                    }}
+                    className="border-red-500 text-red-500 hover:bg-red-50 dark:hover:bg-red-950"
+                  >
+                    <Settings className="h-4 w-4 mr-2" />
+                    Lock Admin
+                  </Button>
+                </>
+              ) : (
+                <Button 
+                  variant="outline"
+                  onClick={handleAdminAccess}
+                >
+                  <Settings className="h-4 w-4 mr-2" />
+                  Admin
+                </Button>
+              )}
               <Button variant="outline" asChild>
                 <Link href="/settings">
                   <Settings className="h-4 w-4 mr-2" />
@@ -654,10 +688,7 @@ export default function Dashboard() {
               </Button>
               <Button
                 variant="destructive"
-                onClick={() => {
-                  setIsAdminUnlocked(false);
-                  signOut({ callbackUrl: '/auth/signin' });
-                }}
+                onClick={() => signOut({ callbackUrl: '/auth/signin' })}
               >
                 <LogOut className="h-4 w-4 mr-2" />
                 Sign Out
