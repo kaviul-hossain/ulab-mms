@@ -1,12 +1,31 @@
+/**
+ * check-db.js - Database Debugging Script (TEMPLATE)
+ * 
+ * This is a template for debugging database issues.
+ * DO NOT commit sensitive data to this file.
+ * 
+ * Usage:
+ * 1. Copy this template to check-db.js
+ * 2. Set environment variables:
+ *    - MONGODB_URI (should already be in .env.local)
+ *    - TEST_URL_TOKEN (optional, for token validation testing)
+ * 
+ * 3. Run: node check-db.js
+ * 
+ * Example .env variables:
+ * MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/?appName=App
+ * TEST_URL_TOKEN=your_token_hash_here
+ */
+
 const mongoose = require('mongoose');
 const crypto = require('crypto');
 
-// Read from environment variables instead of hardcoding
+// Read from environment variables
 const urlToken = process.env.TEST_URL_TOKEN || '';
 const mongoUri = process.env.MONGODB_URI;
 
 if (!mongoUri) {
-  console.error('Error: MONGODB_URI environment variable is not set');
+  console.error('Error: MONGODB_URI environment variable is not set in .env.local');
   process.exit(1);
 }
 
@@ -26,10 +45,12 @@ async function checkDatabase() {
     const db = mongoose.connection.db;
     const usersCollection = db.collection('users');
     
-    const user = await usersCollection.findOne({ email: 'kavnij@gmail.com' });
+    // Query for a specific user (modify email as needed)
+    const userEmail = process.env.TEST_USER_EMAIL || 'test@example.com';
+    const user = await usersCollection.findOne({ email: userEmail });
     
     if (!user) {
-      console.log('\nERROR: User not found with email: kavnij@gmail.com');
+      console.log(`\nERROR: User not found with email: ${userEmail}`);
     } else {
       console.log('\n=== User Found ===');
       console.log('Name:', user.name);
