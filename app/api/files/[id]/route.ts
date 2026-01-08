@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getToken } from 'next-auth/jwt';
 import dbConnect from '@/lib/mongodb';
 import { getGridFSBucket } from '@/lib/gridfs';
+import { verifyAdminPassword } from '@/lib/admin';
 import File from '@/models/File';
 
 export async function GET(
@@ -84,11 +85,10 @@ export async function DELETE(
 
     // Verify admin password via request header
     const adminPassword = request.headers.get('x-admin-password');
-    const expectedPassword = process.env.NEXT_PUBLIC_ADMIN_PASSWORD || 'Admin@123';
-    const isAdmin = adminPassword === expectedPassword;
+    const isValidPassword = adminPassword ? await verifyAdminPassword(adminPassword) : false;
 
     // Only the uploader or admin can delete the file
-    if (file.uploadedBy.toString() !== token.id && !isAdmin) {
+    if (file.uploadedBy.toString() !== token.id && !isValidPassword) {
       return NextResponse.json(
         { error: 'You do not have permission to delete this file' },
         { status: 403 }

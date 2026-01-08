@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getToken } from 'next-auth/jwt';
 import dbConnect from '@/lib/mongodb';
 import { getGridFSBucket } from '@/lib/gridfs';
+import { verifyAdminPassword } from '@/lib/admin';
 import File from '@/models/File';
 import User from '@/models/User';
 import { v4 as uuidv4 } from 'uuid';
@@ -27,11 +28,18 @@ export async function POST(request: NextRequest) {
 
     // Verify admin password via request header
     const adminPassword = request.headers.get('x-admin-password');
-    const expectedPassword = process.env.NEXT_PUBLIC_ADMIN_PASSWORD || 'Admin@123';
     
-    if (!adminPassword || adminPassword !== expectedPassword) {
+    if (!adminPassword) {
       return NextResponse.json(
         { error: 'Admin password required to upload files' },
+        { status: 403 }
+      );
+    }
+
+    const isValidPassword = await verifyAdminPassword(adminPassword);
+    if (!isValidPassword) {
+      return NextResponse.json(
+        { error: 'Invalid admin password' },
         { status: 403 }
       );
     }

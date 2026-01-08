@@ -25,6 +25,9 @@ export default function UserFilesPage() {
   const [error, setError] = useState('');
   const [downloadingId, setDownloadingId] = useState('');
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
+  const [breadcrumbs, setBreadcrumbs] = useState<Array<{ id: string | null; name: string }>>([
+    { id: null, name: 'Home' },
+  ]);
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -104,16 +107,36 @@ export default function UserFilesPage() {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
     });
   };
 
   const getFileIcon = (mimeType: string) => {
     if (mimeType.includes('pdf')) return '📄';
     if (mimeType.includes('word') || mimeType.includes('document')) return '📝';
-    if (mimeType.includes('excel') || mimeType.includes('sheet')) return '📊';
+    if (mimeType.includes('sheet') || mimeType.includes('excel')) return '📊';
     return '📎';
+  };
+
+  const navigateToFolder = (folderId: string | null, folderName: string) => {
+    setSelectedFolderId(folderId);
+    
+    if (folderId === null) {
+      // Navigate to root
+      setBreadcrumbs([{ id: null, name: 'Home' }]);
+    } else {
+      // Check if we're navigating back via breadcrumb
+      const existingIndex = breadcrumbs.findIndex(b => b.id === folderId);
+      if (existingIndex !== -1) {
+        // We're clicking on a breadcrumb - go back to that level
+        setBreadcrumbs(breadcrumbs.slice(0, existingIndex + 1));
+      } else {
+        // We're going deeper - add this folder to breadcrumbs
+        setBreadcrumbs([
+          ...breadcrumbs,
+          { id: folderId, name: folderName },
+        ]);
+      }
+    }
   };
 
   if (status === 'loading') {
@@ -136,17 +159,28 @@ export default function UserFilesPage() {
             </div>
           )}
 
-          {/* Folder Navigation */}
-          {selectedFolderId && (
-            <div className="mb-6">
-              <button
-                onClick={() => setSelectedFolderId(null)}
-                className="text-blue-600 hover:text-blue-800 flex items-center gap-2"
-              >
-                ← Back to Root
-              </button>
+          {/* Breadcrumb Navigation */}
+          <div className="mb-6 p-3 bg-slate-100 rounded-lg">
+            <div className="flex items-center gap-2 flex-wrap">
+              {breadcrumbs.map((crumb, index) => (
+                <div key={crumb.id || 'root'} className="flex items-center gap-2">
+                  <button
+                    onClick={() => navigateToFolder(crumb.id, crumb.name)}
+                    className={`px-3 py-1 rounded-md transition-colors ${
+                      index === breadcrumbs.length - 1
+                        ? 'bg-blue-600 text-white font-semibold'
+                        : 'text-blue-600 hover:bg-blue-100'
+                    }`}
+                  >
+                    {crumb.name}
+                  </button>
+                  {index < breadcrumbs.length - 1 && (
+                    <span className="text-slate-400">/</span>
+                  )}
+                </div>
+              ))}
             </div>
-          )}
+          </div>
 
           {/* Folders Display */}
           {folders.length > 0 && (
@@ -156,7 +190,7 @@ export default function UserFilesPage() {
                 {folders.map((folder) => (
                   <button
                     key={folder.id}
-                    onClick={() => setSelectedFolderId(folder.id)}
+                    onClick={() => navigateToFolder(folder.id, folder.name)}
                     className="p-4 border-2 border-yellow-200 rounded-lg hover:bg-yellow-50 transition-colors text-center group"
                   >
                     <div className="text-4xl mb-2">📁</div>

@@ -77,6 +77,7 @@ export default function Dashboard() {
   const [folderName, setFolderName] = useState('');
   const [creatingFolder, setCreatingFolder] = useState(false);
   const [folders, setFolders] = useState<any[]>([]);
+  const [allFoldersForDropdown, setAllFoldersForDropdown] = useState<any[]>([]);
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [currentFolderPath, setCurrentFolderPath] = useState<string>('/');
   const [folderFiles, setFolderFiles] = useState<Record<string, any[]>>({});
@@ -106,9 +107,18 @@ export default function Dashboard() {
 
     setAdminPasswordSubmitting(true);
     try {
-      // Verify password
-      const expectedPassword = process.env.NEXT_PUBLIC_ADMIN_PASSWORD || 'Admin@123';
-      if (adminPassword === expectedPassword) {
+      // Verify password via API
+      const response = await fetch('/api/auth/verify-admin', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          password: adminPassword,
+        }),
+      });
+
+      if (response.ok) {
         // Store the admin password in localStorage for the session
         localStorage.setItem('adminPassword', adminPassword);
         setIsAdminUnlocked(true);
@@ -118,8 +128,11 @@ export default function Dashboard() {
         // Fetch folders when admin is unlocked
         fetchFolders();
       } else {
-        setAdminPasswordError('Incorrect password. Please try again.');
+        const errorData = await response.json();
+        setAdminPasswordError(errorData.error || 'Incorrect password. Please try again.');
       }
+    } catch (err: any) {
+      setAdminPasswordError(err.message || 'Failed to verify password');
     } finally {
       setAdminPasswordSubmitting(false);
     }
@@ -128,6 +141,7 @@ export default function Dashboard() {
   useEffect(() => {
     if (status === 'authenticated') {
       fetchCourses();
+      fetchAllNestedFolders();
       // Check if admin password is already unlocked in localStorage
       const storedAdminPassword = localStorage.getItem('adminPassword');
       if (storedAdminPassword) {
@@ -135,6 +149,39 @@ export default function Dashboard() {
       }
     }
   }, [status]);
+
+  // Recursively fetch all nested folders for the dropdown
+  const fetchAllNestedFolders = async () => {
+    try {
+      const allFolders: any[] = [];
+      
+      const fetchFoldersRecursive = async (parentFolderId: string | null = null, depth: number = 0) => {
+        const url = new URL('/api/files/folders', window.location.origin);
+        if (parentFolderId) {
+          url.searchParams.append('parentFolderId', parentFolderId);
+        }
+        const response = await fetch(url.toString());
+        const data = await response.json();
+        
+        if (data.folders && data.folders.length > 0) {
+          for (const folder of data.folders) {
+            allFolders.push({
+              ...folder,
+              depth: depth,
+              displayName: '  '.repeat(depth) + '📁 ' + folder.name,
+            });
+            // Recursively fetch subfolders
+            await fetchFoldersRecursive(folder.id, depth + 1);
+          }
+        }
+      };
+      
+      await fetchFoldersRecursive(null, 0);
+      setAllFoldersForDropdown(allFolders);
+    } catch (err) {
+      console.error('Error fetching all nested folders:', err);
+    }
+  };
 
   const fetchFolders = async (parentFolderId: string | null = null) => {
     try {
@@ -284,6 +331,8 @@ export default function Dashboard() {
       browseFolderContents(currentBrowseFolderId);
       // Also refresh the main folders list
       fetchFolders(selectedFolderId);
+      // Refresh the dropdown with all nested folders
+      fetchAllNestedFolders();
       setTimeout(() => setUploadSuccess(''), 3000);
     } catch (err: any) {
       setError(err.message || 'Failed to create folder');
@@ -312,6 +361,8 @@ export default function Dashboard() {
 
       setUploadSuccess('Folder deleted successfully!');
       fetchFolders(selectedFolderId);
+      // Refresh the dropdown with all nested folders
+      fetchAllNestedFolders();
       setTimeout(() => setUploadSuccess(''), 3000);
     } catch (err: any) {
       setError(err.message || 'Failed to delete folder');
@@ -1349,9 +1400,9 @@ export default function Dashboard() {
                     className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                   >
                     <option value="">Root Folder</option>
-                    {folders.map((folder) => (
+                    {allFoldersForDropdown.map((folder) => (
                       <option key={folder.id} value={folder.id}>
-                        📁 {folder.name}
+                        {folder.displayName}
                       </option>
                     ))}
                   </select>
