@@ -29,18 +29,11 @@ export async function middleware(request: NextRequest) {
     // Note: Additional admin check happens in the component
   }
 
-  // Protect student routes
-  if (pathname.startsWith('/student')) {
-    if (!token) {
-      const signInUrl = new URL('/auth/signin', request.url);
-      signInUrl.searchParams.set('callbackUrl', pathname);
-      return NextResponse.redirect(signInUrl);
-    }
-  }
+  // Student routes are now publicly accessible (no authentication required)
 
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: ['/dashboard/:path*', '/course/:path*', '/admin/:path*', '/student/:path*'],
+  matcher: ['/dashboard/:path*', '/course/:path*', '/admin/:path*'],
 };
