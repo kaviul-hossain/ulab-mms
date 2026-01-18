@@ -19,9 +19,28 @@ export async function middleware(request: NextRequest) {
     }
   }
 
+  // Protect admin routes - only admins can access
+  if (pathname.startsWith('/admin')) {
+    if (!token) {
+      const signInUrl = new URL('/auth/signin', request.url);
+      signInUrl.searchParams.set('callbackUrl', pathname);
+      return NextResponse.redirect(signInUrl);
+    }
+    // Note: Additional admin check happens in the component
+  }
+
+  // Protect student routes
+  if (pathname.startsWith('/student')) {
+    if (!token) {
+      const signInUrl = new URL('/auth/signin', request.url);
+      signInUrl.searchParams.set('callbackUrl', pathname);
+      return NextResponse.redirect(signInUrl);
+    }
+  }
+
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: ['/dashboard/:path*', '/course/:path*'],
+  matcher: ['/dashboard/:path*', '/course/:path*', '/admin/:path*', '/student/:path*'],
 };
