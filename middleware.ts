@@ -19,14 +19,14 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  // Protect admin routes - only admins can access
-  if (pathname.startsWith('/admin')) {
-    if (!token) {
-      const signInUrl = new URL('/auth/signin', request.url);
-      signInUrl.searchParams.set('callbackUrl', pathname);
-      return NextResponse.redirect(signInUrl);
+  // Protect admin routes - only admins can access (except signin page)
+  if (pathname.startsWith('/admin') && pathname !== '/admin/signin') {
+    // Admin routes use cookie-based auth, check for admin-token
+    const adminToken = request.cookies.get('admin-token');
+    if (!adminToken) {
+      const adminSignInUrl = new URL('/admin/signin', request.url);
+      return NextResponse.redirect(adminSignInUrl);
     }
-    // Note: Additional admin check happens in the component
   }
 
   // Student routes are now publicly accessible (no authentication required)
