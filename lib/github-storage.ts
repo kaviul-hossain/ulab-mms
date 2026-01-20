@@ -73,6 +73,16 @@ export class GitHubStorage {
 
       if (!response.ok) {
         if (response.status === 404) {
+          // Directory doesn't exist, create it with .gitkeep
+          if (path === 'common') {
+            await this.uploadFile(
+              'common/.gitkeep',
+              '# Common resources folder',
+              'Create common folder'
+            );
+            // Return empty array after creating folder
+            return [];
+          }
           return []; // Directory doesn't exist yet
         }
         const error = await response.json();
