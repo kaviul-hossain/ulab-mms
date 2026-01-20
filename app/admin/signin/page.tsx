@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { notify } from '@/app/utils/notifications';
 import Link from 'next/link';
 import Image from 'next/image';
 import { Eye, EyeOff, Loader2, Shield } from 'lucide-react';
@@ -46,13 +47,18 @@ export default function AdminSignIn() {
         setError('');
       } else if (response.ok) {
         // Successful login
+        notify.success('Welcome Admin! Signed in successfully');
         router.push('/admin/dashboard');
         router.refresh();
       } else {
-        setError(data.error || 'Authentication failed');
+        const errorMsg = data.error || 'Authentication failed';
+        setError(errorMsg);
+        notify.error(errorMsg);
       }
     } catch (err) {
-      setError('An error occurred. Please try again.');
+      const errorMsg = 'An error occurred. Please try again.';
+      setError(errorMsg);
+      notify.error(errorMsg);
     } finally {
       setLoading(false);
     }
@@ -88,13 +94,18 @@ export default function AdminSignIn() {
 
       if (response.ok) {
         // Successful setup
+        notify.success('Admin password set successfully! Welcome!');
         router.push('/admin/dashboard');
         router.refresh();
       } else {
-        setError(data.error || 'Failed to set password');
+        const errorMsg = data.error || 'Failed to set password';
+        setError(errorMsg);
+        notify.error(errorMsg);
       }
     } catch (err) {
-      setError('An error occurred. Please try again.');
+      const errorMsg = 'An error occurred. Please try again.';
+      setError(errorMsg);
+      notify.error(errorMsg);
     } finally {
       setLoading(false);
     }

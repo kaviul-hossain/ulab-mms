@@ -1245,7 +1245,10 @@ export default function CoursePage() {
               <Button 
                 variant="destructive" 
                 size="sm"
-                onClick={() => signOut({ callbackUrl: '/auth/signin' })}
+                onClick={() => {
+                  notify.auth.signOutSuccess();
+                  signOut({ callbackUrl: '/auth/signin' });
+                }}
               >
                 <LogOut className="w-4 h-4 mr-2" />
                 Sign Out

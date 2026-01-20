@@ -12,6 +12,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { notify } from '@/app/utils/notifications';
 
 export default function AdminSettings() {
   const router = useRouter();
@@ -50,9 +51,11 @@ export default function AdminSettings() {
   const handleSignOut = async () => {
     try {
       await fetch('/api/admin/signout', { method: 'POST' });
+      notify.auth.signOutSuccess();
       router.push('/admin/signin');
     } catch (err) {
       console.error('Sign out error:', err);
+      notify.error('Failed to sign out');
     }
   };
 

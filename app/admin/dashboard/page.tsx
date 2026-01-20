@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Loader2, LogOut, Settings, Folder, FolderPlus, Upload, FileText, Trash2 } from 'lucide-react';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
+import { notify } from '@/app/utils/notifications';
 
 export default function AdminDashboard() {
   const router = useRouter();
@@ -62,9 +63,11 @@ export default function AdminDashboard() {
   const handleSignOut = async () => {
     try {
       await fetch('/api/admin/signout', { method: 'POST' });
+      notify.auth.signOutSuccess();
       router.push('/admin/signin');
     } catch (err) {
       console.error('Sign out error:', err);
+      notify.error('Failed to sign out');
     }
   };
 

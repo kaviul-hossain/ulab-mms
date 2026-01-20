@@ -39,13 +39,16 @@ export default function SignIn() {
 
       if (result?.error) {
         setError(result.error);
+        notify.auth.signInError(result.error);
       } else {
         notify.auth.signInSuccess();
         router.push('/dashboard');
         router.refresh();
       }
     } catch (err) {
-      setError('An error occurred. Please try again.');
+      const errorMsg = 'An error occurred. Please try again.';
+      setError(errorMsg);
+      notify.auth.signInError(errorMsg);
     } finally {
       setLoading(false);
     }
