@@ -398,6 +398,15 @@ export default function Dashboard() {
           <div className="flex gap-3">
             <Button
               variant="outline"
+              asChild
+            >
+              <Link href="/dashboard/archived">
+                <Archive className="h-4 w-4 mr-2" />
+                View Archived
+              </Link>
+            </Button>
+            <Button
+              variant="outline"
               onClick={() => setShowImportModal(true)}
             >
               <Upload className="h-4 w-4 mr-2" />
