@@ -16,7 +16,9 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 export default function AdminSignIn() {
   const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [requireSetup, setRequireSetup] = useState(false);
@@ -63,6 +65,12 @@ export default function AdminSignIn() {
 
     if (password.length < 8) {
       setError('Password must be at least 8 characters');
+      setLoading(false);
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setError('Passwords do not match');
       setLoading(false);
       return;
     }
@@ -157,6 +165,17 @@ export default function AdminSignIn() {
 
             <form onSubmit={requireSetup ? handleSetupPassword : handleSubmit} className="space-y-4">
               <div className="space-y-2">
+                <Label htmlFor="username">Username</Label>
+                <Input
+                  id="username"
+                  type="text"
+                  value="admin"
+                  disabled
+                  className="bg-muted"
+                />
+              </div>
+
+              <div className="space-y-2">
                 <Label htmlFor="password">
                   {requireSetup ? 'New Password' : 'Password'}
                 </Label>
@@ -196,6 +215,42 @@ export default function AdminSignIn() {
                   </p>
                 )}
               </div>
+
+              {requireSetup && (
+                <div className="space-y-2">
+                  <Label htmlFor="confirmPassword">Confirm Password</Label>
+                  <div className="relative">
+                    <Input
+                      id="confirmPassword"
+                      type={showConfirmPassword ? "text" : "password"}
+                      placeholder="Retype your password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      required
+                      disabled={loading}
+                      className="pr-10"
+                      minLength={8}
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7"
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      disabled={loading}
+                    >
+                      {showConfirmPassword ? (
+                        <EyeOff className="h-4 w-4" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
+                      <span className="sr-only">
+                        {showConfirmPassword ? "Hide password" : "Show password"}
+                      </span>
+                    </Button>
+                  </div>
+                </div>
+              )}
 
               <Button type="submit" className="w-full" disabled={loading}>
                 {loading ? (
