@@ -1,42 +1,848 @@
 'use client';
 
-import { BookOpen, Plus } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { 
+  BookOpen, 
+  Plus, 
+  Edit, 
+  Trash2, 
+  Upload, 
+  Download, 
+  Loader2,
+  FileSpreadsheet,
+  AlertTriangle,
+  CheckCircle2,
+  XCircle,
+  Search,
+  X
+} from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import RichTextEditor from '@/app/components/RichTextEditor';
+import { notify } from '@/app/utils/notifications';
+import { toast } from 'sonner';
+import * as XLSX from 'xlsx';
+
+interface AdminCourse {
+  _id: string;
+  courseCode: string;
+  courseTitle: string;
+  creditHour: number;
+  prerequisite?: string;
+  content?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+interface ImportResult {
+  updated: number;
+  created: number;
+  errors: Array<{ row: number; error: string; data: any }>;
+  details: {
+    updated: Array<{ courseCode: string; courseTitle: string }>;
+    created: Array<{ courseCode: string; courseTitle: string }>;
+  };
+}
 
 export default function CourseManagement() {
+  const [courses, setCourses] = useState<AdminCourse[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [showImportResultModal, setShowImportResultModal] = useState(false);
+  const [editingCourse, setEditingCourse] = useState<AdminCourse | null>(null);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importMode, setImportMode] = useState<'replace' | 'update'>('update');
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<ImportResult | null>(null);
+  const [formData, setFormData] = useState({
+    courseCode: '',
+    courseTitle: '',
+    creditHour: '',
+    prerequisite: 'N/A',
+    content: '',
+  });
+
+  useEffect(() => {
+    fetchCourses();
+  }, []);
+
+  const fetchCourses = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch('/api/admin/courses');
+      const data = await response.json();
+      
+      if (response.ok) {
+        setCourses(data.courses || []);
+      } else {
+        toast.error('Failed to load courses');
+      }
+    } catch (error) {
+      console.error('Fetch courses error:', error);
+      toast.error('Failed to load courses');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAddCourse = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!formData.courseCode || !formData.courseTitle || !formData.creditHour) {
+      toast.error('Please fill in all required fields');
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/admin/courses', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        toast.success('Course added successfully');
+        setShowAddModal(false);
+        resetForm();
+        fetchCourses();
+      } else if (response.status === 409) {
+        toast.error('Course code already exists');
+      } else {
+        toast.error(data.error || 'Failed to add course');
+      }
+    } catch (error) {
+      console.error('Add course error:', error);
+      toast.error('Failed to add course');
+    }
+  };
+
+  const handleEditCourse = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!editingCourse || !formData.courseCode || !formData.courseTitle || !formData.creditHour) {
+      toast.error('Please fill in all required fields');
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/admin/courses', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          _id: editingCourse._id,
+          ...formData,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        toast.success('Course updated successfully');
+        setShowEditModal(false);
+        setEditingCourse(null);
+        resetForm();
+        fetchCourses();
+      } else if (response.status === 409) {
+        toast.error('Course code already exists');
+      } else {
+        toast.error(data.error || 'Failed to update course');
+      }
+    } catch (error) {
+      console.error('Update course error:', error);
+      toast.error('Failed to update course');
+    }
+  };
+
+  const handleDeleteCourse = async (courseId: string, courseCode: string) => {
+    if (!confirm(`Are you sure you want to delete course "${courseCode}"? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/admin/courses?id=${courseId}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        toast.success('Course deleted successfully');
+        fetchCourses();
+      } else {
+        const data = await response.json();
+        toast.error(data.error || 'Failed to delete course');
+      }
+    } catch (error) {
+      console.error('Delete course error:', error);
+      toast.error('Failed to delete course');
+    }
+  };
+
+  const openEditModal = (course: AdminCourse) => {
+    setEditingCourse(course);
+    setFormData({
+      courseCode: course.courseCode,
+      courseTitle: course.courseTitle,
+      creditHour: course.creditHour.toString(),
+      prerequisite: course.prerequisite || 'N/A',
+      content: course.content || '',
+    });
+    setShowEditModal(true);
+  };
+
+  const resetForm = () => {
+    setFormData({
+      courseCode: '',
+      courseTitle: '',
+      creditHour: '',
+      prerequisite: 'N/A',
+      content: '',
+    });
+  };
+
+  const handleExportCSV = () => {
+    if (courses.length === 0) {
+      toast.error('No courses to export');
+      return;
+    }
+
+    const exportData = courses.map(course => ({
+      'Course Code': course.courseCode,
+      'Course Title': course.courseTitle,
+      'Credit Hour': course.creditHour,
+      'Prerequisite': course.prerequisite || 'N/A',
+      'Content': course.content || '',
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(exportData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Courses');
+    XLSX.writeFile(wb, `courses_${new Date().toISOString().split('T')[0]}.xlsx`);
+    toast.success('Courses exported successfully');
+  };
+
+  const handleExportTemplate = () => {
+    let exportData;
+
+    if (courses.length === 0) {
+      // Empty template
+      exportData = [{
+        'Course Code': '',
+        'Course Title': '',
+        'Credit Hour': '',
+        'Prerequisite': '',
+        'Content': '',
+      }];
+    } else {
+      // Template with existing courses
+      exportData = courses.map(course => ({
+        'Course Code': course.courseCode,
+        'Course Title': course.courseTitle,
+        'Credit Hour': course.creditHour,
+        'Prerequisite': course.prerequisite || 'N/A',
+        'Content': course.content || '',
+      }));
+    }
+
+    const ws = XLSX.utils.json_to_sheet(exportData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Courses');
+    XLSX.writeFile(wb, `course_template_${new Date().toISOString().split('T')[0]}.xlsx`);
+    
+    if (courses.length === 0) {
+      toast.success('Empty template downloaded');
+    } else {
+      toast.success('Template with existing courses downloaded');
+    }
+  };
+
+  const handleImport = async () => {
+    if (!importFile) {
+      toast.error('Please select a file');
+      return;
+    }
+
+    try {
+      setImporting(true);
+      
+      const data = await importFile.arrayBuffer();
+      const workbook = XLSX.read(data);
+      const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+      const jsonData = XLSX.utils.sheet_to_json(worksheet);
+
+      // Transform data to match API format
+      const coursesToImport = jsonData.map((row: any) => ({
+        courseCode: row['Course Code']?.toString().trim() || '',
+        courseTitle: row['Course Title']?.toString().trim() || '',
+        creditHour: parseFloat(row['Credit Hour']) || 0,
+        prerequisite: row['Prerequisite']?.toString().trim() || 'N/A',
+        content: row['Content']?.toString().trim() || '',
+      }));
+
+      // Send to API
+      const response = await fetch('/api/admin/courses/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          courses: coursesToImport,
+          mode: importMode,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        setImportResult(result.result);
+        setShowImportModal(false);
+        setShowImportResultModal(true);
+        fetchCourses();
+        
+        const { created, updated, errors } = result.result;
+        if (errors.length === 0) {
+          toast.success(`Import successful: ${created} created, ${updated} updated`);
+        } else {
+          toast.warning(`Import completed with ${errors.length} errors`);
+        }
+      } else {
+        toast.error(result.error || 'Import failed');
+      }
+    } catch (error) {
+      console.error('Import error:', error);
+      toast.error('Failed to import courses');
+    } finally {
+      setImporting(false);
+      setImportFile(null);
+    }
+  };
+
+  const filteredCourses = courses.filter(course =>
+    course.courseCode.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    course.courseTitle.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold">Course Management</h2>
+      <div className="flex items-center justify-between flex-wrap gap-4">
+        <div>
+          <h2 className="text-2xl font-bold">Course Management</h2>
+          <p className="text-muted-foreground">Manage global course catalogue</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={handleExportTemplate}>
+            <FileSpreadsheet className="h-4 w-4 mr-2" />
+            Download Template
+          </Button>
+          <Button variant="outline" onClick={handleExportCSV} disabled={courses.length === 0}>
+            <Download className="h-4 w-4 mr-2" />
+            Export
+          </Button>
+          <Button variant="outline" onClick={() => setShowImportModal(true)}>
+            <Upload className="h-4 w-4 mr-2" />
+            Import
+          </Button>
+          <Button onClick={() => setShowAddModal(true)}>
+            <Plus className="h-4 w-4 mr-2" />
+            Add Course
+          </Button>
+        </div>
       </div>
 
-      {/* Empty State */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <BookOpen className="h-5 w-5" />
-            Courses
-          </CardTitle>
-          <CardDescription>
-            Manage courses, assignments, and student enrollments
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="text-center py-12">
-            <BookOpen className="h-16 w-16 mx-auto mb-4 text-muted-foreground opacity-50" />
-            <h3 className="text-lg font-semibold mb-2">Coming Soon</h3>
-            <p className="text-muted-foreground mb-4">
-              Course management features will be available here
-            </p>
-            <Button disabled>
-              <Plus className="h-4 w-4 mr-2" />
-              Add Course
+      {/* Search */}
+      <div className="flex items-center gap-2">
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search by code or title..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-10"
+          />
+          {searchQuery && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 p-0"
+              onClick={() => setSearchQuery('')}
+            >
+              <X className="h-4 w-4" />
             </Button>
+          )}
+        </div>
+        <Badge variant="secondary">
+          {filteredCourses.length} {filteredCourses.length === 1 ? 'course' : 'courses'}
+        </Badge>
+      </div>
+
+      {/* Courses Table */}
+      {filteredCourses.length === 0 ? (
+        <Card>
+          <CardContent className="text-center py-12">
+            <BookOpen className="h-16 w-16 mx-auto mb-4 text-muted-foreground opacity-50" />
+            <h3 className="text-lg font-semibold mb-2">
+              {courses.length === 0 ? 'No courses yet' : 'No matching courses'}
+            </h3>
+            <p className="text-muted-foreground mb-4">
+              {courses.length === 0 
+                ? 'Add your first course or import from a CSV/Excel file'
+                : 'Try adjusting your search query'}
+            </p>
+            {courses.length === 0 && (
+              <div className="flex gap-2 justify-center">
+                <Button onClick={() => setShowAddModal(true)}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Course
+                </Button>
+                <Button variant="outline" onClick={() => setShowImportModal(true)}>
+                  <Upload className="h-4 w-4 mr-2" />
+                  Import
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Course Code</TableHead>
+                <TableHead>Course Title</TableHead>
+                <TableHead>Credit Hour</TableHead>
+                <TableHead>Prerequisite</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredCourses.map((course) => (
+                <TableRow key={course._id}>
+                  <TableCell className="font-mono font-semibold">{course.courseCode}</TableCell>
+                  <TableCell>{course.courseTitle}</TableCell>
+                  <TableCell>{course.creditHour}</TableCell>
+                  <TableCell className="text-muted-foreground">{course.prerequisite || 'N/A'}</TableCell>
+                  <TableCell className="text-right">
+                    <div className="flex justify-end gap-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => openEditModal(course)}
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleDeleteCourse(course._id, course.courseCode)}
+                      >
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </Card>
+      )}
+
+      {/* Add Course Modal */}
+      <Dialog open={showAddModal} onOpenChange={setShowAddModal}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Add New Course</DialogTitle>
+            <DialogDescription>
+              Add a new course to the global catalogue
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleAddCourse} className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="add-courseCode">
+                  Course Code <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  id="add-courseCode"
+                  value={formData.courseCode}
+                  onChange={(e) => setFormData({ ...formData, courseCode: e.target.value })}
+                  placeholder="e.g., MAT1101"
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="add-creditHour">
+                  Credit Hour <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  id="add-creditHour"
+                  type="number"
+                  step="0.5"
+                  min="0"
+                  max="10"
+                  value={formData.creditHour}
+                  onChange={(e) => setFormData({ ...formData, creditHour: e.target.value })}
+                  placeholder="e.g., 3.00"
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="add-courseTitle">
+                Course Title <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                id="add-courseTitle"
+                value={formData.courseTitle}
+                onChange={(e) => setFormData({ ...formData, courseTitle: e.target.value })}
+                placeholder="e.g., Differential and Integral Calculus"
+                required
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="add-prerequisite">Prerequisite</Label>
+              <Input
+                id="add-prerequisite"
+                value={formData.prerequisite}
+                onChange={(e) => setFormData({ ...formData, prerequisite: e.target.value })}
+                placeholder="e.g., N/A"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="add-content">Content / Description</Label>
+              <RichTextEditor
+                value={formData.content}
+                onChange={(value) => setFormData({ ...formData, content: value })}
+                placeholder="Enter course content, syllabus, textbooks, etc..."
+              />
+            </div>
+
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setShowAddModal(false);
+                  resetForm();
+                }}
+              >
+                Cancel
+              </Button>
+              <Button type="submit">Add Course</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Course Modal */}
+      <Dialog open={showEditModal} onOpenChange={setShowEditModal}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Course</DialogTitle>
+            <DialogDescription>
+              Update course information
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleEditCourse} className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-courseCode">
+                  Course Code <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  id="edit-courseCode"
+                  value={formData.courseCode}
+                  onChange={(e) => setFormData({ ...formData, courseCode: e.target.value })}
+                  placeholder="e.g., MAT1101"
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-creditHour">
+                  Credit Hour <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  id="edit-creditHour"
+                  type="number"
+                  step="0.5"
+                  min="0"
+                  max="10"
+                  value={formData.creditHour}
+                  onChange={(e) => setFormData({ ...formData, creditHour: e.target.value })}
+                  placeholder="e.g., 3.00"
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="edit-courseTitle">
+                Course Title <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                id="edit-courseTitle"
+                value={formData.courseTitle}
+                onChange={(e) => setFormData({ ...formData, courseTitle: e.target.value })}
+                placeholder="e.g., Differential and Integral Calculus"
+                required
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="edit-prerequisite">Prerequisite</Label>
+              <Input
+                id="edit-prerequisite"
+                value={formData.prerequisite}
+                onChange={(e) => setFormData({ ...formData, prerequisite: e.target.value })}
+                placeholder="e.g., N/A"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="edit-content">Content / Description</Label>
+              <RichTextEditor
+                value={formData.content}
+                onChange={(value) => setFormData({ ...formData, content: value })}
+                placeholder="Enter course content, syllabus, textbooks, etc..."
+              />
+            </div>
+
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setShowEditModal(false);
+                  setEditingCourse(null);
+                  resetForm();
+                }}
+              >
+                Cancel
+              </Button>
+              <Button type="submit">Save Changes</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Import Modal */}
+      <Dialog open={showImportModal} onOpenChange={setShowImportModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Import Courses</DialogTitle>
+            <DialogDescription>
+              Upload a CSV or Excel file with course data
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <Alert>
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription>
+                The file should have columns: Course Code, Course Title, Credit Hour, Prerequisite, Content
+              </AlertDescription>
+            </Alert>
+
+            <div className="space-y-2">
+              <Label htmlFor="import-mode">Import Mode</Label>
+              <Select value={importMode} onValueChange={(value: any) => setImportMode(value)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="update">Update existing, add new</SelectItem>
+                  <SelectItem value="replace">Replace matching courses</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                {importMode === 'update' 
+                  ? 'Updates courses with matching codes, adds new ones'
+                  : 'Replaces all data for courses with matching codes'}
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="import-file">Select File</Label>
+              <Input
+                id="import-file"
+                type="file"
+                accept=".csv,.xlsx,.xls"
+                onChange={(e) => setImportFile(e.target.files?.[0] || null)}
+              />
+            </div>
+
+            {importMode === 'replace' && (
+              <Alert variant="destructive">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription>
+                  Warning: This will replace all data for matching course codes!
+                </AlertDescription>
+              </Alert>
+            )}
           </div>
-        </CardContent>
-      </Card>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowImportModal(false);
+                setImportFile(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleImport}
+              disabled={!importFile || importing}
+            >
+              {importing ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Importing...
+                </>
+              ) : (
+                <>
+                  <Upload className="h-4 w-4 mr-2" />
+                  Import
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Import Result Modal */}
+      <Dialog open={showImportResultModal} onOpenChange={setShowImportResultModal}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Import Results</DialogTitle>
+            <DialogDescription>
+              Summary of the import operation
+            </DialogDescription>
+          </DialogHeader>
+
+          {importResult && (
+            <div className="space-y-4">
+              {/* Summary */}
+              <div className="grid grid-cols-2 gap-4">
+                <Card>
+                  <CardContent className="pt-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-muted-foreground">Created</p>
+                        <p className="text-2xl font-bold text-green-600">{importResult.created}</p>
+                      </div>
+                      <CheckCircle2 className="h-8 w-8 text-green-600" />
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="pt-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-muted-foreground">Updated</p>
+                        <p className="text-2xl font-bold text-blue-600">{importResult.updated}</p>
+                      </div>
+                      <CheckCircle2 className="h-8 w-8 text-blue-600" />
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Errors */}
+              {importResult.errors.length > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <XCircle className="h-5 w-5 text-destructive" />
+                      Errors ({importResult.errors.length})
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2 max-h-60 overflow-y-auto">
+                      {importResult.errors.map((error, index) => (
+                        <Alert key={index} variant="destructive">
+                          <AlertDescription>
+                            <strong>Row {error.row}:</strong> {error.error}
+                            <br />
+                            <span className="text-xs">
+                              Code: {error.data.courseCode || 'N/A'}, Title: {error.data.courseTitle || 'N/A'}
+                            </span>
+                          </AlertDescription>
+                        </Alert>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Details */}
+              {(importResult.details.created.length > 0 || importResult.details.updated.length > 0) && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg">Details</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {importResult.details.created.length > 0 && (
+                      <div>
+                        <h4 className="font-semibold mb-2 text-green-600">Created Courses</h4>
+                        <div className="space-y-1 max-h-40 overflow-y-auto">
+                          {importResult.details.created.map((course, index) => (
+                            <div key={index} className="text-sm flex items-center gap-2">
+                              <CheckCircle2 className="h-4 w-4 text-green-600" />
+                              <span className="font-mono">{course.courseCode}</span> - {course.courseTitle}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {importResult.details.updated.length > 0 && (
+                      <div>
+                        <h4 className="font-semibold mb-2 text-blue-600">Updated Courses</h4>
+                        <div className="space-y-1 max-h-40 overflow-y-auto">
+                          {importResult.details.updated.map((course, index) => (
+                            <div key={index} className="text-sm flex items-center gap-2">
+                              <CheckCircle2 className="h-4 w-4 text-blue-600" />
+                              <span className="font-mono">{course.courseCode}</span> - {course.courseTitle}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button onClick={() => setShowImportResultModal(false)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
