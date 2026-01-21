@@ -13,9 +13,10 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Loader2, Settings, LogOut, Plus, Upload, Copy, Edit, Trash2, BookOpen, FlaskConical, MoreVertical, Archive } from 'lucide-react';
+import { Loader2, Settings, LogOut, Plus, Upload, Copy, Edit, Trash2, BookOpen, FlaskConical, MoreVertical, Archive, Info } from 'lucide-react';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { notify } from '@/app/utils/notifications';
+import { CourseCombobox } from '@/app/components/CourseCombobox';
 
 interface Course {
   _id: string;
@@ -23,9 +24,19 @@ interface Course {
   code: string;
   semester: string;
   year: number;
+  section: string;
   courseType: 'Theory' | 'Lab';
   isArchived: boolean;
   createdAt: string;
+}
+
+interface AdminCourse {
+  _id: string;
+  courseCode: string;
+  courseTitle: string;
+  creditHour: number;
+  prerequisite?: string;
+  content?: string;
 }
 
 export default function Dashboard() {
@@ -48,13 +59,19 @@ export default function Dashboard() {
     code: '',
     semester: 'Spring',
     year: new Date().getFullYear(),
+    section: 'A',
     courseType: 'Theory' as 'Theory' | 'Lab',
   });
+  const [selectedAdminCourse, setSelectedAdminCourse] = useState<AdminCourse | null>(null);
+  const [isCustomCourse, setIsCustomCourse] = useState(false);
+  const [checkingDuplicate, setCheckingDuplicate] = useState(false);
+  const [duplicateError, setDuplicateError] = useState('');
   const [editFormData, setEditFormData] = useState({
     name: '',
     code: '',
     semester: 'Spring',
     year: new Date().getFullYear(),
+    section: 'A',
     courseType: 'Theory' as 'Theory' | 'Lab',
   });
   const [duplicateFormData, setDuplicateFormData] = useState({
@@ -62,6 +79,7 @@ export default function Dashboard() {
     code: '',
     semester: 'Spring',
     year: new Date().getFullYear(),
+    section: 'A',
     courseType: 'Theory' as 'Theory' | 'Lab',
   });
   const [error, setError] = useState('');
@@ -83,6 +101,63 @@ export default function Dashboard() {
       setLoading(false);
     }
   };
+
+  const handleCourseSelect = (course: AdminCourse | null) => {
+    if (course) {
+      setSelectedAdminCourse(course);
+      setIsCustomCourse(false);
+      setFormData({
+        ...formData,
+        name: course.courseTitle,
+        code: course.courseCode,
+      });
+      setDuplicateError('');
+    } else {
+      // Custom course option selected
+      setSelectedAdminCourse(null);
+      setIsCustomCourse(true);
+      setFormData({
+        ...formData,
+        name: '',
+        code: '',
+      });
+      setDuplicateError('');
+    }
+  };
+
+  const checkDuplicate = async () => {
+    if (!formData.code || !formData.semester || !formData.year || !formData.section) {
+      return;
+    }
+
+    setCheckingDuplicate(true);
+    setDuplicateError('');
+
+    try {
+      const response = await fetch(
+        `/api/courses/check-duplicate?code=${encodeURIComponent(formData.code)}&semester=${formData.semester}&year=${formData.year}&section=${encodeURIComponent(formData.section)}`
+      );
+      const data = await response.json();
+
+      if (data.exists) {
+        setDuplicateError(`This course (${formData.code}) already exists for ${formData.semester} ${formData.year}, Section ${formData.section}`);
+      }
+    } catch (err) {
+      console.error('Error checking duplicate:', err);
+    } finally {
+      setCheckingDuplicate(false);
+    }
+  };
+
+  // Check for duplicates when relevant fields change
+  useEffect(() => {
+    if (showAddModal && formData.code && formData.section) {
+      const timer = setTimeout(() => {
+        checkDuplicate();
+      }, 500); // Debounce
+      return () => clearTimeout(timer);
+    }
+  }, [formData.code, formData.semester, formData.year, formData.section, showAddModal]);
 
   const handleAddCourse = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -106,11 +181,15 @@ export default function Dashboard() {
       notify.course.created(data.course.name);
       setCourses([data.course, ...courses]);
       setShowAddModal(false);
+      setSelectedAdminCourse(null);
+      setIsCustomCourse(false);
+      setDuplicateError('');
       setFormData({
         name: '',
         code: '',
         semester: 'Spring',
         year: new Date().getFullYear(),
+        section: 'A',
         courseType: 'Theory',
       });
     } catch (err) {
@@ -196,6 +275,7 @@ export default function Dashboard() {
         code: '',
         semester: 'Spring',
         year: new Date().getFullYear(),
+        section: 'A',
         courseType: 'Theory',
       });
     } catch (err) {
@@ -210,6 +290,7 @@ export default function Dashboard() {
       code: course.code,
       semester: course.semester,
       year: course.year,
+      section: course.section,
       courseType: course.courseType,
     });
     setShowEditModal(true);
@@ -222,6 +303,7 @@ export default function Dashboard() {
       code: `${course.code}-COPY`,
       semester: course.semester,
       year: course.year,
+      section: course.section,
       courseType: course.courseType,
     });
     setShowDuplicateModal(true);
@@ -307,6 +389,7 @@ export default function Dashboard() {
           code: '',
           semester: 'Spring',
           year: new Date().getFullYear(),
+          section: 'A',
           courseType: 'Theory',
         });
         await fetchCourses(); // Refresh the course list
@@ -505,6 +588,7 @@ export default function Dashboard() {
                   <div className="flex items-center gap-2 text-sm mb-4">
                     <Badge variant="outline">{course.semester}</Badge>
                     <Badge variant="outline">{course.year}</Badge>
+                    <Badge variant="outline">Section {course.section}</Badge>
                   </div>
                 </CardContent>
                 <CardFooter>
@@ -521,10 +605,21 @@ export default function Dashboard() {
       </div>
 
       {/* Add Course Modal */}
-      <Dialog open={showAddModal} onOpenChange={setShowAddModal}>
-        <DialogContent className="max-w-md">
+      <Dialog open={showAddModal} onOpenChange={(open) => {
+        setShowAddModal(open);
+        if (!open) {
+          setSelectedAdminCourse(null);
+          setIsCustomCourse(false);
+          setDuplicateError('');
+          setError('');
+        }
+      }}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Add New Course</DialogTitle>
+            <DialogDescription>
+              Select a course from the catalogue or create a custom one
+            </DialogDescription>
           </DialogHeader>
 
           {error && (
@@ -533,64 +628,141 @@ export default function Dashboard() {
             </Alert>
           )}
 
+          {duplicateError && (
+            <Alert variant="destructive">
+              <AlertDescription>{duplicateError}</AlertDescription>
+            </Alert>
+          )}
+
           <form onSubmit={handleAddCourse} className="space-y-4">
+            {/* Course Selection from Catalogue */}
             <div className="space-y-2">
-              <Label htmlFor="course-name">Course Name</Label>
-              <Input
-                id="course-name"
-                type="text"
-                required
-                value={formData.name}
-                onChange={(e) =>
-                  setFormData({ ...formData, name: e.target.value })
-                }
-                placeholder="e.g., Data Structures"
+              <Label>Select from Course Catalogue</Label>
+              <CourseCombobox
+                onSelect={handleCourseSelect}
+                selectedCourse={selectedAdminCourse}
               />
+              <p className="text-xs text-muted-foreground">
+                Search by course code or title. Select &quot;Create custom course&quot; if not found.
+              </p>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="course-code">Course Code</Label>
-              <Input
-                id="course-code"
-                type="text"
-                required
-                value={formData.code}
-                onChange={(e) =>
-                  setFormData({ ...formData, code: e.target.value })
-                }
-                placeholder="e.g., CSE201"
-              />
+            {/* Show course info if selected from catalogue */}
+            {selectedAdminCourse && (
+              <Card className="bg-muted/50">
+                <CardHeader className="pb-3">
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                      <Info className="h-5 w-5 text-primary" />
+                    </div>
+                    <div className="flex-1">
+                      <CardTitle className="text-base">{selectedAdminCourse.courseTitle}</CardTitle>
+                      <CardDescription className="text-xs mt-1">
+                        {selectedAdminCourse.courseCode} • {selectedAdminCourse.creditHour} Credit Hour{selectedAdminCourse.creditHour > 1 ? 's' : ''}
+                      </CardDescription>
+                    </div>
+                  </div>
+                </CardHeader>
+                {selectedAdminCourse.prerequisite && (
+                  <CardContent className="pt-0 pb-3">
+                    <p className="text-xs text-muted-foreground">
+                      <strong>Prerequisite:</strong> {selectedAdminCourse.prerequisite}
+                    </p>
+                  </CardContent>
+                )}
+              </Card>
+            )}
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="course-name">Course Name</Label>
+                <Input
+                  id="course-name"
+                  type="text"
+                  required
+                  disabled={!isCustomCourse && selectedAdminCourse !== null}
+                  value={formData.name}
+                  onChange={(e) =>
+                    setFormData({ ...formData, name: e.target.value })
+                  }
+                  placeholder="e.g., Data Structures"
+                  className={!isCustomCourse && selectedAdminCourse ? 'bg-muted' : ''}
+                />
+                {!isCustomCourse && selectedAdminCourse && (
+                  <p className="text-xs text-muted-foreground">
+                    Auto-filled from catalogue
+                  </p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="course-code">Course Code</Label>
+                <Input
+                  id="course-code"
+                  type="text"
+                  required
+                  disabled={!isCustomCourse && selectedAdminCourse !== null}
+                  value={formData.code}
+                  onChange={(e) =>
+                    setFormData({ ...formData, code: e.target.value })
+                  }
+                  placeholder="e.g., CSE201"
+                  className={!isCustomCourse && selectedAdminCourse ? 'bg-muted' : ''}
+                />
+                {!isCustomCourse && selectedAdminCourse && (
+                  <p className="text-xs text-muted-foreground">
+                    Auto-filled from catalogue
+                  </p>
+                )}
+              </div>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="semester">Semester</Label>
-              <select
-                id="semester"
-                value={formData.semester}
-                onChange={(e) =>
-                  setFormData({ ...formData, semester: e.target.value })
-                }
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-              >
-                <option value="Spring">Spring</option>
-                <option value="Summer">Summer</option>
-                <option value="Fall">Fall</option>
-              </select>
-            </div>
+            <div className="grid grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="semester">Semester</Label>
+                <select
+                  id="semester"
+                  value={formData.semester}
+                  onChange={(e) =>
+                    setFormData({ ...formData, semester: e.target.value })
+                  }
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                >
+                  <option value="Spring">Spring</option>
+                  <option value="Summer">Summer</option>
+                  <option value="Fall">Fall</option>
+                </select>
+              </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="year">Year</Label>
-              <Input
-                id="year"
-                type="number"
-                required
-                min="2000"
-                max="2100"
-                value={formData.year}
-                onChange={(e) =>
-                  setFormData({ ...formData, year: parseInt(e.target.value) })
-                }
-              />
+              <div className="space-y-2">
+                <Label htmlFor="year">Year</Label>
+                <Input
+                  id="year"
+                  type="number"
+                  required
+                  min="2000"
+                  max="2100"
+                  value={formData.year}
+                  onChange={(e) =>
+                    setFormData({ ...formData, year: parseInt(e.target.value) })
+                  }
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="section">Section</Label>
+                <Input
+                  id="section"
+                  type="text"
+                  required
+                  value={formData.section}
+                  onChange={(e) =>
+                    setFormData({ ...formData, section: e.target.value.toUpperCase() })
+                  }
+                  placeholder="e.g., A"
+                  maxLength={5}
+                />
+              </div>
             </div>
 
             <div className="space-y-2">
@@ -620,11 +792,26 @@ export default function Dashboard() {
                 onClick={() => {
                   setShowAddModal(false);
                   setError('');
+                  setDuplicateError('');
+                  setSelectedAdminCourse(null);
+                  setIsCustomCourse(false);
                 }}
               >
                 Cancel
               </Button>
-              <Button type="submit">Create Course</Button>
+              <Button 
+                type="submit" 
+                disabled={!!duplicateError || checkingDuplicate}
+              >
+                {checkingDuplicate ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Checking...
+                  </>
+                ) : (
+                  'Create Course'
+                )}
+              </Button>
             </DialogFooter>
           </form>
         </DialogContent>
@@ -700,6 +887,21 @@ export default function Dashboard() {
                 onChange={(e) =>
                   setEditFormData({ ...editFormData, year: parseInt(e.target.value) })
                 }
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="edit-section">Section</Label>
+              <Input
+                id="edit-section"
+                type="text"
+                required
+                value={editFormData.section}
+                onChange={(e) =>
+                  setEditFormData({ ...editFormData, section: e.target.value.toUpperCase() })
+                }
+                placeholder="e.g., A"
+                maxLength={5}
               />
             </div>
 
@@ -873,6 +1075,21 @@ export default function Dashboard() {
                 onChange={(e) =>
                   setDuplicateFormData({ ...duplicateFormData, year: parseInt(e.target.value) })
                 }
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="dup-section">Section</Label>
+              <Input
+                id="dup-section"
+                type="text"
+                required
+                value={duplicateFormData.section}
+                onChange={(e) =>
+                  setDuplicateFormData({ ...duplicateFormData, section: e.target.value.toUpperCase() })
+                }
+                placeholder="e.g., A"
+                maxLength={5}
               />
             </div>
 

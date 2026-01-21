@@ -37,6 +37,7 @@ function AdminDashboardContent() {
   const [loading, setLoading] = useState(true);
   const [authenticated, setAuthenticated] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
+  const [sidebarOpen, setSidebarOpen] = useState(true);
 
   useEffect(() => {
     checkAuth();
@@ -86,30 +87,30 @@ function AdminDashboardContent() {
   }
 
   return (
-    <div className="min-h-screen flex">
-      {/* Sidebar */}
-      <AdminSidebar items={sidebarItems} title="Admin Portal" />
-
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col">
-        {/* Top Navigation Bar */}
-        <nav className="border-b bg-background sticky top-0 z-30">
-          <div className="flex items-center justify-between px-6 py-4">
+    <div className="min-h-screen">
+      {/* Navbar */}
+      <nav className="sticky top-0 z-50 backdrop-blur-md bg-background/80 border-b">
+        <div className="max-w-7xl mx-auto px-4 py-4">
+          <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <Image
                 src="/ulab.svg"
                 alt="ULAB Logo"
-                width={40}
-                height={40}
-                className="drop-shadow-lg"
+                width={100}
+                height={100}
+                className="drop-shadow-lg cursor-pointer hover:opacity-80 transition-opacity"
               />
               <div>
-                <h1 className="text-xl font-bold">Admin Dashboard</h1>
-                <p className="text-sm text-muted-foreground">Marks Management System</p>
+                <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">
+                  Admin Portal
+                </h1>
+                <p className="text-xs text-muted-foreground">
+                  Marks Management System
+                </p>
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3">
               <ThemeToggle />
               <Button variant="outline" size="sm" asChild>
                 <Link href="/admin/settings">
@@ -123,13 +124,26 @@ function AdminDashboardContent() {
               </Button>
             </div>
           </div>
-        </nav>
+        </div>
+      </nav>
 
-        {/* Content Area */}
-        <main className="flex-1 p-6 overflow-auto">
-          {activeTab === 'overview' && <OverviewSection />}
-          {activeTab === 'courses' && <CourseManagement />}
-          {activeTab === 'resources' && <ResourcesManager />}
+      {/* Sidebar + Main Content Layout */}
+      <div className="flex h-[calc(100vh-88px)]">
+        {/* Left Sidebar */}
+        <AdminSidebar 
+          items={sidebarItems} 
+          title="Menu"
+          isOpen={sidebarOpen}
+          onToggle={() => setSidebarOpen(!sidebarOpen)}
+        />
+
+        {/* Main Content Area */}
+        <main className="flex-1 overflow-y-auto">
+          <div className="max-w-7xl mx-auto p-6">
+            {activeTab === 'overview' && <OverviewSection />}
+            {activeTab === 'courses' && <CourseManagement />}
+            {activeTab === 'resources' && <ResourcesManager />}
+          </div>
         </main>
       </div>
     </div>
@@ -137,40 +151,6 @@ function AdminDashboardContent() {
 }
 
 export default function AdminDashboard() {
-  const router = useRouter();
-  const [loading, setLoading] = useState(true);
-  const [authenticated, setAuthenticated] = useState(false);
-
-  useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        const response = await fetch('/api/admin/verify');
-        if (response.ok) {
-          setAuthenticated(true);
-        } else {
-          router.push('/admin/signin');
-        }
-      } catch (err) {
-        router.push('/admin/signin');
-      } finally {
-        setLoading(false);
-      }
-    };
-    checkAuth();
-  }, [router]);
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
-  }
-
-  if (!authenticated) {
-    return null;
-  }
-
   return (
     <Suspense fallback={
       <div className="min-h-screen flex items-center justify-center">
