@@ -24,7 +24,7 @@ export async function GET(
     const ext = filePath.split('.').pop()?.toLowerCase();
     const contentType = getContentType(ext || '');
 
-    return new NextResponse(buffer, {
+    return new NextResponse(Buffer.from(buffer), {
       headers: {
         'Content-Type': contentType,
         'Content-Disposition': `attachment; filename="${fileInfo.name}"`,

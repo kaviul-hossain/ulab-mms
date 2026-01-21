@@ -1,17 +1,19 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useEditor, EditorContent } from '@tiptap/react';
+import StarterKit from '@tiptap/starter-kit';
+import Link from '@tiptap/extension-link';
+import Placeholder from '@tiptap/extension-placeholder';
 import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
 import { 
   Bold, 
   Italic, 
   List, 
   ListOrdered, 
-  Type,
-  AlignLeft,
-  AlignCenter,
-  AlignRight
+  Heading2,
+  Link2,
+  Undo,
+  Redo
 } from 'lucide-react';
 
 interface RichTextEditorProps {
@@ -27,42 +29,43 @@ export default function RichTextEditor({
   placeholder = 'Enter content...',
   className = ''
 }: RichTextEditorProps) {
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const editor = useEditor({
+    extensions: [
+      StarterKit,
+      Link.configure({
+        openOnClick: false,
+        HTMLAttributes: {
+          class: 'text-primary underline underline-offset-4',
+        },
+      }),
+      Placeholder.configure({
+        placeholder,
+      }),
+    ],
+    content: value,
+    immediatelyRender: false,
+    onUpdate: ({ editor }) => {
+      onChange(editor.getHTML());
+    },
+    editorProps: {
+      attributes: {
+        class: 'prose prose-sm dark:prose-invert max-w-none focus:outline-none min-h-[200px] px-4 py-3',
+      },
+    },
+  });
 
-  const insertText = (before: string, after: string = '') => {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const selectedText = value.substring(start, end);
-    const newText = value.substring(0, start) + before + selectedText + after + value.substring(end);
+  const addLink = () => {
+    if (!editor) return;
     
-    onChange(newText);
-    
-    // Set cursor position after insertion
-    setTimeout(() => {
-      textarea.focus();
-      textarea.setSelectionRange(start + before.length, end + before.length);
-    }, 0);
+    const url = window.prompt('Enter URL:');
+    if (url) {
+      editor.chain().focus().setLink({ href: url }).run();
+    }
   };
 
-  const insertLinePrefix = (prefix: string) => {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-
-    const start = textarea.selectionStart;
-    const beforeCursor = value.substring(0, start);
-    const lineStart = beforeCursor.lastIndexOf('\n') + 1;
-    
-    const newText = value.substring(0, lineStart) + prefix + value.substring(lineStart);
-    onChange(newText);
-    
-    setTimeout(() => {
-      textarea.focus();
-      textarea.setSelectionRange(start + prefix.length, start + prefix.length);
-    }, 0);
-  };
+  if (!editor) {
+    return null;
+  }
 
   return (
     <div className={`border rounded-md ${className}`}>
@@ -70,65 +73,90 @@ export default function RichTextEditor({
       <div className="border-b bg-muted/50 p-2 flex items-center gap-1 flex-wrap">
         <Button
           type="button"
-          variant="ghost"
+          variant={editor.isActive('bold') ? 'secondary' : 'ghost'}
           size="sm"
-          onClick={() => insertText('**', '**')}
-          title="Bold"
+          onClick={() => editor.chain().focus().toggleBold().run()}
+          title="Bold (Ctrl+B)"
         >
           <Bold className="h-4 w-4" />
         </Button>
         <Button
           type="button"
-          variant="ghost"
+          variant={editor.isActive('italic') ? 'secondary' : 'ghost'}
           size="sm"
-          onClick={() => insertText('*', '*')}
-          title="Italic"
+          onClick={() => editor.chain().focus().toggleItalic().run()}
+          title="Italic (Ctrl+I)"
         >
           <Italic className="h-4 w-4" />
         </Button>
         <div className="w-px h-6 bg-border mx-1" />
         <Button
           type="button"
-          variant="ghost"
+          variant={editor.isActive('heading', { level: 2 }) ? 'secondary' : 'ghost'}
           size="sm"
-          onClick={() => insertLinePrefix('# ')}
+          onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
           title="Heading"
         >
-          <Type className="h-4 w-4" />
+          <Heading2 className="h-4 w-4" />
         </Button>
         <div className="w-px h-6 bg-border mx-1" />
         <Button
           type="button"
-          variant="ghost"
+          variant={editor.isActive('bulletList') ? 'secondary' : 'ghost'}
           size="sm"
-          onClick={() => insertLinePrefix('• ')}
+          onClick={() => editor.chain().focus().toggleBulletList().run()}
           title="Bullet List"
         >
           <List className="h-4 w-4" />
         </Button>
         <Button
           type="button"
-          variant="ghost"
+          variant={editor.isActive('orderedList') ? 'secondary' : 'ghost'}
           size="sm"
-          onClick={() => insertLinePrefix('1. ')}
+          onClick={() => editor.chain().focus().toggleOrderedList().run()}
           title="Numbered List"
         >
           <ListOrdered className="h-4 w-4" />
         </Button>
+        <div className="w-px h-6 bg-border mx-1" />
+        <Button
+          type="button"
+          variant={editor.isActive('link') ? 'secondary' : 'ghost'}
+          size="sm"
+          onClick={addLink}
+          title="Add Link"
+        >
+          <Link2 className="h-4 w-4" />
+        </Button>
+        <div className="w-px h-6 bg-border mx-1" />
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={() => editor.chain().focus().undo().run()}
+          disabled={!editor.can().undo()}
+          title="Undo"
+        >
+          <Undo className="h-4 w-4" />
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={() => editor.chain().focus().redo().run()}
+          disabled={!editor.can().redo()}
+          title="Redo"
+        >
+          <Redo className="h-4 w-4" />
+        </Button>
       </div>
 
-      {/* Text Area */}
-      <Textarea
-        ref={textareaRef}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        className="min-h-[200px] border-0 focus-visible:ring-0 resize-y"
-      />
+      {/* Editor Content */}
+      <EditorContent editor={editor} />
 
       {/* Help Text */}
       <div className="border-t bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-        Markdown supported: **bold**, *italic*, # Heading, • Lists
+        Shortcuts: <strong>Ctrl+B</strong> Bold, <strong>Ctrl+I</strong> Italic, <strong>#</strong> Heading
       </div>
     </div>
   );

@@ -14,7 +14,12 @@ import {
   CheckCircle2,
   XCircle,
   Search,
-  X
+  X,
+  Eye,
+  GraduationCap,
+  Clock,
+  FileText,
+  List
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -25,6 +30,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { VisuallyHidden } from '@/components/ui/visually-hidden';
 import RichTextEditor from '@/app/components/RichTextEditor';
 import { notify } from '@/app/utils/notifications';
 import { toast } from 'sonner';
@@ -59,7 +65,9 @@ export default function CourseManagement() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [showImportResultModal, setShowImportResultModal] = useState(false);
+  const [showViewModal, setShowViewModal] = useState(false);
   const [editingCourse, setEditingCourse] = useState<AdminCourse | null>(null);
+  const [viewingCourse, setViewingCourse] = useState<AdminCourse | null>(null);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importMode, setImportMode] = useState<'replace' | 'update'>('update');
   const [importing, setImporting] = useState(false);
@@ -440,6 +448,17 @@ export default function CourseManagement() {
                   <TableCell className="text-muted-foreground">{course.prerequisite || 'N/A'}</TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setViewingCourse(course);
+                          setShowViewModal(true);
+                        }}
+                        title="View Details"
+                      >
+                        <Eye className="h-4 w-4" />
+                      </Button>
                       <Button
                         variant="ghost"
                         size="sm"
@@ -843,6 +862,180 @@ export default function CourseManagement() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* View Course Detail Modal */}
+      <Dialog open={showViewModal} onOpenChange={setShowViewModal}>
+        <DialogContent className="max-w-[95vw] max-h-[95vh] h-[95vh] p-0 overflow-hidden">
+          <DialogHeader className="sr-only">
+            <VisuallyHidden>
+              <DialogTitle>Course Details</DialogTitle>
+            </VisuallyHidden>
+          </DialogHeader>
+          {viewingCourse && (
+            <div className="flex flex-col h-full overflow-hidden">
+              {/* Header Bar */}
+              <div className="flex items-center justify-between px-6 py-4 border-b bg-muted/30 flex-shrink-0">
+                <div className="flex items-center gap-3 min-w-0 flex-1">
+                  <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-blue-600 to-cyan-600 flex items-center justify-center flex-shrink-0">
+                    <GraduationCap className="h-6 w-6 text-white" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <h2 className="text-xl font-bold truncate">{viewingCourse.courseCode}</h2>
+                    <p className="text-sm text-muted-foreground truncate">{viewingCourse.courseTitle}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0 mr-8">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setShowViewModal(false);
+                      openEditModal(viewingCourse);
+                    }}
+                  >
+                    <Edit className="h-4 w-4 mr-2" />
+                    Edit
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setShowViewModal(false);
+                      handleDeleteCourse(viewingCourse._id, viewingCourse.courseCode);
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4 mr-2 text-destructive" />
+                    Delete
+                  </Button>
+                </div>
+              </div>
+
+              {/* Content Area */}
+              <div className="flex-1 flex overflow-hidden min-h-0">
+                {/* Left Side - Course Information */}
+                <div className="w-1/2 p-6 overflow-y-auto border-r space-y-4 min-w-0">
+                  {/* Basic Info Card */}
+                  <Card className="overflow-hidden">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2 text-lg">
+                        <BookOpen className="h-5 w-5 text-primary flex-shrink-0" />
+                        <span className="truncate">Course Information</span>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="min-w-0">
+                          <Label className="text-xs text-muted-foreground">Course Code</Label>
+                          <p className="text-lg font-mono font-bold text-primary mt-1 break-all">
+                            {viewingCourse.courseCode}
+                          </p>
+                        </div>
+                        <div className="min-w-0">
+                          <Label className="text-xs text-muted-foreground">Credit Hour</Label>
+                          <p className="text-lg font-semibold mt-1">
+                            {viewingCourse.creditHour}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="min-w-0">
+                        <Label className="text-xs text-muted-foreground">Course Title</Label>
+                        <p className="text-base font-medium mt-1 break-words">
+                          {viewingCourse.courseTitle}
+                        </p>
+                      </div>
+                      <div className="min-w-0">
+                        <Label className="text-xs text-muted-foreground flex items-center gap-1">
+                          <List className="h-3 w-3 flex-shrink-0" />
+                          Prerequisite
+                        </Label>
+                        <p className="text-sm mt-1 break-words">
+                          {viewingCourse.prerequisite || 'N/A'}
+                        </p>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Content Card */}
+                  {viewingCourse.content && (
+                    <Card className="overflow-hidden">
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2 text-lg">
+                          <FileText className="h-5 w-5 text-primary flex-shrink-0" />
+                          <span className="truncate">Course Content</span>
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="overflow-hidden">
+                        <div className="prose prose-sm dark:prose-invert max-w-none break-words overflow-wrap-anywhere">
+                          <HTMLContentRenderer content={viewingCourse.content} />
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* Metadata Card */}
+                  <Card className="overflow-hidden">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2 text-lg">
+                        <Clock className="h-5 w-5 text-primary flex-shrink-0" />
+                        <span className="truncate">Metadata</span>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-2 text-sm">
+                      {viewingCourse.createdAt && (
+                        <div className="flex justify-between gap-2 flex-wrap">
+                          <span className="text-muted-foreground flex-shrink-0">Created:</span>
+                          <span className="text-right break-words">{new Date(viewingCourse.createdAt).toLocaleDateString('en-US', {
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}</span>
+                        </div>
+                      )}
+                      {viewingCourse.updatedAt && (
+                        <div className="flex justify-between gap-2 flex-wrap">
+                          <span className="text-muted-foreground flex-shrink-0">Last Updated:</span>
+                          <span className="text-right break-words">{new Date(viewingCourse.updatedAt).toLocaleDateString('en-US', {
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}</span>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Right Side - Placeholder */}
+                <div className="w-1/2 p-6 flex items-center justify-center bg-muted/20 overflow-hidden">
+                  <div className="text-center">
+                    <div className="w-24 h-24 mx-auto mb-4 rounded-full bg-muted flex items-center justify-center">
+                      <FileText className="h-12 w-12 text-muted-foreground opacity-50" />
+                    </div>
+                    <h3 className="text-xl font-semibold mb-2">Coming Soon</h3>
+                    <p className="text-muted-foreground">
+                      Additional features will be available here
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
+  );
+}
+
+// HTML Content Renderer Component
+function HTMLContentRenderer({ content }: { content: string }) {
+  return (
+    <div 
+      className="prose prose-sm dark:prose-invert max-w-none"
+      dangerouslySetInnerHTML={{ __html: content }} 
+    />
   );
 }

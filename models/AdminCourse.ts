@@ -17,7 +17,6 @@ const AdminCourseSchema: Schema = new Schema(
       required: [true, 'Please provide a course code'],
       trim: true,
       unique: true,
-      index: true,
     },
     courseTitle: {
       type: String,
@@ -45,9 +44,6 @@ const AdminCourseSchema: Schema = new Schema(
     timestamps: true,
   }
 );
-
-// Prevent duplicate course codes
-AdminCourseSchema.index({ courseCode: 1 }, { unique: true });
 
 const AdminCourse: Model<IAdminCourse> =
   mongoose.models.AdminCourse || mongoose.model<IAdminCourse>('AdminCourse', AdminCourseSchema);
