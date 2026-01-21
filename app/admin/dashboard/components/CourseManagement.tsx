@@ -19,7 +19,8 @@ import {
   GraduationCap,
   Clock,
   FileText,
-  List
+  List,
+  Trash
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -66,6 +67,9 @@ export default function CourseManagement() {
   const [showImportModal, setShowImportModal] = useState(false);
   const [showImportResultModal, setShowImportResultModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
+  const [showDeleteAllModal, setShowDeleteAllModal] = useState(false);
+  const [deleteAllConfirmText, setDeleteAllConfirmText] = useState('');
+  const [deletingAll, setDeletingAll] = useState(false);
   const [editingCourse, setEditingCourse] = useState<AdminCourse | null>(null);
   const [viewingCourse, setViewingCourse] = useState<AdminCourse | null>(null);
   const [importFile, setImportFile] = useState<File | null>(null);
@@ -193,6 +197,36 @@ export default function CourseManagement() {
     } catch (error) {
       console.error('Delete course error:', error);
       toast.error('Failed to delete course');
+    }
+  };
+
+  const handleDeleteAllCourses = async () => {
+    if (deleteAllConfirmText !== 'DELETE ALL') {
+      toast.error('Please type "DELETE ALL" to confirm');
+      return;
+    }
+
+    setDeletingAll(true);
+    try {
+      const response = await fetch('/api/admin/courses/delete-all', {
+        method: 'DELETE',
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        toast.success(`Successfully deleted ${data.count} courses`);
+        setShowDeleteAllModal(false);
+        setDeleteAllConfirmText('');
+        fetchCourses();
+      } else {
+        toast.error(data.error || 'Failed to delete courses');
+      }
+    } catch (error) {
+      console.error('Delete all courses error:', error);
+      toast.error('Failed to delete courses');
+    } finally {
+      setDeletingAll(false);
     }
   };
 
@@ -355,6 +389,14 @@ export default function CourseManagement() {
           <p className="text-muted-foreground">Manage global course catalogue</p>
         </div>
         <div className="flex items-center gap-2">
+          <Button 
+            variant="destructive" 
+            onClick={() => setShowDeleteAllModal(true)}
+            disabled={courses.length === 0}
+          >
+            <Trash className="h-4 w-4 mr-2" />
+            Delete All
+          </Button>
           <Button variant="outline" onClick={handleExportTemplate}>
             <FileSpreadsheet className="h-4 w-4 mr-2" />
             Download Template
@@ -1024,6 +1066,80 @@ export default function CourseManagement() {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete All Confirmation Modal */}
+      <Dialog open={showDeleteAllModal} onOpenChange={setShowDeleteAllModal}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="h-5 w-5" />
+              Delete All Courses
+            </DialogTitle>
+            <DialogDescription>
+              This will permanently delete all {courses.length} courses from the catalogue. This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+
+          <Alert variant="destructive">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>
+              <strong>Warning:</strong> This will remove all course data permanently.
+            </AlertDescription>
+          </Alert>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="delete-confirm">
+                Type <strong>DELETE ALL</strong> to confirm
+              </Label>
+              <Input
+                id="delete-confirm"
+                value={deleteAllConfirmText}
+                onChange={(e) => setDeleteAllConfirmText(e.target.value)}
+                placeholder="DELETE ALL"
+                className="font-mono"
+              />
+            </div>
+
+            <div className="text-sm text-muted-foreground space-y-1">
+              <p>• All {courses.length} courses will be deleted</p>
+              <p>• This action is irreversible</p>
+              <p>• Teachers can still use their existing courses</p>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setShowDeleteAllModal(false);
+                setDeleteAllConfirmText('');
+              }}
+              disabled={deletingAll}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteAllCourses}
+              disabled={deleteAllConfirmText !== 'DELETE ALL' || deletingAll}
+            >
+              {deletingAll ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                <>
+                  <Trash className="h-4 w-4 mr-2" />
+                  Delete All Courses
+                </>
+              )}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

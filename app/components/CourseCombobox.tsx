@@ -88,7 +88,16 @@ export function CourseCombobox({ selectedCourse, onSelect, disabled = false }: C
             />
           </div>
           
-          <div className="max-h-[300px] overflow-y-auto">
+          <div 
+            className="max-h-[300px] overflow-y-auto overscroll-contain"
+            style={{ 
+              scrollBehavior: 'smooth',
+              WebkitOverflowScrolling: 'touch'
+            }}
+            onWheel={(e) => {
+              e.stopPropagation();
+            }}
+          >
             {loading ? (
               <div className="p-4 text-center text-sm text-muted-foreground">
                 Loading courses...
