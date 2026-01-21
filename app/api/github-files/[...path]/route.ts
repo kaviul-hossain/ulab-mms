@@ -24,11 +24,14 @@ export async function GET(
     const ext = filePath.split('.').pop()?.toLowerCase();
     const contentType = getContentType(ext || '');
 
-    return new NextResponse(buffer, {
+    // Convert buffer to Uint8Array for NextResponse compatibility
+    const uint8Array = new Uint8Array(buffer);
+
+    return new NextResponse(uint8Array, {
       headers: {
         'Content-Type': contentType,
         'Content-Disposition': `attachment; filename="${fileInfo.name}"`,
-        'Content-Length': buffer.length.toString(),
+        'Content-Length': uint8Array.length.toString(),
       },
     });
   } catch (error: any) {
