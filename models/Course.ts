@@ -5,6 +5,7 @@ export interface ICourse extends Document {
   code: string;
   semester: string;
   year: number;
+  section: string;
   courseType: 'Theory' | 'Lab';
   showFinalGrade: boolean;
   quizAggregation: 'average' | 'best'; // How to aggregate quiz marks
@@ -41,6 +42,12 @@ const CourseSchema: Schema = new Schema(
       required: [true, 'Please provide a year'],
       min: 2000,
       max: 2100,
+    },
+    section: {
+      type: String,
+      required: [true, 'Please provide a section'],
+      trim: true,
+      default: 'A',
     },
     courseType: {
       type: String,
@@ -95,8 +102,8 @@ const CourseSchema: Schema = new Schema(
   }
 );
 
-// Create compound index for course code and user
-CourseSchema.index({ code: 1, userId: 1 });
+// Create compound index for duplicate prevention: same code + semester + year + section for same user
+CourseSchema.index({ code: 1, semester: 1, year: 1, section: 1, userId: 1 }, { unique: true });
 
 const Course: Model<ICourse> =
   mongoose.models.Course || mongoose.model<ICourse>('Course', CourseSchema);
