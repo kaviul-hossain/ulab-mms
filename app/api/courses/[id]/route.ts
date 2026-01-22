@@ -76,6 +76,7 @@ export async function PUT(
       code, 
       semester, 
       year, 
+      section, 
       courseType, 
       showFinalGrade,
       quizAggregation,
@@ -93,6 +94,7 @@ export async function PUT(
     if (code !== undefined) updateData.code = code;
     if (semester !== undefined) updateData.semester = semester;
     if (year !== undefined) updateData.year = year;
+    if (section !== undefined) updateData.section = section;
     
     // Only update courseType if provided (prevent accidental changes)
     if (courseType !== undefined) {
