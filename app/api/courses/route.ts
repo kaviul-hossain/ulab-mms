@@ -46,10 +46,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { name, code, semester, year, courseType } = await request.json();
+    const { name, code, semester, year, section, courseType } = await request.json();
 
     // Validation
-    if (!name || !code || !semester || !year || !courseType) {
+    if (!name || !code || !semester || !year || !section || !courseType) {
       return NextResponse.json(
         { error: 'Please provide all required fields' },
         { status: 400 }
@@ -77,6 +77,7 @@ export async function POST(request: NextRequest) {
       code,
       semester,
       year,
+      section,
       courseType,
       userId: session.user.id,
     });
@@ -148,6 +149,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ course }, { status: 201 });
   } catch (error: any) {
     console.error('Create course error:', error);
+    
+    // Handle duplicate key error
+    if (error.code === 11000) {
+      return NextResponse.json(
+        { error: `A course with code "${code}" already exists for ${semester} ${year}, Section ${section}` },
+        { status: 400 }
+      );
+    }
+    
     return NextResponse.json(
       { error: error.message || 'Internal server error' },
       { status: 500 }
