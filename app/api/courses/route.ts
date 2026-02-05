@@ -20,14 +20,35 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const archived = searchParams.get('archived') === 'true';
 
-    const courses = await Course.find({ 
-      userId: session.user.id,
+    // Get user's courses AND capstone courses (created by any user)
+    const query = {
       isArchived: archived ? true : { $ne: true }
+    };
+    
+    // Get user's own courses
+    let courses = await Course.find({ 
+      ...query,
+      userId: session.user.id,
     }).sort({
       createdAt: -1,
     });
 
-    return NextResponse.json({ courses }, { status: 200 });
+    // Also get capstone courses (check if they exist from any user)
+    const capstoneCodes = ['CSE4098A', 'CSE4098B', 'CSE4098C', 'CSE499'];
+    const capstoneCoursesExists = await Course.find({ 
+      code: { $in: capstoneCodes },
+      ...query
+    });
+
+    // Combine and remove duplicates
+    const combinedCourses = [...courses];
+    for (const capstoneCourse of capstoneCoursesExists) {
+      if (!combinedCourses.find(c => c.code === capstoneCourse.code)) {
+        combinedCourses.push(capstoneCourse);
+      }
+    }
+
+    return NextResponse.json({ courses: combinedCourses }, { status: 200 });
   } catch (error: any) {
     console.error('Get courses error:', error);
     return NextResponse.json(
@@ -152,8 +173,9 @@ export async function POST(request: NextRequest) {
     
     // Handle duplicate key error
     if (error.code === 11000) {
+      const { code: courseCode, semester: sem, year: yr, section: sec } = await request.json();
       return NextResponse.json(
-        { error: `A course with code "${code}" already exists for ${semester} ${year}, Section ${section}` },
+        { error: `A course with code "${courseCode}" already exists for ${sem} ${yr}, Section ${sec}` },
         { status: 400 }
       );
     }

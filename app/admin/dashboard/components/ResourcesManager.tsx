@@ -28,6 +28,7 @@ export default function ResourcesManager() {
   const [showCreateFolder, setShowCreateFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
   const [creatingFolder, setCreatingFolder] = useState(false);
+  const [deletingPath, setDeletingPath] = useState<string | null>(null);
 
   useEffect(() => {
     loadFiles();
@@ -52,33 +53,50 @@ export default function ResourcesManager() {
   };
 
   const handleUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
+    const fileList = event.target.files;
+    if (!fileList || fileList.length === 0) return;
 
     setUploading(true);
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('path', currentPath);
+    let successCount = 0;
+    let failCount = 0;
 
     try {
-      const response = await fetch('/api/github-files', {
-        method: 'POST',
-        body: formData,
-      });
+      for (let i = 0; i < fileList.length; i++) {
+        const file = fileList[i];
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('path', currentPath);
 
-      const data = await response.json();
+        try {
+          const response = await fetch('/api/github-files', {
+            method: 'POST',
+            body: formData,
+          });
 
-      if (data.success) {
-        toast.success(`File "${file.name}" uploaded successfully!`);
-        loadFiles();
-        event.target.value = '';
-      } else {
-        toast.error(data.error);
+          const data = await response.json();
+
+          if (data.success) {
+            successCount++;
+          } else {
+            failCount++;
+            console.error(`Failed to upload ${file.name}:`, data.error);
+          }
+        } catch (err: any) {
+          failCount++;
+          console.error(`Error uploading ${file.name}:`, err);
+        }
       }
-    } catch (err: any) {
-      toast.error('Failed to upload file');
+
+      if (successCount > 0) {
+        toast.success(`${successCount} file${successCount > 1 ? 's' : ''} uploaded successfully!`);
+        loadFiles();
+      }
+      if (failCount > 0) {
+        toast.error(`Failed to upload ${failCount} file${failCount > 1 ? 's' : ''}`);
+      }
     } finally {
       setUploading(false);
+      event.target.value = '';
     }
   };
 
@@ -113,23 +131,44 @@ export default function ResourcesManager() {
       return;
     }
 
+    setDeletingPath(file.path);
     try {
       toast.loading('Deleting...', { id: 'delete' });
       
-      const response = await fetch(`/api/github-files/${file.path}`, {
-        method: 'DELETE',
-      });
+      if (file.type === 'dir') {
+        // For directories, delete the .gitkeep file
+        const gitkeepPath = `${file.path}/.gitkeep`;
+        const response = await fetch(`/api/github-files/${encodeURIComponent(gitkeepPath)}`, {
+          method: 'DELETE',
+        });
 
-      const data = await response.json();
+        const data = await response.json();
 
-      if (data.success) {
-        toast.success('File deleted successfully!', { id: 'delete' });
-        loadFiles();
+        if (data.success) {
+          toast.success('Folder deleted successfully!', { id: 'delete' });
+          loadFiles();
+        } else {
+          toast.error(data.error, { id: 'delete' });
+        }
       } else {
-        toast.error(data.error, { id: 'delete' });
+        // For files, delete normally
+        const response = await fetch(`/api/github-files/${encodeURIComponent(file.path)}`, {
+          method: 'DELETE',
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          toast.success('File deleted successfully!', { id: 'delete' });
+          loadFiles();
+        } else {
+          toast.error(data.error, { id: 'delete' });
+        }
       }
     } catch (err: any) {
       toast.error('Failed to delete file', { id: 'delete' });
+    } finally {
+      setDeletingPath(null);
     }
   };
 
@@ -211,7 +250,7 @@ export default function ResourcesManager() {
                 <Info className="h-4 w-4 text-muted-foreground cursor-help" />
               </TooltipTrigger>
               <TooltipContent className="max-w-xs">
-                <p>Manage common resources shared across all courses. All files are stored in the 'common' folder on GitHub.</p>
+                <p>Manage common resources shared across all courses. Create folders to organize files, and upload files to any folder. All files are stored on GitHub.</p>
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
@@ -247,7 +286,7 @@ export default function ResourcesManager() {
                 >
                   <span>
                     <Upload className="h-4 w-4 mr-2" />
-                    {uploading ? 'Uploading...' : 'Upload File'}
+                    {uploading ? 'Uploading...' : 'Upload Files'}
                   </span>
                 </Button>
               </label>
@@ -256,11 +295,31 @@ export default function ResourcesManager() {
                 type="file"
                 onChange={handleUpload}
                 className="hidden"
+                multiple
               />
             </div>
           </CardTitle>
         </CardHeader>
         <CardContent>
+          {/* Breadcrumb Navigation */}
+          <div className="mb-4 flex items-center gap-2">
+            <Button 
+              onClick={() => setCurrentPath('common')}
+              variant={currentPath === 'common' ? 'default' : 'outline'}
+              size="sm"
+            >
+              Common
+            </Button>
+            {currentPath !== 'common' && (
+              <>
+                <span className="text-muted-foreground">/</span>
+                <span className="text-sm font-medium">
+                  {currentPath.split('/').filter(Boolean).slice(1).join(' / ')}
+                </span>
+              </>
+            )}
+          </div>
+
           {/* Navigation */}
           {canNavigateUp && (
             <div className="mb-4">
@@ -280,7 +339,7 @@ export default function ResourcesManager() {
             <div className="text-center py-12 text-muted-foreground">
               <Folder className="h-12 w-12 mx-auto mb-2 opacity-50" />
               <p>No files in this directory</p>
-              <p className="text-sm">Upload a file to get started</p>
+              <p className="text-sm">Upload a file or create a folder to get started</p>
             </div>
           ) : (
             <div className="space-y-2">
@@ -291,9 +350,9 @@ export default function ResourcesManager() {
                 >
                   <div className="flex items-center gap-3 flex-1">
                     {file.type === 'dir' ? (
-                      <Folder className="h-5 w-5 text-blue-500" />
+                      <Folder className="h-5 w-5 text-blue-500 flex-shrink-0" />
                     ) : (
-                      <File className="h-5 w-5 text-gray-500" />
+                      <File className="h-5 w-5 text-gray-500 flex-shrink-0" />
                     )}
                     <div className="flex-1 min-w-0">
                       <button
@@ -301,6 +360,7 @@ export default function ResourcesManager() {
                         className={`font-medium truncate block ${
                           file.type === 'dir' ? 'hover:underline text-blue-600' : ''
                         }`}
+                        disabled={file.type !== 'dir'}
                       >
                         {file.name}
                       </button>
@@ -310,24 +370,30 @@ export default function ResourcesManager() {
                     </div>
                   </div>
                   
-                  {file.type === 'file' && (
-                    <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2">
+                    {file.type === 'file' && (
                       <Button
                         size="sm"
                         variant="outline"
                         onClick={() => handleDownload(file)}
+                        disabled={deletingPath === file.path}
                       >
                         <Download className="h-4 w-4" />
                       </Button>
-                      <Button
-                        size="sm"
-                        variant="destructive"
-                        onClick={() => handleDelete(file)}
-                      >
+                    )}
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      onClick={() => handleDelete(file)}
+                      disabled={deletingPath === file.path}
+                    >
+                      {deletingPath === file.path ? (
+                        <RefreshCw className="h-4 w-4 animate-spin" />
+                      ) : (
                         <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  )}
+                      )}
+                    </Button>
+                  </div>
                 </div>
               ))}
             </div>

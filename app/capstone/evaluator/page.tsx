@@ -104,8 +104,8 @@ export default function EvaluatorCapstone() {
                   asChild 
                   className={`w-full ${category.buttonColor}`}
                 >
-                  <Link href={`/capstone/evaluator/${category.code}`}>
-                    Submit Marks
+                  <Link href={`/capstone/evaluator/${category.code}/report`}>
+                    Report
                   </Link>
                 </Button>
               </CardContent>

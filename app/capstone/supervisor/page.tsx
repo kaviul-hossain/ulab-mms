@@ -84,7 +84,7 @@ export default function SupervisorCapstone() {
         {/* Categories Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {CATEGORIES.map((category) => (
-            <Card key={category.code} className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-blue-500">
+            <Card key={category.code} className="hover:shadow-lg transition-shadow border-2 hover:border-blue-500">
               <CardHeader>
                 <div className={`w-12 h-12 rounded-lg ${category.color} flex items-center justify-center mb-4`}>
                   <span className={`text-lg font-bold ${category.textColor}`}>
@@ -96,18 +96,38 @@ export default function SupervisorCapstone() {
                   Capstone {category.code === 'CSE499' ? 'Final Project' : `Section ${category.code.slice(-1)}`}
                 </CardDescription>
               </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground mb-6">
-                  Submit supervisor marks for {category.code} capstone students
+              <CardContent className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  Submit marks for {category.code} capstone students
                 </p>
-                <Button 
-                  asChild 
-                  className={`w-full ${category.buttonColor}`}
-                >
-                  <Link href={`/capstone/supervisor/${category.code}`}>
-                    Submit Marks
-                  </Link>
-                </Button>
+                
+                {/* Buttons for Weekly Journal, Peer, and Report */}
+                <div className="space-y-2">
+                  <Button 
+                    asChild 
+                    className={`w-full ${category.buttonColor}`}
+                  >
+                    <Link href={`/capstone/supervisor/${category.code}/weekly-journal`}>
+                      Weekly Journal
+                    </Link>
+                  </Button>
+                  <Button 
+                    asChild 
+                    className={`w-full ${category.buttonColor}`}
+                  >
+                    <Link href={`/capstone/supervisor/${category.code}/peer`}>
+                      Peer
+                    </Link>
+                  </Button>
+                  <Button 
+                    asChild 
+                    className={`w-full ${category.buttonColor}`}
+                  >
+                    <Link href={`/capstone/supervisor/${category.code}/report`}>
+                      Report
+                    </Link>
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           ))}

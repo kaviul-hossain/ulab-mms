@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { Loader2, ArrowLeft, Plus, Edit, CheckCircle2 } from 'lucide-react';
 import Image from 'next/image';
 import { toast } from 'sonner';
+import AssignedStudentsList from '@/app/capstone/components/AssignedStudentsList';
 
 interface Student {
   _id: string;
@@ -192,6 +193,11 @@ export default function SupervisorCategoryCapstone({ params }: PageProps) {
           <p className="text-muted-foreground">
             Enter and manage capstone marks for your supervised students
           </p>
+        </div>
+
+        {/* Assigned Students Section */}
+        <div className="mb-8">
+          <AssignedStudentsList courseCode={category} role="supervisor" />
         </div>
 
         {/* Search Bar */}
