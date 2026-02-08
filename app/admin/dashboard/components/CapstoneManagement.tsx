@@ -6,46 +6,37 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Loader2, Plus, Edit2, Trash2, RefreshCw, Users, FolderOpen } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Loader2, Plus } from 'lucide-react';
 import { toast } from 'sonner';
-import GroupManagement from './GroupManagement';
 
-interface CapstoneMarks {
+interface Course {
   _id: string;
-  studentId: {
-    _id: string;
-    name: string;
-    rollNumber: string;
-  };
-  supervisorId: {
-    _id: string;
-    name: string;
-    email: string;
-  };
-  evaluatorId?: {
-    _id: string;
-    name: string;
-    email: string;
-  };
-  supervisorMarks?: number;
-  supervisorComments?: string;
-  evaluatorMarks?: number;
-  evaluatorComments?: string;
-  submissionType: 'proposal' | 'midterm' | 'final';
-  createdAt: string;
-  updatedAt: string;
+  name: string;
+  code: string;
 }
 
-interface CapstoneAssignment {
+interface User {
   _id: string;
-  studentId: {
-    _id: string;
-    name: string;
-    studentId: string;
-  };
+  name: string;
+  email: string;
+}
+
+interface Student {
+  _id: string;
+  name: string;
+  studentId: string;
+}
+
+interface CapstoneGroup {
+  _id: string;
+  groupName: string;
   courseId: {
     _id: string;
     name: string;
@@ -56,318 +47,213 @@ interface CapstoneAssignment {
     name: string;
     email: string;
   };
-  evaluatorId?: {
+  studentIds: Array<{
     _id: string;
     name: string;
-    email: string;
-  };
-  supervisorRole: 'supervisor' | 'evaluator' | 'both';
-  evaluatorRole: 'supervisor' | 'evaluator' | 'both';
+    studentId: string;
+  }>;
   createdAt: string;
   updatedAt: string;
 }
 
-interface User {
-  _id: string;
-  name: string;
-  email: string;
+interface FormData {
+  title: string;
+  courseId: string;
+  supervisorId: string;
+  numberOfMembers: number;
+  students: Array<{ name: string; id: string }>;
 }
-
-interface Course {
-  _id: string;
-  name: string;
-  code: string;
-  semester?: string;
-  year?: number;
-}
-
-interface Student {
-  _id: string;
-  name: string;
-  studentId: string;
-}
-
-const CAPSTONE_COURSES = ['CSE4098A', 'CSE4098B', 'CSE4098C', 'CSE499'];
 
 export default function CapstoneManagement() {
-  // Marks Tab State
-  const [capstoneMarks, setCapstoneMarks] = useState<CapstoneMarks[]>([]);
-  const [marksLoading, setMarksLoading] = useState(true);
-  const [filterType, setFilterType] = useState<string>('');
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [showDetailsDialog, setShowDetailsDialog] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [loadingData, setLoadingData] = useState(true);
+  
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [supervisors, setSupervisors] = useState<User[]>([]);
+  const [students, setStudents] = useState<Student[]>([]);
+  const [capstoneGroups, setCapstoneGroups] = useState<CapstoneGroup[]>([]);
+  const [selectedGroup, setSelectedGroup] = useState<CapstoneGroup | null>(null);
+  const [selectedGroupId, setSelectedGroupId] = useState<string>('');
 
-  // Assignment Tab State
-  const [assignments, setAssignments] = useState<CapstoneAssignment[]>([]);
-  const [assignmentsLoading, setAssignmentsLoading] = useState(true);
-  const [showAddDialog, setShowAddDialog] = useState(false);
-  const [selectedAssignment, setSelectedAssignment] = useState<CapstoneAssignment | null>(null);
-  const [filterCourse, setFilterCourse] = useState<string>('');
-  const [filterUser, setFilterUser] = useState<string>('');
-
-  // Form states
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<FormData>({
+    title: '',
     courseId: '',
-    studentId: '',
     supervisorId: '',
-    evaluatorId: '',
-    supervisorRole: 'supervisor' as 'supervisor' | 'evaluator' | 'both',
-    evaluatorRole: 'evaluator' as 'supervisor' | 'evaluator' | 'both',
+    numberOfMembers: 3,
+    students: Array(3).fill({ name: '', id: '' }),
   });
 
-  const [courses, setCourses] = useState<Course[]>([]);
-  const [users, setUsers] = useState<User[]>([]);
-  const [students, setStudents] = useState<Student[]>([]);
-  const [loadingDropdowns, setLoadingDropdowns] = useState(false);
-
-  // Load both marks and assignments on mount
+  // Load initial data
   useEffect(() => {
-    loadCapstoneMarks();
-    loadAssignments();
-    loadDropdowns();
-  }, [filterType, filterCourse, filterUser]);
+    loadInitialData();
+  }, []);
 
-  // ==================== MARKS TAB FUNCTIONS ====================
-
-  const loadCapstoneMarks = async () => {
-    setMarksLoading(true);
+  const loadInitialData = async () => {
+    setLoadingData(true);
     try {
-      const url = filterType 
-        ? `/api/capstone?submissionType=${filterType}`
-        : '/api/capstone';
-      
-      const response = await fetch(url);
-      const data = await response.json();
-
-      if (Array.isArray(data)) {
-        setCapstoneMarks(data);
-      } else {
-        toast.error('Failed to load capstone marks');
-      }
-    } catch (err: any) {
-      toast.error('Failed to load capstone marks');
-    } finally {
-      setMarksLoading(false);
-    }
-  };
-
-  const handleDeleteMark = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this capstone record?')) {
-      return;
-    }
-
-    try {
-      const response = await fetch(`/api/capstone/${id}`, {
-        method: 'DELETE',
-      });
-
-      if (response.ok) {
-        toast.success('Capstone record deleted successfully');
-        loadCapstoneMarks();
-      } else {
-        toast.error('Failed to delete capstone record');
-      }
-    } catch (err: any) {
-      toast.error('Failed to delete capstone record');
-    }
-  };
-
-  const getSubmissionTypeColor = (type: string) => {
-    switch (type) {
-      case 'proposal':
-        return 'bg-blue-100 text-blue-800';
-      case 'midterm':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'final':
-        return 'bg-green-100 text-green-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
-  };
-
-  const getAverageMarks = (mark: CapstoneMarks) => {
-    const marks = [];
-    if (mark.supervisorMarks !== undefined) marks.push(mark.supervisorMarks);
-    if (mark.evaluatorMarks !== undefined) marks.push(mark.evaluatorMarks);
-    
-    if (marks.length === 0) return 'N/A';
-    return (marks.reduce((a, b) => a + b, 0) / marks.length).toFixed(2);
-  };
-
-  // ==================== ASSIGNMENT TAB FUNCTIONS ====================
-
-  const loadAssignments = async () => {
-    setAssignmentsLoading(true);
-    try {
-      let url = '/api/admin/capstone-assignment';
-      const params = new URLSearchParams();
-
-      if (filterCourse) params.append('courseId', filterCourse);
-      if (filterUser) params.append('userId', filterUser);
-
-      if (params.toString()) url += '?' + params.toString();
-
-      const response = await fetch(url);
-      const data = await response.json();
-
-      if (Array.isArray(data)) {
-        setAssignments(data);
-      } else {
-        toast.error('Failed to load assignments');
-      }
-    } catch (err: any) {
-      toast.error('Failed to load assignments');
-    } finally {
-      setAssignmentsLoading(false);
-    }
-  };
-
-  const loadDropdowns = async () => {
-    setLoadingDropdowns(true);
-    try {
-      // Load ALL courses from the system
-      const coursesResponse = await fetch('/api/courses');
-      const coursesData = await coursesResponse.json();
-      
+      // Load courses
+      const coursesRes = await fetch('/api/courses');
+      const coursesData = await coursesRes.json();
       if (coursesData.courses && Array.isArray(coursesData.courses)) {
-        // Load all courses without filtering
-        console.log('Found total courses:', coursesData.courses.length);
         setCourses(coursesData.courses);
-      } else if (Array.isArray(coursesData)) {
-        // Handle direct array response
-        console.log('Found total courses:', coursesData.length);
-        setCourses(coursesData);
       }
 
-      // Load users (supervisors and evaluators) - not students
-      // For the assignment form, we need user accounts, not enrolled students
-      const usersResponse = await fetch('/api/auth/users');
-      const usersData = await usersResponse.json();
+      // Load supervisors (users)
+      const usersRes = await fetch('/api/auth/users');
+      const usersData = await usersRes.json();
       if (Array.isArray(usersData)) {
-        setUsers(usersData);
-      } else if (usersData && Array.isArray(usersData.users)) {
-        setUsers(usersData.users);
+        setSupervisors(usersData);
       }
+
+      // Load all students
+      const studentsRes = await fetch('/api/students');
+      const studentsData = await studentsRes.json();
+      if (Array.isArray(studentsData)) {
+        setStudents(studentsData);
+      }
+
+      // Load capstone groups
+      await loadCapstoneGroups();
     } catch (err) {
-      console.error('Failed to load dropdowns:', err);
-      // Fallback: try to get users from students endpoint as fallback
-      try {
-        const fallbackResponse = await fetch('/api/students');
-        const fallbackData = await fallbackResponse.json();
-        if (Array.isArray(fallbackData)) {
-          setUsers(fallbackData);
-        }
-      } catch (fallbackErr) {
-        console.error('Fallback users load also failed:', fallbackErr);
-      }
+      console.error('Failed to load initial data:', err);
+      toast.error('Failed to load data');
     } finally {
-      setLoadingDropdowns(false);
+      setLoadingData(false);
     }
   };
 
-  const loadStudents = async (courseId: string) => {
+  const loadCapstoneGroups = async () => {
     try {
-      const response = await fetch(`/api/courses/${courseId}`);
+      const response = await fetch('/api/admin/capstone-group');
       const data = await response.json();
-      if (data.students) {
-        setStudents(data.students);
+      if (Array.isArray(data)) {
+        setCapstoneGroups(data);
       }
     } catch (err) {
-      console.error('Failed to load students:', err);
+      console.error('Failed to load capstone groups:', err);
     }
   };
 
-  const handleCourseChange = (courseId: string) => {
-    setFormData({ ...formData, courseId });
-    if (courseId) {
-      loadStudents(courseId);
-    } else {
-      setStudents([]);
+  const handleNumberOfMembersChange = (num: number) => {
+    if (num < 3 || num > 6) return;
+    
+    const newStudents = Array(num).fill({ name: '', id: '' });
+    // Preserve existing student data if downscaling
+    for (let i = 0; i < Math.min(num, formData.students.length); i++) {
+      newStudents[i] = formData.students[i];
     }
+    
+    setFormData({
+      ...formData,
+      numberOfMembers: num,
+      students: newStudents,
+    });
+  };
+
+  const handleStudentChange = (index: number, field: 'name' | 'id', value: string) => {
+    const newStudents = [...formData.students];
+    newStudents[index] = {
+      ...newStudents[index],
+      [field]: value,
+    };
+    setFormData({
+      ...formData,
+      students: newStudents,
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!formData.courseId || !formData.studentId || !formData.supervisorId) {
-      toast.error('Please fill in all required fields');
+    // Validation
+    if (!formData.title.trim()) {
+      toast.error('Please enter a group title');
+      return;
+    }
+    if (!formData.courseId) {
+      toast.error('Please select a course');
+      return;
+    }
+    if (!formData.supervisorId) {
+      toast.error('Please select a supervisor');
       return;
     }
 
+    // Check all students are selected
+    const allStudentsSelected = formData.students.every(s => s.name && s.id);
+    if (!allStudentsSelected) {
+      toast.error('Please select all student names and IDs');
+      return;
+    }
+
+    setLoading(true);
     try {
-      const response = await fetch('/api/admin/capstone-assignment', {
+      const response = await fetch('/api/admin/capstone-group', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-password': localStorage.getItem('adminPassword') || '',
+        },
+        body: JSON.stringify({
+          groupName: formData.title,
+          courseId: formData.courseId,
+          supervisorId: formData.supervisorId,
+          studentIds: formData.students.map(s => s.name), // Send actual student _ids
+        }),
       });
 
       if (response.ok) {
-        toast.success(selectedAssignment ? 'Assignment updated successfully' : 'Assignment created successfully');
-        setShowAddDialog(false);
-        setSelectedAssignment(null);
+        toast.success('Capstone group created successfully');
+        setShowCreateDialog(false);
         setFormData({
+          title: '',
           courseId: '',
-          studentId: '',
           supervisorId: '',
-          evaluatorId: '',
-          supervisorRole: 'supervisor',
-          evaluatorRole: 'evaluator',
+          numberOfMembers: 3,
+          students: Array(3).fill({ name: '', id: '' }),
         });
-        loadAssignments();
+        // Reload groups list
+        await loadCapstoneGroups();
       } else {
         const error = await response.json();
-        toast.error(error.error || 'Failed to save assignment');
+        toast.error(error.error || 'Failed to create group');
       }
-    } catch (err: any) {
-      toast.error('Failed to save assignment');
+    } catch (err) {
+      console.error('Error creating group:', err);
+      toast.error('Failed to create group');
+    } finally {
+      setLoading(false);
     }
-  };
-
-  const handleDeleteAssignment = async (id: string) => {
-    if (!confirm('Are you sure you want to remove this assignment?')) {
-      return;
-    }
-
-    try {
-      const response = await fetch(`/api/admin/capstone-assignment?id=${id}`, {
-        method: 'DELETE',
-      });
-
-      if (response.ok) {
-        toast.success('Assignment removed successfully');
-        loadAssignments();
-      } else {
-        toast.error('Failed to remove assignment');
-      }
-    } catch (err: any) {
-      toast.error('Failed to remove assignment');
-    }
-  };
-
-  const handleEdit = (assignment: CapstoneAssignment) => {
-    setSelectedAssignment(assignment);
-    setFormData({
-      courseId: assignment.courseId._id,
-      studentId: assignment.studentId._id,
-      supervisorId: assignment.supervisorId._id,
-      evaluatorId: assignment.evaluatorId?._id || '',
-      supervisorRole: assignment.supervisorRole as 'supervisor' | 'evaluator' | 'both',
-      evaluatorRole: assignment.evaluatorRole as 'supervisor' | 'evaluator' | 'both',
-    });
-    loadStudents(assignment.courseId._id);
-    setShowAddDialog(true);
   };
 
   const handleCloseDialog = () => {
-    setShowAddDialog(false);
-    setSelectedAssignment(null);
+    setShowCreateDialog(false);
     setFormData({
+      title: '',
       courseId: '',
-      studentId: '',
       supervisorId: '',
-      evaluatorId: '',
-      supervisorRole: 'supervisor',
-      evaluatorRole: 'evaluator',
+      numberOfMembers: 3,
+      students: Array(3).fill({ name: '', id: '' }),
     });
-    setStudents([]);
+  };
+
+  if (loadingData) {
+    return (
+      <div className="flex justify-center py-12">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  const handleGroupSelect = (groupId: string) => {
+    const group = capstoneGroups.find((g) => g._id === groupId);
+    if (group) {
+      setSelectedGroup(group);
+      setShowDetailsDialog(true);
+    }
+    setSelectedGroupId('');
   };
 
   return (
@@ -377,160 +263,78 @@ export default function CapstoneManagement() {
         <h2 className="text-2xl font-bold">Capstone Management</h2>
       </div>
 
-      {/* Tabs */}
-      <Tabs defaultValue="groups" className="w-full">
-        <TabsList>
-          <TabsTrigger value="groups" className="flex items-center gap-2">
-            <FolderOpen className="h-4 w-4" />
-            Groups
-          </TabsTrigger>
-          <TabsTrigger value="marks">Capstone Marks</TabsTrigger>
-        </TabsList>
-        {/* ==================== GROUPS TAB ==================== */}
-        <TabsContent value="groups" className="space-y-6">
-          <GroupManagement onGroupsUpdated={() => {}} />
-        </TabsContent>
+      {/* Create Groups Card */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Create Capstone Groups</CardTitle>
+          <CardDescription>
+            Create a new capstone group with students and a supervisor
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button onClick={() => setShowCreateDialog(true)} size="lg" className="w-full">
+            <Plus className="h-4 w-4 mr-2" />
+            Create Capstone Groups
+          </Button>
+        </CardContent>
+      </Card>
 
-        {/* ==================== MARKS TAB ==================== */}
-        <TabsContent value="marks" className="space-y-6">
-          {/* Filter */}
-          <div className="flex gap-4 items-center">
-            <div className="flex items-center gap-2">
-              <Label htmlFor="filter-type">Filter by Type:</Label>
-              <select
-                id="filter-type"
-                value={filterType}
-                onChange={(e) => setFilterType(e.target.value)}
-                className="px-3 py-2 border rounded-md text-sm"
-              >
-                <option value="">All Types</option>
-                <option value="proposal">Proposal</option>
-                <option value="midterm">Midterm</option>
-                <option value="final">Final</option>
-              </select>
-            </div>
-            <Button onClick={loadCapstoneMarks} disabled={marksLoading} variant="outline" size="sm">
-              <RefreshCw className={`h-4 w-4 mr-2 ${marksLoading ? 'animate-spin' : ''}`} />
-              Refresh
-            </Button>
-          </div>
+      {/* View Groups Dropdown Card */}
+      <Card>
+        <CardHeader>
+          <CardTitle>View Capstone Groups</CardTitle>
+          <CardDescription>
+            Select a group to view its details
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {capstoneGroups.length === 0 ? (
+            <p className="text-muted-foreground">No capstone groups created yet</p>
+          ) : (
+            <Select value={selectedGroupId} onValueChange={handleGroupSelect}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Capstone Groups" />
+              </SelectTrigger>
+              <SelectContent>
+                {capstoneGroups.map((group) => (
+                  <SelectItem key={group._id} value={group._id}>
+                    {group.groupName} ({group.courseId?.code})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        </CardContent>
+      </Card>
 
-          {/* Capstone Records Card */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Capstone Records</CardTitle>
-              <CardDescription>
-                View student capstone submissions and supervisor/evaluator marks
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {marksLoading ? (
-                <div className="flex justify-center py-12">
-                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                </div>
-              ) : capstoneMarks.length === 0 ? (
-                <div className="text-center py-12 text-muted-foreground">
-                  <p>No capstone records found</p>
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b">
-                        <th className="text-left py-3 px-4 font-semibold">Student</th>
-                        <th className="text-left py-3 px-4 font-semibold">Roll No.</th>
-                        <th className="text-left py-3 px-4 font-semibold">Type</th>
-                        <th className="text-left py-3 px-4 font-semibold">Supervisor</th>
-                        <th className="text-center py-3 px-4 font-semibold">Supervisor Marks</th>
-                        <th className="text-center py-3 px-4 font-semibold">Evaluator Marks</th>
-                        <th className="text-center py-3 px-4 font-semibold">Average</th>
-                        <th className="text-right py-3 px-4 font-semibold">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {capstoneMarks.map((mark) => (
-                        <tr key={mark._id} className="border-b hover:bg-muted/50 transition-colors">
-                          <td className="py-3 px-4 font-medium">{mark.studentId.name}</td>
-                          <td className="py-3 px-4 text-muted-foreground">{mark.studentId.rollNumber}</td>
-                          <td className="py-3 px-4">
-                            <span className={`px-2 py-1 rounded text-xs font-semibold ${getSubmissionTypeColor(mark.submissionType)}`}>
-                              {mark.submissionType.charAt(0).toUpperCase() + mark.submissionType.slice(1)}
-                            </span>
-                          </td>
-                          <td className="py-3 px-4 text-muted-foreground">{mark.supervisorId.name}</td>
-                          <td className="py-3 px-4 text-center font-medium">
-                            {mark.supervisorMarks !== undefined ? mark.supervisorMarks : 'N/A'}
-                          </td>
-                          <td className="py-3 px-4 text-center font-medium">
-                            {mark.evaluatorMarks !== undefined ? mark.evaluatorMarks : 'N/A'}
-                          </td>
-                          <td className="py-3 px-4 text-center font-semibold text-blue-600">
-                            {getAverageMarks(mark)}
-                          </td>
-                          <td className="py-3 px-4 text-right">
-                            <div className="flex gap-2 justify-end">
-                              <Button
-                                size="sm"
-                                variant="destructive"
-                                onClick={() => handleDeleteMark(mark._id)}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Marks Statistics Card */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-sm font-medium">Statistics</CardTitle>
-            </CardHeader>
-            <CardContent className="text-sm space-y-2">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Total Records:</span>
-                <span className="font-medium">{capstoneMarks.length}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Proposals:</span>
-                <span className="font-medium">{capstoneMarks.filter(m => m.submissionType === 'proposal').length}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Midterm:</span>
-                <span className="font-medium">{capstoneMarks.filter(m => m.submissionType === 'midterm').length}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Final:</span>
-                <span className="font-medium">{capstoneMarks.filter(m => m.submissionType === 'final').length}</span>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
-
-      {/* Add/Edit Assignment Dialog */}
-      <Dialog open={showAddDialog} onOpenChange={(open) => {
+      {/* Create Group Dialog */}
+      <Dialog open={showCreateDialog} onOpenChange={(open) => {
         if (!open) handleCloseDialog();
       }}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>
-              {selectedAssignment ? 'Edit Assignment' : 'Assign Student to Supervisor/Evaluator'}
-            </DialogTitle>
+            <DialogTitle>Create New Capstone Group</DialogTitle>
             <DialogDescription>
-              {selectedAssignment
-                ? 'Update the assignment details'
-                : 'Select a capstone course, student, and supervisor/evaluator'}
+              Fill in the group details and select students
             </DialogDescription>
           </DialogHeader>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Title Field */}
+            <div>
+              <Label htmlFor="title" className="font-semibold">
+                Title <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                id="title"
+                placeholder="Enter group title"
+                value={formData.title}
+                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                required
+                className="mt-1"
+              />
+            </div>
+
             {/* Course Selection */}
             <div>
               <Label htmlFor="courseId" className="font-semibold">
@@ -539,39 +343,14 @@ export default function CapstoneManagement() {
               <select
                 id="courseId"
                 value={formData.courseId}
-                onChange={(e) => handleCourseChange(e.target.value)}
-                disabled={loadingDropdowns}
+                onChange={(e) => setFormData({ ...formData, courseId: e.target.value })}
                 className="w-full px-3 py-2 border rounded-md mt-1"
                 required
               >
-                <option value="">Select a capstone course</option>
-                {courses.map((c) => (
-                  <option key={c._id} value={c._id}>
-                    {c.code} - {c.name} {c.year && c.semester ? `(${c.semester} ${c.year})` : ''}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Student Selection */}
-            <div>
-              <Label htmlFor="studentId" className="font-semibold">
-                Student <span className="text-red-500">*</span>
-              </Label>
-              <select
-                id="studentId"
-                value={formData.studentId}
-                onChange={(e) => setFormData({ ...formData, studentId: e.target.value })}
-                disabled={!formData.courseId || students.length === 0}
-                className="w-full px-3 py-2 border rounded-md mt-1"
-                required
-              >
-                <option value="">
-                  {students.length === 0 ? 'Select a course first' : 'Select a student'}
-                </option>
-                {students.map((s) => (
-                  <option key={s._id} value={s._id}>
-                    {s.name} ({s.studentId})
+                <option value="">Select a course</option>
+                {courses.map((course) => (
+                  <option key={course._id} value={course._id}>
+                    {course.code} - {course.name}
                   </option>
                 ))}
               </select>
@@ -586,89 +365,208 @@ export default function CapstoneManagement() {
                 id="supervisorId"
                 value={formData.supervisorId}
                 onChange={(e) => setFormData({ ...formData, supervisorId: e.target.value })}
-                disabled={loadingDropdowns}
                 className="w-full px-3 py-2 border rounded-md mt-1"
                 required
               >
                 <option value="">Select a supervisor</option>
-                {users.map((u) => (
-                  <option key={u._id} value={u._id}>
-                    {u.name} ({u.email})
+                {supervisors.map((supervisor) => (
+                  <option key={supervisor._id} value={supervisor._id}>
+                    {supervisor.name} ({supervisor.email})
                   </option>
                 ))}
               </select>
             </div>
 
-            {/* Supervisor Role */}
+            {/* Number of Members */}
             <div>
-              <Label htmlFor="supervisorRole" className="font-semibold">
-                Supervisor Role
+              <Label htmlFor="numberOfMembers" className="font-semibold">
+                Number of Members <span className="text-red-500">*</span>
               </Label>
-              <select
-                id="supervisorRole"
-                value={formData.supervisorRole}
-                onChange={(e) => setFormData({ ...formData, supervisorRole: e.target.value as any })}
-                className="w-full px-3 py-2 border rounded-md mt-1"
-              >
-                <option value="supervisor">Supervisor</option>
-                <option value="evaluator">Evaluator</option>
-                <option value="both">Both (Supervisor & Evaluator)</option>
-              </select>
-            </div>
-
-            {/* Evaluator Selection */}
-            <div>
-              <Label htmlFor="evaluatorId" className="font-semibold">
-                Evaluator (Optional)
-              </Label>
-              <select
-                id="evaluatorId"
-                value={formData.evaluatorId}
-                onChange={(e) => setFormData({ ...formData, evaluatorId: e.target.value })}
-                disabled={loadingDropdowns}
-                className="w-full px-3 py-2 border rounded-md mt-1"
-              >
-                <option value="">No evaluator</option>
-                {users.map((u) => (
-                  <option key={u._id} value={u._id}>
-                    {u.name} ({u.email})
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Evaluator Role */}
-            {formData.evaluatorId && (
-              <div>
-                <Label htmlFor="evaluatorRole" className="font-semibold">
-                  Evaluator Role
-                </Label>
-                <select
-                  id="evaluatorRole"
-                  value={formData.evaluatorRole}
-                  onChange={(e) => setFormData({ ...formData, evaluatorRole: e.target.value as any })}
-                  className="w-full px-3 py-2 border rounded-md mt-1"
+              <div className="flex items-center gap-4 mt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleNumberOfMembersChange(formData.numberOfMembers - 1)}
+                  disabled={formData.numberOfMembers <= 3}
                 >
-                  <option value="evaluator">Evaluator</option>
-                  <option value="supervisor">Supervisor</option>
-                  <option value="both">Both (Supervisor & Evaluator)</option>
-                </select>
+                  -
+                </Button>
+                <span className="text-center font-semibold text-lg w-12">
+                  {formData.numberOfMembers}
+                </span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleNumberOfMembersChange(formData.numberOfMembers + 1)}
+                  disabled={formData.numberOfMembers >= 6}
+                >
+                  +
+                </Button>
               </div>
-            )}
+              <p className="text-xs text-muted-foreground mt-2">
+                Select between 3 and 6 members
+              </p>
+            </div>
+
+            {/* Student Fields */}
+            <div className="space-y-4">
+              <Label className="font-semibold">Students <span className="text-red-500">*</span></Label>
+              {formData.students.map((student, index) => (
+                <div key={index} className="border rounded-lg p-4 space-y-3">
+                  <h4 className="font-medium">Student {index + 1}</h4>
+                  
+                  {/* Student Name Dropdown */}
+                  <div>
+                    <Label htmlFor={`student-name-${index}`} className="text-sm">
+                      Student Name <span className="text-red-500">*</span>
+                    </Label>
+                    <select
+                      id={`student-name-${index}`}
+                      value={student.name}
+                      onChange={(e) => handleStudentChange(index, 'name', e.target.value)}
+                      className="w-full px-3 py-2 border rounded-md mt-1 text-sm"
+                      required
+                    >
+                      <option value="">Select student name</option>
+                      {students.map((s) => (
+                        <option key={s._id} value={s._id}>
+                          {s.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Student ID Dropdown */}
+                  <div>
+                    <Label htmlFor={`student-id-${index}`} className="text-sm">
+                      Student ID <span className="text-red-500">*</span>
+                    </Label>
+                    <select
+                      id={`student-id-${index}`}
+                      value={student.id}
+                      onChange={(e) => handleStudentChange(index, 'id', e.target.value)}
+                      className="w-full px-3 py-2 border rounded-md mt-1 text-sm"
+                      required
+                    >
+                      <option value="">Select student ID</option>
+                      {students.map((s) => (
+                        <option key={s._id} value={s.studentId}>
+                          {s.studentId}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              ))}
+            </div>
 
             <DialogFooter className="gap-2">
               <Button
                 type="button"
                 variant="outline"
                 onClick={handleCloseDialog}
+                disabled={loading}
               >
                 Cancel
               </Button>
-              <Button type="submit">
-                {selectedAssignment ? 'Update Assignment' : 'Assign Student'}
+              <Button type="submit" disabled={loading}>
+                {loading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                Create Group
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Group Details Dialog */}
+      <Dialog open={showDetailsDialog} onOpenChange={setShowDetailsDialog}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{selectedGroup?.groupName}</DialogTitle>
+            <DialogDescription>
+              Capstone group details and members
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedGroup && (
+            <div className="space-y-6">
+              {/* Course Information */}
+              <div>
+                <h3 className="font-semibold mb-3">Course Information</h3>
+                <div className="grid gap-3 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Course Code:</span>
+                    <span className="font-medium">{selectedGroup.courseId?.code}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Course Name:</span>
+                    <span className="font-medium">{selectedGroup.courseId?.name}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Supervisor Information */}
+              <div>
+                <h3 className="font-semibold mb-3">Supervisor</h3>
+                <div className="grid gap-3 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Name:</span>
+                    <span className="font-medium">{selectedGroup.supervisorId?.name}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Email:</span>
+                    <span className="font-medium">{selectedGroup.supervisorId?.email}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Group Members */}
+              <div>
+                <h3 className="font-semibold mb-3">Group Members ({selectedGroup.studentIds?.length || 0})</h3>
+                <div className="border rounded-lg divide-y">
+                  {selectedGroup.studentIds && selectedGroup.studentIds.length > 0 ? (
+                    selectedGroup.studentIds.map((student, index) => (
+                      <div key={student._id} className="p-3 flex justify-between items-center text-sm">
+                        <span className="font-medium">{student.name}</span>
+                        <span className="text-muted-foreground">{student.studentId}</span>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="p-3 text-sm text-muted-foreground">
+                      No students in this group
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Timeline */}
+              <div>
+                <h3 className="font-semibold mb-3">Timeline</h3>
+                <div className="grid gap-3 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Created:</span>
+                    <span className="font-medium">
+                      {new Date(selectedGroup.createdAt).toLocaleDateString()}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Last Updated:</span>
+                    <span className="font-medium">
+                      {new Date(selectedGroup.updatedAt).toLocaleDateString()}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDetailsDialog(false)}>
+              Close
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

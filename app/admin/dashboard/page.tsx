@@ -26,14 +26,14 @@ const sidebarItems: SidebarItem[] = [
     icon: BookOpen,
   },
   {
-    title: 'Capstone Management',
-    href: '/admin/dashboard?tab=capstone',
-    icon: GraduationCap,
-  },
-  {
     title: 'Resources',
     href: '/admin/dashboard?tab=resources',
     icon: FolderOpen,
+  },
+  {
+    title: 'Capstone Management',
+    href: '/admin/dashboard?tab=capstone',
+    icon: GraduationCap,
   },
 ];
 
@@ -135,8 +135,8 @@ function AdminDashboardContent() {
         <main className="flex-1 p-6 overflow-auto">
           {activeTab === 'overview' && <OverviewSection />}
           {activeTab === 'courses' && <CourseManagement />}
-          {activeTab === 'capstone' && <CapstoneManagement />}
           {activeTab === 'resources' && <ResourcesManager />}
+          {activeTab === 'capstone' && <CapstoneManagement />}
         </main>
       </div>
     </div>

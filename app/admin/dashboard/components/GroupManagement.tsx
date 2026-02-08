@@ -86,13 +86,17 @@ export default function GroupManagement({ onGroupsUpdated }: GroupManagementProp
   const [filterCourse, setFilterCourse] = useState('');
   const [filterSupervisor, setFilterSupervisor] = useState('');
   const [showAddStudentDialog, setShowAddStudentDialog] = useState(false);
+  const [isClient, setIsClient] = useState(false);
 
   // Form State
   const [formData, setFormData] = useState({
     courseId: '',
     groupName: '',
     supervisorId: '',
+    groupSize: 0,
   });
+
+  const [groupStudents, setGroupStudents] = useState<Array<{ name: string; studentId: string }>>([]);
 
   const [studentForm, setStudentForm] = useState({ studentId: '' });
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
@@ -104,16 +108,40 @@ export default function GroupManagement({ onGroupsUpdated }: GroupManagementProp
   const [courseStudents, setCourseStudents] = useState<Student[]>([]);
   const [loadingDropdowns, setLoadingDropdowns] = useState(false);
 
-  // Load groups and dropdowns on mount
+  // Mark as client-side component
   useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  // Load groups and dropdowns on mount (client-side only)
+  useEffect(() => {
+    if (!isClient) return;
     loadGroups();
     loadDropdowns();
-  }, []);
+  }, [isClient]);
 
   // Re-load groups when filters change
   useEffect(() => {
+    if (!isClient) return;
     loadGroups();
-  }, [filterCourse, filterSupervisor]);
+  }, [filterCourse, filterSupervisor, isClient]);
+
+  // Helper to safely get admin password from localStorage
+  const getAdminPassword = (): string | null => {
+    if (typeof window === 'undefined') return null;
+    try {
+      return localStorage.getItem('adminPassword');
+    } catch (error) {
+      console.error('Error accessing localStorage:', error);
+      return null;
+    }
+  };
+
+  // Refresh dropdowns when dialog opens
+  const handleOpenDialog = () => {
+    setShowAddDialog(true);
+    loadDropdowns(); // Refresh courses list
+  };
 
   const loadGroups = async () => {
     setLoading(true);
@@ -126,7 +154,11 @@ export default function GroupManagement({ onGroupsUpdated }: GroupManagementProp
 
       if (params.toString()) url += '?' + params.toString();
 
-      const response = await fetch(url);
+      const adminPassword = getAdminPassword();
+
+      const response = await fetch(url, {
+        headers: adminPassword ? { 'x-admin-password': adminPassword } : {},
+      });
       const data = await response.json();
 
       if (Array.isArray(data)) {
@@ -145,14 +177,19 @@ export default function GroupManagement({ onGroupsUpdated }: GroupManagementProp
   const loadDropdowns = async () => {
     setLoadingDropdowns(true);
     try {
-      // Load ALL courses from the system
-      const coursesResponse = await fetch('/api/courses');
+      // Load ALL admin courses (courses created in Course Management)
+      const coursesResponse = await fetch('/api/admin/courses');
       const coursesData = await coursesResponse.json();
       
       if (coursesData.courses && Array.isArray(coursesData.courses)) {
-        // Load all courses without filtering
-        console.log('Found total courses:', coursesData.courses.length);
-        setCourses(coursesData.courses);
+        // Map AdminCourse fields to Course interface
+        const mappedCourses = coursesData.courses.map((course: any) => ({
+          _id: course._id,
+          name: course.courseTitle,
+          code: course.courseCode,
+        }));
+        console.log('Found total courses:', mappedCourses.length);
+        setCourses(mappedCourses);
       } else if (Array.isArray(coursesData)) {
         // Handle direct array response
         console.log('Found total courses:', coursesData.length);
@@ -182,16 +219,20 @@ export default function GroupManagement({ onGroupsUpdated }: GroupManagementProp
 
   const loadStudentsForCourse = async (courseId: string) => {
     try {
-      const response = await fetch(`/api/courses/${courseId}`);
+      // Load students from the /api/students endpoint by courseId
+      const response = await fetch(`/api/students?courseId=${courseId}`);
       const data = await response.json();
-      if (data.students) {
+      if (Array.isArray(data)) {
+        setCourseStudents(data);
+      } else if (data.students) {
         setCourseStudents(data.students);
       } else {
         setCourseStudents([]);
       }
     } catch (error) {
       console.error('Error loading course students:', error);
-      toast.error('Failed to load course students');
+      // Don't show error toast here as admin courses may not have associated students
+      setCourseStudents([]);
     }
   };
 
@@ -209,6 +250,7 @@ export default function GroupManagement({ onGroupsUpdated }: GroupManagementProp
 
     // Debug: Log form data
     console.log('Form data:', formData);
+    console.log('Group students:', groupStudents);
     console.log('Courses available:', courses.length);
     console.log('Users available:', users.length);
 
@@ -225,11 +267,48 @@ export default function GroupManagement({ onGroupsUpdated }: GroupManagementProp
       return;
     }
 
+    // Check if group size is specified and matches students added
+    if (!selectedGroup && formData.groupSize > 0) {
+      const validStudents = groupStudents.filter(s => s.studentId && s.name);
+      if (validStudents.length !== formData.groupSize) {
+        toast.error(`Please add all ${formData.groupSize} students with both name and ID`);
+        return;
+      }
+    }
+
     try {
+      // For new groups, try to find student IDs by looking up in courseStudents
+      let studentIds: string[] = [];
+      
+      if (!selectedGroup && groupStudents.length > 0) {
+        for (const student of groupStudents) {
+          if (student.studentId) {
+            // Try to find this student in courseStudents by studentId
+            const found = courseStudents.find(cs => cs.studentId === student.studentId);
+            if (found) {
+              studentIds.push(found._id);
+            } else {
+              // Try to look up via API
+              try {
+                const response = await fetch(`/api/students?studentId=${student.studentId}`);
+                const data = await response.json();
+                if (Array.isArray(data) && data.length > 0) {
+                  studentIds.push(data[0]._id);
+                } else {
+                  toast.warning(`Could not find student with ID ${student.studentId}`);
+                }
+              } catch (error) {
+                console.error('Error looking up student:', error);
+              }
+            }
+          }
+        }
+      }
+
       const payload = {
         courseId: formData.courseId,
         groupName: formData.groupName,
-        studentIds: [], // Create empty group without students initially
+        studentIds: studentIds,
         supervisorId: formData.supervisorId,
       };
 
@@ -241,9 +320,15 @@ export default function GroupManagement({ onGroupsUpdated }: GroupManagementProp
 
       const method = selectedGroup ? 'PUT' : 'POST';
 
+      // Get admin password from localStorage
+      const adminPassword = getAdminPassword();
+
       const response = await fetch(url, {
         method,
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(adminPassword && { 'x-admin-password': adminPassword }),
+        },
         body: JSON.stringify(payload),
       });
 
@@ -268,8 +353,11 @@ export default function GroupManagement({ onGroupsUpdated }: GroupManagementProp
     }
 
     try {
+      const adminPassword = getAdminPassword();
+
       const response = await fetch(`/api/admin/capstone-group/${id}`, {
         method: 'DELETE',
+        headers: adminPassword ? { 'x-admin-password': adminPassword } : {},
       });
 
       if (response.ok) {
@@ -299,9 +387,14 @@ export default function GroupManagement({ onGroupsUpdated }: GroupManagementProp
     }
 
     try {
+      const adminPassword = getAdminPassword();
+
       const response = await fetch(`/api/admin/capstone-group/${selectedGroup._id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(adminPassword && { 'x-admin-password': adminPassword }),
+        },
         body: JSON.stringify({
           studentIds: [...selectedGroup.studentIds.map(s => s._id), studentForm.studentId],
         }),
@@ -331,8 +424,16 @@ export default function GroupManagement({ onGroupsUpdated }: GroupManagementProp
       courseId: group.courseId._id,
       groupName: group.groupName,
       supervisorId: group.supervisorId._id,
+      groupSize: group.studentIds.length,
     });
+    setGroupStudents(
+      group.studentIds.map(student => ({
+        name: student.name,
+        studentId: student.studentId,
+      }))
+    );
     loadStudentsForCourse(group.courseId._id);
+    loadDropdowns(); // Refresh dropdowns when editing
     setShowAddDialog(true);
   };
 
@@ -345,9 +446,14 @@ export default function GroupManagement({ onGroupsUpdated }: GroupManagementProp
     }
 
     try {
+      const adminPassword = getAdminPassword();
+
       const response = await fetch(`/api/admin/capstone-group/${selectedGroup._id}/assign-evaluator`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(adminPassword && { 'x-admin-password': adminPassword }),
+        },
         body: JSON.stringify({ evaluatorId: evaluatorForm.evaluatorId }),
       });
 
@@ -394,7 +500,9 @@ export default function GroupManagement({ onGroupsUpdated }: GroupManagementProp
       courseId: '',
       groupName: '',
       supervisorId: '',
+      groupSize: 0,
     });
+    setGroupStudents([]);
     setSelectedStudent(null);
     setSelectedGroup(null);
     setCourseStudents([]);
@@ -428,7 +536,7 @@ export default function GroupManagement({ onGroupsUpdated }: GroupManagementProp
           >
             Refresh
           </Button>
-          <Button onClick={() => { resetForm(); setShowAddDialog(true); }}>
+          <Button onClick={() => { resetForm(); handleOpenDialog(); }}>
             <Plus className="w-4 h-4 mr-2" />
             Create Group
           </Button>
@@ -669,7 +777,7 @@ export default function GroupManagement({ onGroupsUpdated }: GroupManagementProp
                 required
               >
                 <option value="">Select a course</option>
-                {courses.map((course) => (
+                {courses.filter(course => course && course._id).map((course) => (
                   <option key={course._id} value={course._id}>
                     {course.code || ''} - {course.name || 'Unknown Course'}
                   </option>
@@ -698,15 +806,85 @@ export default function GroupManagement({ onGroupsUpdated }: GroupManagementProp
                 required
               >
                 <option value="">Select a supervisor</option>
-                {users.map((user) => (
+                {users.filter(user => user && user._id).map((user) => (
                   <option key={user._id} value={user._id}>
-                    {user.email} - {user.name}
+                    {user.email || 'N/A'} - {user.name || 'Unknown'}
                   </option>
                 ))}
               </select>
             </div>
 
+            {/* Group Size */}
+            {!selectedGroup && (
+              <div>
+                <Label htmlFor="groupSize" className="text-sm font-medium">
+                  Number of Students in Group
+                </Label>
+                <Input
+                  id="groupSize"
+                  type="number"
+                  min="0"
+                  max="10"
+                  value={formData.groupSize || ''}
+                  onChange={(e) => {
+                    const size = parseInt(e.target.value) || 0;
+                    setFormData({ ...formData, groupSize: size });
+                    // Initialize groupStudents array
+                    if (size > 0) {
+                      const newStudents = Array(size).fill(null).map((_, i) => 
+                        groupStudents[i] || { name: '', studentId: '' }
+                      );
+                      setGroupStudents(newStudents);
+                    } else {
+                      setGroupStudents([]);
+                    }
+                  }}
+                  placeholder="Enter number of students"
+                  className="text-black"
+                />
+              </div>
+            )}
 
+            {/* Student Input Fields */}
+            {!selectedGroup && formData.groupSize > 0 && (
+              <div className="border-t pt-4">
+                <h4 className="text-sm font-semibold mb-3">Add Student Details ({groupStudents.filter(s => s.studentId && s.name).length}/{formData.groupSize})</h4>
+                <div className="space-y-3 max-h-64 overflow-y-auto">
+                  {groupStudents.map((student, index) => (
+                    <div key={index} className="flex gap-2 items-end">
+                      <div className="flex-1">
+                        <Label className="text-xs">Student Name</Label>
+                        <Input
+                          type="text"
+                          placeholder="e.g., Ahmed Ali"
+                          value={student.name}
+                          onChange={(e) => {
+                            const newStudents = [...groupStudents];
+                            newStudents[index].name = e.target.value;
+                            setGroupStudents(newStudents);
+                          }}
+                          className="text-black text-sm"
+                        />
+                      </div>
+                      <div className="flex-1">
+                        <Label className="text-xs">Student ID</Label>
+                        <Input
+                          type="text"
+                          placeholder="e.g., 21-0001"
+                          value={student.studentId}
+                          onChange={(e) => {
+                            const newStudents = [...groupStudents];
+                            newStudents[index].studentId = e.target.value;
+                            setGroupStudents(newStudents);
+                          }}
+                          className="text-black text-sm"
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <DialogFooter>
               <Button

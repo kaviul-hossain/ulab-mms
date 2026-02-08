@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { jwtVerify } from 'jose';
+import bcrypt from 'bcryptjs';
 import dbConnect from '@/lib/mongodb';
 import CapstoneGroup from '@/models/CapstoneGroup';
 import Student from '@/models/Student';
 import User from '@/models/User';
 import Course from '@/models/Course';
+import AdminCourse from '@/models/AdminCourse';
+import AdminSettings from '@/models/AdminSettings';
+import { migrateIndexes } from '@/lib/migrations';
 
 const SECRET = new TextEncoder().encode(process.env.NEXTAUTH_SECRET || 'your-secret-key');
 
@@ -21,14 +25,37 @@ async function verifyAdminToken(request: NextRequest): Promise<boolean> {
   }
 }
 
+// Verify admin password from header
+async function verifyAdminPassword(request: NextRequest): Promise<boolean> {
+  try {
+    const adminPassword = request.headers.get('x-admin-password');
+    if (!adminPassword) return false;
+
+    const adminSettings = await AdminSettings.findOne();
+    if (!adminSettings || !adminSettings.passwordHash) return false;
+
+    const isPasswordValid = await bcrypt.compare(adminPassword, adminSettings.passwordHash);
+    return isPasswordValid;
+  } catch (error) {
+    return false;
+  }
+}
+
+// Check authorization (either JWT or password header)
+async function checkAuthorization(request: NextRequest): Promise<boolean> {
+  const isJwtValid = await verifyAdminToken(request);
+  const isPasswordValid = await verifyAdminPassword(request);
+  return isJwtValid || isPasswordValid;
+}
+
 export async function GET(request: NextRequest) {
   try {
-    const isAdmin = await verifyAdminToken(request);
+    const isAuthorized = await checkAuthorization(request);
 
-    if (!isAdmin) {
+    if (!isAuthorized) {
       return NextResponse.json(
         { error: 'Unauthorized' },
-        { status: 401 }
+        { status: 403 }
       );
     }
 
@@ -73,14 +100,17 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const isAdmin = await verifyAdminToken(request);
+    const isAuthorized = await checkAuthorization(request);
 
-    if (!isAdmin) {
+    if (!isAuthorized) {
       return NextResponse.json(
         { error: 'Unauthorized' },
-        { status: 401 }
+        { status: 403 }
       );
     }
+
+    // Run index migration to clean up old conflicting indexes
+    await migrateIndexes();
 
     await dbConnect();
 
@@ -95,15 +125,18 @@ export async function POST(request: NextRequest) {
     } = body;
 
     // Validation
-    if (!courseId || !groupName || !studentIds || studentIds.length === 0 || !supervisorId) {
+    if (!courseId || !groupName || !supervisorId) {
       return NextResponse.json(
-        { error: 'Missing required fields' },
+        { error: 'Missing required fields: courseId, groupName, supervisorId' },
         { status: 400 }
       );
     }
 
-    // Verify course exists
-    const course = await Course.findById(courseId);
+    // Verify course exists (check both AdminCourse and Course)
+    let course = await AdminCourse.findById(courseId);
+    if (!course) {
+      course = await Course.findById(courseId);
+    }
     if (!course) {
       return NextResponse.json(
         { error: 'Course not found' },
@@ -120,25 +153,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Verify all students exist
-    const students = await Student.find({ _id: { $in: studentIds } });
-    if (students.length !== studentIds.length) {
-      return NextResponse.json(
-        { error: 'One or more students not found' },
-        { status: 404 }
-      );
-    }
+    // Use provided studentIds (don't require strict validation)
+    // Students may not be in Student collection yet, but we can still reference them
+    const finalStudentIds = studentIds || [];
 
     // Create new group
     const newGroup = new CapstoneGroup({
       courseId,
       groupName,
-      groupNumber: groupNumber || null,
       description: description || '',
-      studentIds,
+      studentIds: finalStudentIds,
       supervisorId,
       evaluatorAssignments: [],
-      createdBy: request.cookies.get('admin-id')?.value || 'unknown',
     });
 
     await newGroup.save();

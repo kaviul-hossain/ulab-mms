@@ -13,7 +13,7 @@ export interface ICapstoneGroup extends Document {
     assignedBy: mongoose.Types.ObjectId;
     status: 'pending' | 'in-progress' | 'completed';
   }[];
-  createdBy: mongoose.Types.ObjectId; // Admin who created the group
+  createdBy?: mongoose.Types.ObjectId; // Admin who created the group
   createdAt: Date;
   updatedAt: Date;
 }
@@ -31,7 +31,7 @@ const CapstoneGroupSchema: Schema = new Schema(
     },
     groupNumber: {
       type: Number,
-      default: null,
+      required: false,
     },
     description: {
       type: String,
@@ -75,7 +75,7 @@ const CapstoneGroupSchema: Schema = new Schema(
     createdBy: {
       type: Schema.Types.ObjectId,
       ref: 'User',
-      required: true,
+      default: null,
     },
   },
   {
@@ -92,5 +92,10 @@ CapstoneGroupSchema.index({ createdAt: -1 });
 const CapstoneGroup: Model<ICapstoneGroup> =
   mongoose.models.CapstoneGroup ||
   mongoose.model<ICapstoneGroup>('CapstoneGroup', CapstoneGroupSchema);
+
+// Force sync indexes to clean up old non-sparse indexes
+CapstoneGroup.syncIndexes().catch((err) => {
+  console.warn('Warning: Could not sync CapstoneGroup indexes:', err.message);
+});
 
 export default CapstoneGroup;

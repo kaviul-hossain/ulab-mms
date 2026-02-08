@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { jwtVerify } from 'jose';
+import bcrypt from 'bcryptjs';
 import dbConnect from '@/lib/mongodb';
 import CapstoneGroup from '@/models/CapstoneGroup';
+import AdminSettings from '@/models/AdminSettings';
 
 const SECRET = new TextEncoder().encode(process.env.NEXTAUTH_SECRET || 'your-secret-key');
 
@@ -18,17 +20,40 @@ async function verifyAdminToken(request: NextRequest): Promise<boolean> {
   }
 }
 
+// Verify admin password from header
+async function verifyAdminPassword(request: NextRequest): Promise<boolean> {
+  try {
+    const adminPassword = request.headers.get('x-admin-password');
+    if (!adminPassword) return false;
+
+    const adminSettings = await AdminSettings.findOne();
+    if (!adminSettings || !adminSettings.passwordHash) return false;
+
+    const isPasswordValid = await bcrypt.compare(adminPassword, adminSettings.passwordHash);
+    return isPasswordValid;
+  } catch (error) {
+    return false;
+  }
+}
+
+// Check authorization (either JWT or password header)
+async function checkAuthorization(request: NextRequest): Promise<boolean> {
+  const isJwtValid = await verifyAdminToken(request);
+  const isPasswordValid = await verifyAdminPassword(request);
+  return isJwtValid || isPasswordValid;
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const isAdmin = await verifyAdminToken(request);
+    const isAuthorized = await checkAuthorization(request);
 
-    if (!isAdmin) {
+    if (!isAuthorized) {
       return NextResponse.json(
         { error: 'Unauthorized' },
-        { status: 401 }
+        { status: 403 }
       );
     }
 
@@ -76,12 +101,12 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const isAdmin = await verifyAdminToken(request);
+    const isAuthorized = await checkAuthorization(request);
 
-    if (!isAdmin) {
+    if (!isAuthorized) {
       return NextResponse.json(
         { error: 'Unauthorized' },
-        { status: 401 }
+        { status: 403 }
       );
     }
 
@@ -140,12 +165,12 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const isAdmin = await verifyAdminToken(request);
+    const isAuthorized = await checkAuthorization(request);
 
-    if (!isAdmin) {
+    if (!isAuthorized) {
       return NextResponse.json(
         { error: 'Unauthorized' },
-        { status: 401 }
+        { status: 403 }
       );
     }
 
