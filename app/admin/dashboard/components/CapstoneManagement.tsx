@@ -13,7 +13,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Loader2, Plus } from 'lucide-react';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import { Loader2, Plus, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface Course {
@@ -34,6 +39,13 @@ interface Student {
   studentId: string;
 }
 
+interface Semester {
+  _id: string;
+  name: string;
+  description: string;
+  isActive: boolean;
+}
+
 interface CapstoneGroup {
   _id: string;
   groupName: string;
@@ -47,6 +59,7 @@ interface CapstoneGroup {
     name: string;
     email: string;
   };
+  semester?: string;
   studentIds: Array<{
     _id: string;
     name: string;
@@ -60,6 +73,7 @@ interface FormData {
   title: string;
   courseId: string;
   supervisorId: string;
+  semester: string;
   numberOfMembers: number;
   students: Array<{ name: string; id: string }>;
 }
@@ -67,20 +81,32 @@ interface FormData {
 export default function CapstoneManagement() {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showDetailsDialog, setShowDetailsDialog] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showEditDialog, setShowEditDialog] = useState(false);
   const [loading, setLoading] = useState(false);
   const [loadingData, setLoadingData] = useState(true);
+  const [deleting, setDeleting] = useState(false);
+  const [updating, setUpdating] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
   
   const [courses, setCourses] = useState<Course[]>([]);
   const [supervisors, setSupervisors] = useState<User[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
+  const [semesters, setSemesters] = useState<Semester[]>([]);
   const [capstoneGroups, setCapstoneGroups] = useState<CapstoneGroup[]>([]);
   const [selectedGroup, setSelectedGroup] = useState<CapstoneGroup | null>(null);
   const [selectedGroupId, setSelectedGroupId] = useState<string>('');
+  const [groupSearchQuery, setGroupSearchQuery] = useState<string>('');
+  const [studentSearchOpen, setStudentSearchOpen] = useState<boolean[]>([false, false, false]);
+  const [studentSearchQuery, setStudentSearchQuery] = useState<string[]>(['', '', '']);
+  const [supervisorSearchOpen, setSupervisorSearchOpen] = useState(false);
+  const [supervisorSearchQuery, setSupervisorSearchQuery] = useState<string>('');
 
   const [formData, setFormData] = useState<FormData>({
     title: '',
     courseId: '',
     supervisorId: '',
+    semester: '',
     numberOfMembers: 3,
     students: Array(3).fill({ name: '', id: '' }),
   });
@@ -94,10 +120,13 @@ export default function CapstoneManagement() {
     setLoadingData(true);
     try {
       // Load courses
-      const coursesRes = await fetch('/api/courses');
+      const coursesRes = await fetch('/api/admin/courses-list');
       const coursesData = await coursesRes.json();
       if (coursesData.courses && Array.isArray(coursesData.courses)) {
         setCourses(coursesData.courses);
+        console.log('Courses loaded:', coursesData.courses.length);
+      } else {
+        console.warn('No courses found or invalid format:', coursesData);
       }
 
       // Load supervisors (users)
@@ -105,17 +134,33 @@ export default function CapstoneManagement() {
       const usersData = await usersRes.json();
       if (Array.isArray(usersData)) {
         setSupervisors(usersData);
+        console.log('Supervisors loaded:', usersData.length);
+      } else {
+        console.warn('No supervisors found or invalid format:', usersData);
       }
 
       // Load all students
-      const studentsRes = await fetch('/api/students');
+      const studentsRes = await fetch('/api/admin/students-list');
       const studentsData = await studentsRes.json();
       if (Array.isArray(studentsData)) {
         setStudents(studentsData);
+        console.log('Students loaded:', studentsData.length);
+      } else {
+        console.warn('No students found or invalid format:', studentsData);
       }
 
       // Load capstone groups
       await loadCapstoneGroups();
+
+      // Load semesters
+      const semestersRes = await fetch('/api/admin/semesters');
+      const semestersData = await semestersRes.json();
+      if (Array.isArray(semestersData)) {
+        setSemesters(semestersData);
+        console.log('Semesters loaded:', semestersData.length);
+      } else {
+        console.warn('No semesters found or invalid format:', semestersData);
+      }
     } catch (err) {
       console.error('Failed to load initial data:', err);
       toast.error('Failed to load data');
@@ -145,6 +190,20 @@ export default function CapstoneManagement() {
       newStudents[i] = formData.students[i];
     }
     
+    // Adjust studentSearchOpen array size
+    const newSearchOpen = Array(num).fill(false);
+    for (let i = 0; i < Math.min(num, studentSearchOpen.length); i++) {
+      newSearchOpen[i] = studentSearchOpen[i];
+    }
+    setStudentSearchOpen(newSearchOpen);
+
+    // Adjust studentSearchQuery array size
+    const newSearchQuery = Array(num).fill('');
+    for (let i = 0; i < Math.min(num, studentSearchQuery.length); i++) {
+      newSearchQuery[i] = studentSearchQuery[i];
+    }
+    setStudentSearchQuery(newSearchQuery);
+    
     setFormData({
       ...formData,
       numberOfMembers: num,
@@ -158,10 +217,44 @@ export default function CapstoneManagement() {
       ...newStudents[index],
       [field]: value,
     };
+    
+    // If name is changed, auto-fill the student ID
+    if (field === 'name' && value) {
+      const selectedStudent = students.find((s) => s._id === value);
+      if (selectedStudent) {
+        newStudents[index].id = selectedStudent.studentId;
+      }
+    }
+    
     setFormData({
       ...formData,
       students: newStudents,
     });
+  };
+
+  const handleStudentSearchOpen = (index: number, open: boolean) => {
+    const newSearchOpen = [...studentSearchOpen];
+    newSearchOpen[index] = open;
+    setStudentSearchOpen(newSearchOpen);
+    if (!open) {
+      const newSearchQuery = [...studentSearchQuery];
+      newSearchQuery[index] = '';
+      setStudentSearchQuery(newSearchQuery);
+    }
+  };
+
+  const handleStudentSearch = (index: number, query: string) => {
+    const newSearchQuery = [...studentSearchQuery];
+    newSearchQuery[index] = query.toLowerCase();
+    setStudentSearchQuery(newSearchQuery);
+  };
+
+  const getFilteredStudents = (index: number) => {
+    const query = studentSearchQuery[index];
+    if (!query) return students;
+    return students.filter((s) =>
+      s.name.toLowerCase().includes(query) || s.studentId.toLowerCase().includes(query)
+    );
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -180,11 +273,8 @@ export default function CapstoneManagement() {
       toast.error('Please select a supervisor');
       return;
     }
-
-    // Check all students are selected
-    const allStudentsSelected = formData.students.every(s => s.name && s.id);
-    if (!allStudentsSelected) {
-      toast.error('Please select all student names and IDs');
+    if (!formData.semester.trim()) {
+      toast.error('Please enter a semester');
       return;
     }
 
@@ -200,6 +290,7 @@ export default function CapstoneManagement() {
           groupName: formData.title,
           courseId: formData.courseId,
           supervisorId: formData.supervisorId,
+          semester: formData.semester,
           studentIds: formData.students.map(s => s.name), // Send actual student _ids
         }),
       });
@@ -207,10 +298,13 @@ export default function CapstoneManagement() {
       if (response.ok) {
         toast.success('Capstone group created successfully');
         setShowCreateDialog(false);
+        setStudentSearchOpen([false, false, false]);
+        setStudentSearchQuery(['', '', '']);
         setFormData({
           title: '',
           courseId: '',
           supervisorId: '',
+          semester: '',
           numberOfMembers: 3,
           students: Array(3).fill({ name: '', id: '' }),
         });
@@ -230,10 +324,136 @@ export default function CapstoneManagement() {
 
   const handleCloseDialog = () => {
     setShowCreateDialog(false);
+    setStudentSearchOpen([false, false, false]);
+    setStudentSearchQuery(['', '', '']);
+    setSupervisorSearchOpen(false);
+    setSupervisorSearchQuery('');
     setFormData({
       title: '',
       courseId: '',
       supervisorId: '',
+      semester: '',
+      numberOfMembers: 3,
+      students: Array(3).fill({ name: '', id: '' }),
+    });
+  };
+
+  const handleDeleteGroup = async () => {
+    if (!selectedGroup) return;
+
+    setDeleting(true);
+    try {
+      const response = await fetch(`/api/admin/capstone-group/${selectedGroup._id}`, {
+        method: 'DELETE',
+        headers: {
+          'x-admin-password': localStorage.getItem('adminPassword') || '',
+        },
+      });
+
+      if (response.ok) {
+        toast.success('Capstone group deleted successfully');
+        setShowDetailsDialog(false);
+        setShowDeleteConfirm(false);
+        setSelectedGroup(null);
+        await loadCapstoneGroups();
+      } else {
+        const error = await response.json();
+        toast.error(error.error || 'Failed to delete group');
+      }
+    } catch (err) {
+      console.error('Error deleting group:', err);
+      toast.error('Failed to delete group');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleEditClick = () => {
+    if (!selectedGroup) return;
+    
+    setFormData({
+      title: selectedGroup.groupName,
+      courseId: selectedGroup.courseId._id,
+      supervisorId: selectedGroup.supervisorId._id,
+      semester: (selectedGroup as any).semester || '',
+      numberOfMembers: formData.numberOfMembers,
+      students: formData.students,
+    });
+    setIsEditMode(true);
+    setShowDetailsDialog(false);
+    setShowEditDialog(true);
+  };
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    // Validation for edit mode
+    if (!formData.courseId) {
+      toast.error('Please select a course');
+      return;
+    }
+    if (!formData.semester.trim()) {
+      toast.error('Please enter a semester');
+      return;
+    }
+
+    if (!selectedGroup) return;
+
+    setUpdating(true);
+    try {
+      const response = await fetch(`/api/admin/capstone-group/${selectedGroup._id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-password': localStorage.getItem('adminPassword') || '',
+        },
+        body: JSON.stringify({
+          courseId: formData.courseId,
+          semester: formData.semester,
+        }),
+      });
+
+      if (response.ok) {
+        toast.success('Capstone group updated successfully');
+        setShowEditDialog(false);
+        setIsEditMode(false);
+        handleCloseEditDialog();
+        await loadCapstoneGroups();
+        // Reload the selected group if details dialog was showing
+        const updatedGroup = await fetch(
+          `/api/admin/capstone-group/${selectedGroup._id}`,
+          {
+            headers: {
+              'x-admin-password': localStorage.getItem('adminPassword') || '',
+            },
+          }
+        ).then(res => res.json());
+        setSelectedGroup(updatedGroup);
+        setShowDetailsDialog(true);
+      } else {
+        const error = await response.json();
+        toast.error(error.error || 'Failed to update group');
+      }
+    } catch (err) {
+      console.error('Error updating group:', err);
+      toast.error('Failed to update group');
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const handleCloseEditDialog = () => {
+    setShowEditDialog(false);
+    setIsEditMode(false);
+    setStudentSearchOpen([false, false, false]);
+    setStudentSearchQuery(['', '', '']);
+    setSupervisorSearchOpen(false);
+    setSupervisorSearchQuery('');
+    setFormData({
+      title: '',
+      courseId: '',
+      supervisorId: '',
+      semester: '',
       numberOfMembers: 3,
       students: Array(3).fill({ name: '', id: '' }),
     });
@@ -246,6 +466,21 @@ export default function CapstoneManagement() {
       </div>
     );
   }
+
+  const getFilteredGroups = () => {
+    if (!groupSearchQuery.trim()) {
+      return capstoneGroups;
+    }
+    
+    const query = groupSearchQuery.toLowerCase();
+    return capstoneGroups.filter(
+      (group) =>
+        group.groupName.toLowerCase().includes(query) ||
+        group.courseId?.code?.toLowerCase().includes(query) ||
+        group.supervisorId?.name?.toLowerCase().includes(query) ||
+        group.supervisorId?.email?.toLowerCase().includes(query)
+    );
+  };
 
   const handleGroupSelect = (groupId: string) => {
     const group = capstoneGroups.find((g) => g._id === groupId);
@@ -279,30 +514,54 @@ export default function CapstoneManagement() {
         </CardContent>
       </Card>
 
-      {/* View Groups Dropdown Card */}
+      {/* View Groups Card */}
       <Card>
         <CardHeader>
           <CardTitle>View Capstone Groups</CardTitle>
           <CardDescription>
-            Select a group to view its details
+            Search and select a group to view its details
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
           {capstoneGroups.length === 0 ? (
             <p className="text-muted-foreground">No capstone groups created yet</p>
           ) : (
-            <Select value={selectedGroupId} onValueChange={handleGroupSelect}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Capstone Groups" />
-              </SelectTrigger>
-              <SelectContent>
-                {capstoneGroups.map((group) => (
-                  <SelectItem key={group._id} value={group._id}>
-                    {group.groupName} ({group.courseId?.code})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <>
+              <Input
+                placeholder="Search by group name, course code, or supervisor..."
+                value={groupSearchQuery}
+                onChange={(e) => setGroupSearchQuery(e.target.value)}
+                className="w-full"
+              />
+              
+              <div className="space-y-2 max-h-96 overflow-y-auto">
+                {getFilteredGroups().length > 0 ? (
+                  getFilteredGroups().map((group) => (
+                    <div
+                      key={group._id}
+                      onClick={() => handleGroupSelect(group._id)}
+                      className="p-3 border rounded-lg cursor-pointer hover:bg-accent transition-colors"
+                    >
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <p className="font-semibold text-sm">{group.groupName}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {group.courseId?.code} • Supervisor: {group.supervisorId?.name}
+                          </p>
+                        </div>
+                        <p className="text-xs bg-muted px-2 py-1 rounded">
+                          {group.studentIds?.length || 0} members
+                        </p>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-sm text-muted-foreground text-center py-4">
+                    No groups match your search
+                  </p>
+                )}
+              </div>
+            </>
           )}
         </CardContent>
       </Card>
@@ -335,7 +594,7 @@ export default function CapstoneManagement() {
               />
             </div>
 
-            {/* Course Selection */}
+            {/* Course Selection - Limited to Specific Courses */}
             <div>
               <Label htmlFor="courseId" className="font-semibold">
                 Course <span className="text-red-500">*</span>
@@ -344,37 +603,115 @@ export default function CapstoneManagement() {
                 id="courseId"
                 value={formData.courseId}
                 onChange={(e) => setFormData({ ...formData, courseId: e.target.value })}
-                className="w-full px-3 py-2 border rounded-md mt-1"
+                className="w-full px-3 py-2 border rounded-md mt-1 bg-background text-foreground dark:bg-slate-950 dark:border-slate-700 dark:text-white"
                 required
               >
                 <option value="">Select a course</option>
-                {courses.map((course) => (
-                  <option key={course._id} value={course._id}>
-                    {course.code} - {course.name}
-                  </option>
-                ))}
+                {courses
+                  .filter((course) => ['CSE4098A', 'CSE4098B', 'CSE4098C', 'CSE499'].includes(course.code))
+                  .map((course) => (
+                    <option key={course._id} value={course._id}>
+                      {course.code} - {course.name}
+                    </option>
+                  ))}
               </select>
             </div>
 
-            {/* Supervisor Selection */}
+            {/* Supervisor Selection - Searchable */}
             <div>
               <Label htmlFor="supervisorId" className="font-semibold">
                 Supervisor <span className="text-red-500">*</span>
               </Label>
-              <select
-                id="supervisorId"
-                value={formData.supervisorId}
-                onChange={(e) => setFormData({ ...formData, supervisorId: e.target.value })}
-                className="w-full px-3 py-2 border rounded-md mt-1"
-                required
+              <Popover open={supervisorSearchOpen} onOpenChange={setSupervisorSearchOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className="w-full justify-between mt-1"
+                  >
+                    {supervisors.find((s) => s._id === formData.supervisorId)?.name || 'Select supervisor...'}
+                    <span className="text-muted-foreground">▼</span>
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-full p-0">
+                  <div className="p-2 space-y-2">
+                    <Input
+                      placeholder="Search supervisors..."
+                      value={supervisorSearchQuery}
+                      onChange={(e) => setSupervisorSearchQuery(e.target.value)}
+                      className="h-8"
+                    />
+                    <div className="max-h-48 overflow-y-auto space-y-1">
+                      {supervisors
+                        .filter((supervisor) =>
+                          `${supervisor.name} ${supervisor.email}`
+                            .toLowerCase()
+                            .includes(supervisorSearchQuery.toLowerCase())
+                        )
+                        .map((supervisor) => (
+                          <Button
+                            key={supervisor._id}
+                            variant={formData.supervisorId === supervisor._id ? 'default' : 'ghost'}
+                            className="w-full justify-start text-sm"
+                            size="sm"
+                            onClick={() => {
+                              setFormData({ ...formData, supervisorId: supervisor._id });
+                              setSupervisorSearchOpen(false);
+                              setSupervisorSearchQuery('');
+                            }}
+                          >
+                            <div className="text-left">
+                              <div>{supervisor.name}</div>
+                              <div className="text-xs text-muted-foreground">{supervisor.email}</div>
+                            </div>
+                          </Button>
+                        ))}
+                      {supervisors.filter((supervisor) =>
+                        `${supervisor.name} ${supervisor.email}`
+                          .toLowerCase()
+                          .includes(supervisorSearchQuery.toLowerCase())
+                      ).length === 0 && (
+                        <p className="text-sm text-muted-foreground p-2 text-center">
+                          No supervisors found
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            {/* Semester Field - Dropdown */}
+            <div>
+              <Label htmlFor="semester" className="font-semibold">
+                Semester <span className="text-red-500">*</span>
+              </Label>
+              <Select
+                value={formData.semester}
+                onValueChange={(value) => setFormData({ ...formData, semester: value })}
               >
-                <option value="">Select a supervisor</option>
-                {supervisors.map((supervisor) => (
-                  <option key={supervisor._id} value={supervisor._id}>
-                    {supervisor.name} ({supervisor.email})
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger className="mt-1" id="semester">
+                  <SelectValue placeholder="Select a semester" />
+                </SelectTrigger>
+                <SelectContent>
+                  {semesters.length > 0 ? (
+                    semesters.map((semester) => (
+                      <SelectItem key={semester._id} value={semester.name}>
+                        {semester.name}
+                        {semester.description && ` - ${semester.description}`}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <SelectItem value="" disabled>
+                      No semesters available
+                    </SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+              {semesters.length === 0 && (
+                <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-1">
+                  No semesters created. Please create a semester in Semester Management.
+                </p>
+              )}
             </div>
 
             {/* Number of Members */}
@@ -414,49 +751,77 @@ export default function CapstoneManagement() {
             <div className="space-y-4">
               <Label className="font-semibold">Students <span className="text-red-500">*</span></Label>
               {formData.students.map((student, index) => (
-                <div key={index} className="border rounded-lg p-4 space-y-3">
+                <div key={index} className="border rounded-lg p-4 space-y-3 dark:border-slate-700">
                   <h4 className="font-medium">Student {index + 1}</h4>
                   
-                  {/* Student Name Dropdown */}
+                  {/* Student Name Searchable Dropdown */}
                   <div>
                     <Label htmlFor={`student-name-${index}`} className="text-sm">
                       Student Name <span className="text-red-500">*</span>
                     </Label>
-                    <select
-                      id={`student-name-${index}`}
-                      value={student.name}
-                      onChange={(e) => handleStudentChange(index, 'name', e.target.value)}
-                      className="w-full px-3 py-2 border rounded-md mt-1 text-sm"
-                      required
-                    >
-                      <option value="">Select student name</option>
-                      {students.map((s) => (
-                        <option key={s._id} value={s._id}>
-                          {s.name}
-                        </option>
-                      ))}
-                    </select>
+                    <Popover open={studentSearchOpen[index]} onOpenChange={(open) => handleStudentSearchOpen(index, open)}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          aria-expanded={studentSearchOpen[index]}
+                          className="w-full justify-between mt-1"
+                        >
+                          {student.name
+                            ? students.find((s) => s._id === student.name)?.name
+                            : 'Select student...'}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-full p-0" align="start">
+                        <div className="p-3 border-b">
+                          <Input
+                            placeholder="Search by name or ID..."
+                            value={studentSearchQuery[index] || ''}
+                            onChange={(e) => handleStudentSearch(index, e.target.value)}
+                            autoFocus
+                            className="h-8"
+                          />
+                        </div>
+                        {getFilteredStudents(index).length === 0 ? (
+                          <div className="p-4 text-sm text-muted-foreground text-center">
+                            {students.length === 0 ? 'No students available.' : 'No student found.'}
+                          </div>
+                        ) : (
+                          <div className="max-h-[300px] overflow-y-auto">
+                            {getFilteredStudents(index).map((s) => (
+                              <button
+                                key={s._id}
+                                onClick={() => {
+                                  handleStudentChange(index, 'name', s._id);
+                                  handleStudentSearchOpen(index, false);
+                                }}
+                                className="w-full px-4 py-2 text-left hover:bg-accent hover:text-accent-foreground border-b
+ last:border-b-0 flex items-center justify-between transition-colors"
+                              >
+                                <div>
+                                  <div className="font-medium text-sm">{s.name}</div>
+                                  <div className="text-xs text-muted-foreground">{s.studentId}</div>
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </PopoverContent>
+                    </Popover>
                   </div>
 
-                  {/* Student ID Dropdown */}
+                  {/* Student ID (Auto-filled) */}
                   <div>
                     <Label htmlFor={`student-id-${index}`} className="text-sm">
                       Student ID <span className="text-red-500">*</span>
                     </Label>
-                    <select
+                    <Input
                       id={`student-id-${index}`}
                       value={student.id}
-                      onChange={(e) => handleStudentChange(index, 'id', e.target.value)}
-                      className="w-full px-3 py-2 border rounded-md mt-1 text-sm"
-                      required
-                    >
-                      <option value="">Select student ID</option>
-                      {students.map((s) => (
-                        <option key={s._id} value={s.studentId}>
-                          {s.studentId}
-                        </option>
-                      ))}
-                    </select>
+                      placeholder="Auto-filled when name is selected"
+                      disabled
+                      className="mt-1 text-sm bg-muted"
+                    />
                   </div>
                 </div>
               ))}
@@ -503,6 +868,10 @@ export default function CapstoneManagement() {
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Course Name:</span>
                     <span className="font-medium">{selectedGroup.courseId?.name}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Semester:</span>
+                    <span className="font-medium">{selectedGroup.semester || 'N/A'}</span>
                   </div>
                 </div>
               </div>
@@ -566,7 +935,123 @@ export default function CapstoneManagement() {
             <Button variant="outline" onClick={() => setShowDetailsDialog(false)}>
               Close
             </Button>
+            <Button 
+              variant="default"
+              onClick={handleEditClick}
+            >
+              Edit Group
+            </Button>
+            <Button 
+              variant="destructive" 
+              onClick={() => setShowDeleteConfirm(true)}
+              disabled={deleting}
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Delete Group
+            </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Delete Capstone Group</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete the group "{selectedGroup?.groupName}"? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => setShowDeleteConfirm(false)}
+              disabled={deleting}
+            >
+              Cancel
+            </Button>
+            <Button 
+              variant="destructive" 
+              onClick={handleDeleteGroup}
+              disabled={deleting}
+            >
+              {deleting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              {deleting ? 'Deleting...' : 'Delete'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Group Dialog */}
+      <Dialog open={showEditDialog} onOpenChange={(open) => {
+        if (!open) handleCloseEditDialog();
+      }}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Capstone Group</DialogTitle>
+            <DialogDescription>
+              Update the course and semester for this capstone group
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleEditSubmit} className="space-y-6">
+            {/* Course Selection */}
+            <div>
+              <Label htmlFor="edit-courseId" className="font-semibold">
+                Course <span className="text-red-500">*</span>
+              </Label>
+              <select
+                id="edit-courseId"
+                value={formData.courseId}
+                onChange={(e) => setFormData({ ...formData, courseId: e.target.value })}
+                className="w-full px-3 py-2 border rounded-md mt-1"
+                required
+              >
+                <option value="">Select a course</option>
+                {courses.map((course) => (
+                  <option key={course._id} value={course._id}>
+                    {course.code} - {course.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Semester Field */}
+            <div>
+              <Label htmlFor="edit-semester" className="font-semibold">
+                Semester <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                id="edit-semester"
+                placeholder="e.g., Spring2024, Fall2024, F23"
+                value={formData.semester}
+                onChange={(e) => setFormData({ ...formData, semester: e.target.value })}
+                pattern="[a-zA-Z0-9\-_]+"
+                title="Semester must be alphanumeric (can include hyphens and underscores)"
+                required
+                className="mt-1"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Alphanumeric format (e.g., Spring2024, F23, 2024-Spring)
+              </p>
+            </div>
+
+            <DialogFooter>
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={handleCloseEditDialog}
+                disabled={updating}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={updating}>
+                {updating && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                Update Group
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
     </div>

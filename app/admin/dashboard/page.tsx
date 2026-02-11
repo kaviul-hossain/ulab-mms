@@ -4,7 +4,7 @@ import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Loader2, LogOut, Settings, LayoutDashboard, BookOpen, FolderOpen, GraduationCap } from 'lucide-react';
+import { Loader2, LogOut, Settings, LayoutDashboard, BookOpen, FolderOpen, GraduationCap, Calendar } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { AdminSidebar, SidebarItem } from '@/app/components/AdminSidebar';
@@ -13,6 +13,7 @@ import OverviewSection from './components/OverviewSection';
 import CourseManagement from './components/CourseManagement';
 import ResourcesManager from './components/ResourcesManager';
 import CapstoneManagement from './components/CapstoneManagement';
+import SemesterManagement from './components/SemesterManagement';
 
 const sidebarItems: SidebarItem[] = [
   {
@@ -29,6 +30,11 @@ const sidebarItems: SidebarItem[] = [
     title: 'Resources',
     href: '/admin/dashboard?tab=resources',
     icon: FolderOpen,
+  },
+  {
+    title: 'Semester Management',
+    href: '/admin/dashboard?tab=semesters',
+    icon: Calendar,
   },
   {
     title: 'Capstone Management',
@@ -136,6 +142,7 @@ function AdminDashboardContent() {
           {activeTab === 'overview' && <OverviewSection />}
           {activeTab === 'courses' && <CourseManagement />}
           {activeTab === 'resources' && <ResourcesManager />}
+          {activeTab === 'semesters' && <SemesterManagement />}
           {activeTab === 'capstone' && <CapstoneManagement />}
         </main>
       </div>

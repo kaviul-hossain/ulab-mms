@@ -1,7 +1,7 @@
 'use client';
 
 import { useSession } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useParams } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
@@ -13,7 +13,6 @@ import { Badge } from '@/components/ui/badge';
 import { Loader2, ArrowLeft, Plus, Edit, CheckCircle2 } from 'lucide-react';
 import Image from 'next/image';
 import { toast } from 'sonner';
-import AssignedStudentsList from '@/app/capstone/components/AssignedStudentsList';
 
 interface Student {
   _id: string;
@@ -24,21 +23,17 @@ interface Student {
 interface CapstoneRecord {
   _id: string;
   studentId: Student;
-  supervisorMarks?: number;
-  supervisorComments?: string;
+  reportMarks?: number;
+  reportComments?: string;
   createdAt: string;
 }
 
-interface PageProps {
-  params: {
-    category: string;
-  };
-}
-
-export default function SupervisorCategoryCapstone({ params }: PageProps) {
+export default function ReportPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
-  const { category } = params;
+  const params = useParams();
+  const semester = params?.semester as string;
+  const category = params?.category as string;
   const [students, setStudents] = useState<Student[]>([]);
   const [capstoneRecords, setCapstoneRecords] = useState<CapstoneRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -47,7 +42,6 @@ export default function SupervisorCategoryCapstone({ params }: PageProps) {
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [marks, setMarks] = useState('');
   const [comments, setComments] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -72,7 +66,7 @@ export default function SupervisorCategoryCapstone({ params }: PageProps) {
 
   const fetchCapstoneRecords = async () => {
     try {
-      const response = await fetch('/api/capstone?submissionType=supervisor');
+      const response = await fetch('/api/capstone?submissionType=report');
       if (!response.ok) throw new Error('Failed to fetch records');
       const data = await response.json();
       setCapstoneRecords(data);
@@ -89,8 +83,8 @@ export default function SupervisorCategoryCapstone({ params }: PageProps) {
     );
     setSelectedStudent(student);
     if (existingRecord) {
-      setMarks(existingRecord.supervisorMarks?.toString() || '');
-      setComments(existingRecord.supervisorComments || '');
+      setMarks(existingRecord.reportMarks?.toString() || '');
+      setComments(existingRecord.reportComments || '');
     } else {
       setMarks('');
       setComments('');
@@ -118,9 +112,9 @@ export default function SupervisorCategoryCapstone({ params }: PageProps) {
         body: JSON.stringify({
           studentId: selectedStudent._id,
           supervisorId: session?.user?.id,
-          supervisorMarks: marksNum,
-          supervisorComments: comments,
-          submissionType: 'supervisor',
+          reportMarks: marksNum,
+          reportComments: comments,
+          submissionType: 'report',
         }),
       });
 
@@ -136,12 +130,6 @@ export default function SupervisorCategoryCapstone({ params }: PageProps) {
       setSubmitting(false);
     }
   };
-
-  const filteredStudents = students.filter(
-    (student) =>
-      student.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      student.rollNumber.toLowerCase().includes(searchQuery.toLowerCase())
-  );
 
   if (status === 'loading' || loading) {
     return (
@@ -169,15 +157,15 @@ export default function SupervisorCategoryCapstone({ params }: PageProps) {
               </Link>
               <div>
                 <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">
-                  {category} - Supervisor Marks
+                  {semester} - {category} - Report Marks
                 </h1>
                 <p className="text-xs text-muted-foreground">
-                  Submit marks for {category} capstone students
+                  Submit report marks for {category} students
                 </p>
               </div>
             </div>
             <Button variant="outline" asChild>
-              <Link href="/capstone/supervisor">
+              <Link href={`/capstone/supervisor/${semester}`}>
                 <ArrowLeft className="h-4 w-4 mr-2" />
                 Back
               </Link>
@@ -189,35 +177,20 @@ export default function SupervisorCategoryCapstone({ params }: PageProps) {
       <div className="max-w-6xl mx-auto p-4 pt-8">
         {/* Header */}
         <div className="mb-8">
-          <h2 className="text-3xl font-bold mb-2">Submit Supervisor Marks - {category}</h2>
+          <h2 className="text-3xl font-bold mb-2">Submit Report Marks - {category}</h2>
           <p className="text-muted-foreground">
-            Enter and manage capstone marks for your supervised students
+            Enter and manage report marks for your capstone students ({semester})
           </p>
-        </div>
-
-        {/* Assigned Students Section */}
-        <div className="mb-8">
-          <AssignedStudentsList courseCode={category} role="supervisor" />
-        </div>
-
-        {/* Search Bar */}
-        <div className="mb-6">
-          <Input
-            placeholder="Search by student name or roll number..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="max-w-md"
-          />
         </div>
 
         {/* Students Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredStudents.length > 0 ? (
-            filteredStudents.map((student) => {
+          {students.length > 0 ? (
+            students.map((student) => {
               const record = capstoneRecords.find(
                 (r) => r.studentId._id === student._id
               );
-              const hasSubmitted = !!record?.supervisorMarks;
+              const hasSubmitted = !!record?.reportMarks;
 
               return (
                 <Card key={student._id} className="flex flex-col">
@@ -240,11 +213,11 @@ export default function SupervisorCategoryCapstone({ params }: PageProps) {
                       <div className="mb-4">
                         <p className="text-sm text-muted-foreground">Marks</p>
                         <p className="text-2xl font-bold text-blue-600">
-                          {record?.supervisorMarks}/100
+                          {record?.reportMarks}/100
                         </p>
-                        {record?.supervisorComments && (
+                        {record?.reportComments && (
                           <p className="text-sm mt-2 text-muted-foreground">
-                            {record.supervisorComments}
+                            {record.reportComments}
                           </p>
                         )}
                       </div>
@@ -274,7 +247,7 @@ export default function SupervisorCategoryCapstone({ params }: PageProps) {
             <Card className="md:col-span-2 lg:col-span-3">
               <CardContent className="pt-6 text-center">
                 <p className="text-muted-foreground">
-                  {searchQuery ? 'No students found matching your search' : 'No students available'}
+                  No students available
                 </p>
               </CardContent>
             </Card>
@@ -286,7 +259,7 @@ export default function SupervisorCategoryCapstone({ params }: PageProps) {
       <Dialog open={showModal} onOpenChange={setShowModal}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
-            <DialogTitle>Submit Capstone Marks</DialogTitle>
+            <DialogTitle>Submit Report Marks</DialogTitle>
             <DialogDescription>
               {selectedStudent?.name} ({selectedStudent?.rollNumber})
             </DialogDescription>

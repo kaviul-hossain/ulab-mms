@@ -114,7 +114,7 @@ export async function PUT(
 
     const { id } = await params;
     const body = await request.json();
-    const { groupName, description, studentIds, supervisorId } = body;
+    const { groupName, description, courseId, semester, studentIds, supervisorId } = body;
 
     const group = await CapstoneGroup.findById(id);
     if (!group) {
@@ -127,6 +127,8 @@ export async function PUT(
     // Update fields
     if (groupName) group.groupName = groupName;
     if (description !== undefined) group.description = description;
+    if (courseId) group.courseId = courseId;
+    if (semester !== undefined) group.semester = semester;
     if (studentIds) group.studentIds = studentIds;
     if (supervisorId) group.supervisorId = supervisorId;
 

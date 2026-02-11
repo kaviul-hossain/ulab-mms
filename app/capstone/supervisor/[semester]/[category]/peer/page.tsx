@@ -1,7 +1,7 @@
 'use client';
 
 import { useSession } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useParams } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
@@ -17,7 +17,8 @@ import { toast } from 'sonner';
 interface Student {
   _id: string;
   name: string;
-  rollNumber: string;
+  rollNumber?: string;
+  studentId?: string;
 }
 
 interface CapstoneRecord {
@@ -28,25 +29,38 @@ interface CapstoneRecord {
   createdAt: string;
 }
 
-interface PageProps {
-  params: {
-    category: string;
+interface CapstoneGroup {
+  _id: string;
+  groupName: string;
+  courseId: {
+    _id: string;
+    code: string;
+    name: string;
   };
+  supervisorId: {
+    _id: string;
+    name: string;
+  };
+  semester?: string;
+  studentIds: Student[];
 }
 
-export default function PeerPage({ params }: PageProps) {
+export default function PeerPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
-  const { category } = params;
+  const params = useParams();
+  const semester = params?.semester as string;
+  const category = params?.category as string;
   const [students, setStudents] = useState<Student[]>([]);
   const [capstoneRecords, setCapstoneRecords] = useState<CapstoneRecord[]>([]);
+  const [capstoneGroups, setCapstoneGroups] = useState<CapstoneGroup[]>([]);
+  const [groupSearchQuery, setGroupSearchQuery] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [marks, setMarks] = useState('');
   const [comments, setComments] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -54,6 +68,7 @@ export default function PeerPage({ params }: PageProps) {
     } else if (status === 'authenticated') {
       fetchStudents();
       fetchCapstoneRecords();
+      fetchCapstoneGroups();
     }
   }, [status, router]);
 
@@ -79,6 +94,18 @@ export default function PeerPage({ params }: PageProps) {
     } catch (error) {
       console.error('Error fetching capstone records:', error);
       setLoading(false);
+    }
+  };
+
+  const fetchCapstoneGroups = async () => {
+    try {
+      const response = await fetch('/api/capstone-groups?all=true');
+      if (!response.ok) throw new Error('Failed to fetch groups');
+      const data: CapstoneGroup[] = await response.json();
+      setCapstoneGroups(data);
+    } catch (error) {
+      console.error('Error fetching capstone groups:', error);
+      toast.error('Failed to load capstone groups');
     }
   };
 
@@ -136,11 +163,25 @@ export default function PeerPage({ params }: PageProps) {
     }
   };
 
-  const filteredStudents = students.filter(
-    (student) =>
-      student.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      student.rollNumber.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const getFilteredCapstoneGroups = () => {
+    if (!groupSearchQuery.trim()) {
+      return capstoneGroups;
+    }
+
+    const query = groupSearchQuery.toLowerCase();
+    return capstoneGroups.filter(
+      (group) =>
+        group.groupName.toLowerCase().includes(query) ||
+        group.courseId?.code?.toLowerCase().includes(query) ||
+        group.supervisorId?.name?.toLowerCase().includes(query) ||
+        group.semester?.toLowerCase().includes(query) ||
+        group.studentIds?.some(
+          (s) =>
+            s.name.toLowerCase().includes(query) ||
+            s.studentId?.toLowerCase().includes(query)
+        )
+    );
+  };
 
   if (status === 'loading' || loading) {
     return (
@@ -168,7 +209,7 @@ export default function PeerPage({ params }: PageProps) {
               </Link>
               <div>
                 <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">
-                  {category} - Peer Evaluation Marks
+                  {semester} - {category} - Peer Evaluation Marks
                 </h1>
                 <p className="text-xs text-muted-foreground">
                   Submit peer evaluation marks for {category} students
@@ -176,7 +217,7 @@ export default function PeerPage({ params }: PageProps) {
               </div>
             </div>
             <Button variant="outline" asChild>
-              <Link href="/capstone/supervisor">
+              <Link href={`/capstone/supervisor/${semester}`}>
                 <ArrowLeft className="h-4 w-4 mr-2" />
                 Back
               </Link>
@@ -190,24 +231,79 @@ export default function PeerPage({ params }: PageProps) {
         <div className="mb-8">
           <h2 className="text-3xl font-bold mb-2">Submit Peer Evaluation Marks - {category}</h2>
           <p className="text-muted-foreground">
-            Enter and manage peer evaluation marks for your capstone students
+            Enter and manage peer evaluation marks for your capstone students ({semester})
           </p>
         </div>
 
-        {/* Search Bar */}
-        <div className="mb-6">
-          <Input
-            placeholder="Search by student name or roll number..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="max-w-md"
-          />
-        </div>
+        {/* Capstone Groups Section */}
+        <Card className="mb-8">
+          <CardHeader>
+            <CardTitle>All Capstone Groups</CardTitle>
+            <CardDescription>
+              View all capstone groups in the system
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {capstoneGroups.length === 0 ? (
+              <p className="text-muted-foreground">No capstone groups found</p>
+            ) : (
+              <>
+                <Input
+                  placeholder="Search by group name, course, semester, supervisor, or student..."
+                  value={groupSearchQuery}
+                  onChange={(e) => setGroupSearchQuery(e.target.value)}
+                  className="w-full"
+                />
+
+                <div className="space-y-3 max-h-96 overflow-y-auto border rounded-lg p-3">
+                  {getFilteredCapstoneGroups().length > 0 ? (
+                    getFilteredCapstoneGroups().map((group) => (
+                      <div
+                        key={group._id}
+                        className="p-3 bg-muted rounded-lg border border-border hover:border-blue-300 transition-colors"
+                      >
+                        <div className="flex justify-between items-start mb-2">
+                          <div>
+                            <p className="font-semibold text-sm">{group.groupName}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {group.courseId?.code} • Course: {group.courseId?.name}
+                              {group.semester && ` • Semester: ${group.semester}`}
+                            </p>
+                          </div>
+                          <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                            {group.studentIds?.length || 0} members
+                          </span>
+                        </div>
+                        <p className="text-xs text-muted-foreground mb-2">
+                          Supervisor: <span className="font-medium">{group.supervisorId?.name}</span>
+                        </p>
+                        <div className="text-xs">
+                          <p className="font-medium text-muted-foreground mb-1">Members:</p>
+                          <ul className="space-y-1 pl-2">
+                            {group.studentIds?.map((student) => (
+                              <li key={student._id} className="text-muted-foreground">
+                                • {student.name} ({student.studentId})
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-sm text-muted-foreground text-center py-4">
+                      No groups match your search
+                    </p>
+                  )}
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
 
         {/* Students Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredStudents.length > 0 ? (
-            filteredStudents.map((student) => {
+          {students.length > 0 ? (
+            students.map((student) => {
               const record = capstoneRecords.find(
                 (r) => r.studentId._id === student._id
               );
@@ -268,7 +364,7 @@ export default function PeerPage({ params }: PageProps) {
             <Card className="md:col-span-2 lg:col-span-3">
               <CardContent className="pt-6 text-center">
                 <p className="text-muted-foreground">
-                  {searchQuery ? 'No students found matching your search' : 'No students available'}
+                  No students available
                 </p>
               </CardContent>
             </Card>

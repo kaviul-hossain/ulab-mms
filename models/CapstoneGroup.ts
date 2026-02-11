@@ -5,6 +5,7 @@ export interface ICapstoneGroup extends Document {
   groupName: string;
   groupNumber?: number;
   description?: string;
+  semester?: string;
   studentIds: mongoose.Types.ObjectId[]; // Array of student IDs in the group
   supervisorId: mongoose.Types.ObjectId;
   evaluatorAssignments: {
@@ -34,6 +35,10 @@ const CapstoneGroupSchema: Schema = new Schema(
       required: false,
     },
     description: {
+      type: String,
+      default: '',
+    },
+    semester: {
       type: String,
       default: '',
     },
