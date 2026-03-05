@@ -1,7 +1,7 @@
 'use client';
 
 import { useSession } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useParams } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
@@ -16,9 +16,11 @@ const CATEGORIES = [
   { code: 'CSE499', color: 'bg-orange-100 dark:bg-orange-900', textColor: 'text-orange-600 dark:text-orange-400', buttonColor: 'bg-orange-600 hover:bg-orange-700' },
 ];
 
-export default function EvaluatorCapstone() {
+export default function SemesterPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
+  const params = useParams();
+  const semester = params?.semester as string;
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -54,16 +56,16 @@ export default function EvaluatorCapstone() {
                 />
               </Link>
               <div>
-                <h1 className="text-2xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
-                  Evaluator - Capstone Marks
+                <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">
+                  {semester} - Capstone Courses
                 </h1>
                 <p className="text-xs text-muted-foreground">
-                  Select a category to submit marks
+                  Select a course to submit marks
                 </p>
               </div>
             </div>
             <Button variant="outline" asChild>
-              <Link href="/capstone">
+              <Link href="/capstone/supervisor">
                 <ArrowLeft className="h-4 w-4 mr-2" />
                 Back
               </Link>
@@ -75,16 +77,16 @@ export default function EvaluatorCapstone() {
       <div className="max-w-6xl mx-auto p-4 pt-8">
         {/* Header */}
         <div className="mb-8">
-          <h2 className="text-3xl font-bold mb-2">Select Capstone Category</h2>
+          <h2 className="text-3xl font-bold mb-2">Select Course - {semester}</h2>
           <p className="text-muted-foreground">
-            Choose a capstone category to view and submit evaluation marks
+            Choose a capstone course to view and submit marks
           </p>
         </div>
 
         {/* Categories Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {CATEGORIES.map((category) => (
-            <Card key={category.code} className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-purple-500">
+            <Card key={category.code} className="hover:shadow-lg transition-shadow border-2 hover:border-blue-500">
               <CardHeader>
                 <div className={`w-12 h-12 rounded-lg ${category.color} flex items-center justify-center mb-4`}>
                   <span className={`text-lg font-bold ${category.textColor}`}>
@@ -96,18 +98,38 @@ export default function EvaluatorCapstone() {
                   Capstone {category.code === 'CSE499' ? 'Final Project' : `Section ${category.code.slice(-1)}`}
                 </CardDescription>
               </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground mb-6">
-                  Submit evaluation marks for {category.code} capstone students
+              <CardContent className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  Submit marks for {category.code} capstone students
                 </p>
-                <Button 
-                  asChild 
-                  className={`w-full ${category.buttonColor}`}
-                >
-                  <Link href={`/capstone/evaluator/${category.code}/report`}>
-                    Report
-                  </Link>
-                </Button>
+                
+                {/* Buttons for Weekly Journal, Peer, and Report */}
+                <div className="space-y-2">
+                  <Button 
+                    asChild 
+                    className={`w-full ${category.buttonColor}`}
+                  >
+                    <Link href={`/capstone/supervisor/${semester}/${category.code}/weekly-journal`}>
+                      Weekly Journal
+                    </Link>
+                  </Button>
+                  <Button 
+                    asChild 
+                    className={`w-full ${category.buttonColor}`}
+                  >
+                    <Link href={`/capstone/supervisor/${semester}/${category.code}/peer`}>
+                      Peer
+                    </Link>
+                  </Button>
+                  <Button 
+                    asChild 
+                    className={`w-full ${category.buttonColor}`}
+                  >
+                    <Link href={`/capstone/supervisor/${semester}/${category.code}/report`}>
+                      Report
+                    </Link>
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           ))}

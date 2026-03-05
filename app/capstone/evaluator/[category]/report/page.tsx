@@ -23,8 +23,8 @@ interface Student {
 interface CapstoneRecord {
   _id: string;
   studentId: Student;
-  supervisorMarks?: number;
-  supervisorComments?: string;
+  evaluatorReportMarks?: number;
+  evaluatorReportComments?: string;
   createdAt: string;
 }
 
@@ -34,7 +34,7 @@ interface PageProps {
   };
 }
 
-export default function SupervisorCategoryCapstone({ params }: PageProps) {
+export default function EvaluatorReportPage({ params }: PageProps) {
   const { data: session, status } = useSession();
   const router = useRouter();
   const { category } = params;
@@ -71,7 +71,7 @@ export default function SupervisorCategoryCapstone({ params }: PageProps) {
 
   const fetchCapstoneRecords = async () => {
     try {
-      const response = await fetch('/api/capstone?submissionType=supervisor');
+      const response = await fetch('/api/capstone?submissionType=evaluatorReport');
       if (!response.ok) throw new Error('Failed to fetch records');
       const data = await response.json();
       setCapstoneRecords(data);
@@ -88,8 +88,8 @@ export default function SupervisorCategoryCapstone({ params }: PageProps) {
     );
     setSelectedStudent(student);
     if (existingRecord) {
-      setMarks(existingRecord.supervisorMarks?.toString() || '');
-      setComments(existingRecord.supervisorComments || '');
+      setMarks(existingRecord.evaluatorReportMarks?.toString() || '');
+      setComments(existingRecord.evaluatorReportComments || '');
     } else {
       setMarks('');
       setComments('');
@@ -116,10 +116,10 @@ export default function SupervisorCategoryCapstone({ params }: PageProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           studentId: selectedStudent._id,
-          supervisorId: session?.user?.id,
-          supervisorMarks: marksNum,
-          supervisorComments: comments,
-          submissionType: 'supervisor',
+          evaluatorId: session?.user?.id,
+          evaluatorReportMarks: marksNum,
+          evaluatorReportComments: comments,
+          submissionType: 'evaluatorReport',
         }),
       });
 
@@ -167,16 +167,16 @@ export default function SupervisorCategoryCapstone({ params }: PageProps) {
                 />
               </Link>
               <div>
-                <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">
-                  {category} - Supervisor Marks
+                <h1 className="text-2xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
+                  {category} - Evaluator Report Marks
                 </h1>
                 <p className="text-xs text-muted-foreground">
-                  Submit marks for {category} capstone students
+                  Submit report evaluation marks for {category} students
                 </p>
               </div>
             </div>
             <Button variant="outline" asChild>
-              <Link href="/capstone/supervisor">
+              <Link href="/capstone/evaluator">
                 <ArrowLeft className="h-4 w-4 mr-2" />
                 Back
               </Link>
@@ -188,9 +188,9 @@ export default function SupervisorCategoryCapstone({ params }: PageProps) {
       <div className="max-w-6xl mx-auto p-4 pt-8">
         {/* Header */}
         <div className="mb-8">
-          <h2 className="text-3xl font-bold mb-2">Submit Supervisor Marks - {category}</h2>
+          <h2 className="text-3xl font-bold mb-2">Submit Evaluator Report Marks - {category}</h2>
           <p className="text-muted-foreground">
-            Enter and manage capstone marks for your supervised students
+            Enter and manage report evaluation marks for your assigned students
           </p>
         </div>
 
@@ -211,7 +211,7 @@ export default function SupervisorCategoryCapstone({ params }: PageProps) {
               const record = capstoneRecords.find(
                 (r) => r.studentId._id === student._id
               );
-              const hasSubmitted = !!record?.supervisorMarks;
+              const hasSubmitted = !!record?.evaluatorReportMarks;
 
               return (
                 <Card key={student._id} className="flex flex-col">
@@ -233,12 +233,12 @@ export default function SupervisorCategoryCapstone({ params }: PageProps) {
                     {hasSubmitted && (
                       <div className="mb-4">
                         <p className="text-sm text-muted-foreground">Marks</p>
-                        <p className="text-2xl font-bold text-blue-600">
-                          {record?.supervisorMarks}/100
+                        <p className="text-2xl font-bold text-purple-600">
+                          {record?.evaluatorReportMarks}/100
                         </p>
-                        {record?.supervisorComments && (
+                        {record?.evaluatorReportComments && (
                           <p className="text-sm mt-2 text-muted-foreground">
-                            {record.supervisorComments}
+                            {record.evaluatorReportComments}
                           </p>
                         )}
                       </div>
@@ -280,7 +280,7 @@ export default function SupervisorCategoryCapstone({ params }: PageProps) {
       <Dialog open={showModal} onOpenChange={setShowModal}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
-            <DialogTitle>Submit Capstone Marks</DialogTitle>
+            <DialogTitle>Submit Evaluator Report Marks</DialogTitle>
             <DialogDescription>
               {selectedStudent?.name} ({selectedStudent?.rollNumber})
             </DialogDescription>

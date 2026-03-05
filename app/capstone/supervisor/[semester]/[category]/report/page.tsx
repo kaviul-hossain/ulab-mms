@@ -1,7 +1,7 @@
 'use client';
 
 import { useSession } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useParams } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
@@ -13,7 +13,6 @@ import { Badge } from '@/components/ui/badge';
 import { Loader2, ArrowLeft, Plus, Edit, CheckCircle2 } from 'lucide-react';
 import Image from 'next/image';
 import { toast } from 'sonner';
-import AssignedStudentsList from '@/app/capstone/components/AssignedStudentsList';
 
 interface Student {
   _id: string;
@@ -24,21 +23,17 @@ interface Student {
 interface CapstoneRecord {
   _id: string;
   studentId: Student;
-  evaluatorMarks?: number;
-  evaluatorComments?: string;
+  reportMarks?: number;
+  reportComments?: string;
   createdAt: string;
 }
 
-interface PageProps {
-  params: {
-    category: string;
-  };
-}
-
-export default function EvaluatorCategoryCapstone({ params }: PageProps) {
+export default function ReportPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
-  const { category } = params;
+  const params = useParams();
+  const semester = params?.semester as string;
+  const category = params?.category as string;
   const [students, setStudents] = useState<Student[]>([]);
   const [capstoneRecords, setCapstoneRecords] = useState<CapstoneRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -47,7 +42,6 @@ export default function EvaluatorCategoryCapstone({ params }: PageProps) {
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [marks, setMarks] = useState('');
   const [comments, setComments] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -72,7 +66,7 @@ export default function EvaluatorCategoryCapstone({ params }: PageProps) {
 
   const fetchCapstoneRecords = async () => {
     try {
-      const response = await fetch('/api/capstone?submissionType=evaluator');
+      const response = await fetch('/api/capstone?submissionType=report');
       if (!response.ok) throw new Error('Failed to fetch records');
       const data = await response.json();
       setCapstoneRecords(data);
@@ -89,8 +83,8 @@ export default function EvaluatorCategoryCapstone({ params }: PageProps) {
     );
     setSelectedStudent(student);
     if (existingRecord) {
-      setMarks(existingRecord.evaluatorMarks?.toString() || '');
-      setComments(existingRecord.evaluatorComments || '');
+      setMarks(existingRecord.reportMarks?.toString() || '');
+      setComments(existingRecord.reportComments || '');
     } else {
       setMarks('');
       setComments('');
@@ -118,9 +112,9 @@ export default function EvaluatorCategoryCapstone({ params }: PageProps) {
         body: JSON.stringify({
           studentId: selectedStudent._id,
           supervisorId: session?.user?.id,
-          evaluatorMarks: marksNum,
-          evaluatorComments: comments,
-          submissionType: 'evaluator',
+          reportMarks: marksNum,
+          reportComments: comments,
+          submissionType: 'report',
         }),
       });
 
@@ -136,12 +130,6 @@ export default function EvaluatorCategoryCapstone({ params }: PageProps) {
       setSubmitting(false);
     }
   };
-
-  const filteredStudents = students.filter(
-    (student) =>
-      student.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      student.rollNumber.toLowerCase().includes(searchQuery.toLowerCase())
-  );
 
   if (status === 'loading' || loading) {
     return (
@@ -168,16 +156,16 @@ export default function EvaluatorCategoryCapstone({ params }: PageProps) {
                 />
               </Link>
               <div>
-                <h1 className="text-2xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
-                  {category} - Evaluator Marks
+                <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">
+                  {semester} - {category} - Report Marks
                 </h1>
                 <p className="text-xs text-muted-foreground">
-                  Submit evaluation marks for {category} capstone students
+                  Submit report marks for {category} students
                 </p>
               </div>
             </div>
             <Button variant="outline" asChild>
-              <Link href="/capstone/evaluator">
+              <Link href={`/capstone/supervisor/${semester}`}>
                 <ArrowLeft className="h-4 w-4 mr-2" />
                 Back
               </Link>
@@ -189,35 +177,20 @@ export default function EvaluatorCategoryCapstone({ params }: PageProps) {
       <div className="max-w-6xl mx-auto p-4 pt-8">
         {/* Header */}
         <div className="mb-8">
-          <h2 className="text-3xl font-bold mb-2">Submit Evaluator Marks - {category}</h2>
+          <h2 className="text-3xl font-bold mb-2">Submit Report Marks - {category}</h2>
           <p className="text-muted-foreground">
-            Enter and manage capstone evaluation marks for assigned students
+            Enter and manage report marks for your capstone students ({semester})
           </p>
-        </div>
-
-        {/* Assigned Students Section */}
-        <div className="mb-8">
-          <AssignedStudentsList courseCode={category} role="evaluator" />
-        </div>
-
-        {/* Search Bar */}
-        <div className="mb-6">
-          <Input
-            placeholder="Search by student name or roll number..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="max-w-md"
-          />
         </div>
 
         {/* Students Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredStudents.length > 0 ? (
-            filteredStudents.map((student) => {
+          {students.length > 0 ? (
+            students.map((student) => {
               const record = capstoneRecords.find(
                 (r) => r.studentId._id === student._id
               );
-              const hasSubmitted = !!record?.evaluatorMarks;
+              const hasSubmitted = !!record?.reportMarks;
 
               return (
                 <Card key={student._id} className="flex flex-col">
@@ -228,7 +201,7 @@ export default function EvaluatorCategoryCapstone({ params }: PageProps) {
                         <CardDescription>{student.rollNumber}</CardDescription>
                       </div>
                       {hasSubmitted && (
-                        <Badge variant="default" className="bg-purple-600">
+                        <Badge variant="default" className="bg-green-600">
                           <CheckCircle2 className="h-3 w-3 mr-1" />
                           Submitted
                         </Badge>
@@ -238,13 +211,13 @@ export default function EvaluatorCategoryCapstone({ params }: PageProps) {
                   <CardContent className="flex-grow">
                     {hasSubmitted && (
                       <div className="mb-4">
-                        <p className="text-sm text-muted-foreground">Evaluation Marks</p>
-                        <p className="text-2xl font-bold text-purple-600">
-                          {record?.evaluatorMarks}/100
+                        <p className="text-sm text-muted-foreground">Marks</p>
+                        <p className="text-2xl font-bold text-blue-600">
+                          {record?.reportMarks}/100
                         </p>
-                        {record?.evaluatorComments && (
+                        {record?.reportComments && (
                           <p className="text-sm mt-2 text-muted-foreground">
-                            {record.evaluatorComments}
+                            {record.reportComments}
                           </p>
                         )}
                       </div>
@@ -274,7 +247,7 @@ export default function EvaluatorCategoryCapstone({ params }: PageProps) {
             <Card className="md:col-span-2 lg:col-span-3">
               <CardContent className="pt-6 text-center">
                 <p className="text-muted-foreground">
-                  {searchQuery ? 'No students found matching your search' : 'No students available'}
+                  No students available
                 </p>
               </CardContent>
             </Card>
@@ -286,7 +259,7 @@ export default function EvaluatorCategoryCapstone({ params }: PageProps) {
       <Dialog open={showModal} onOpenChange={setShowModal}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
-            <DialogTitle>Submit Evaluation Marks</DialogTitle>
+            <DialogTitle>Submit Report Marks</DialogTitle>
             <DialogDescription>
               {selectedStudent?.name} ({selectedStudent?.rollNumber})
             </DialogDescription>
@@ -294,7 +267,7 @@ export default function EvaluatorCategoryCapstone({ params }: PageProps) {
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <Label htmlFor="marks">
-                Evaluation Marks (0-100) <span className="text-red-500">*</span>
+                Marks (0-100) <span className="text-red-500">*</span>
               </Label>
               <Input
                 id="marks"
@@ -302,16 +275,16 @@ export default function EvaluatorCategoryCapstone({ params }: PageProps) {
                 min="0"
                 max="100"
                 step="0.5"
-                placeholder="Enter evaluation marks"
+                placeholder="Enter marks"
                 value={marks}
                 onChange={(e) => setMarks(e.target.value)}
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="comments">Evaluation Comments</Label>
+              <Label htmlFor="comments">Comments</Label>
               <textarea
                 id="comments"
-                placeholder="Add evaluation feedback or comments (optional)"
+                placeholder="Add feedback or comments (optional)"
                 value={comments}
                 onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setComments(e.target.value)}
                 rows={4}
@@ -323,7 +296,7 @@ export default function EvaluatorCategoryCapstone({ params }: PageProps) {
             <Button variant="outline" onClick={() => setShowModal(false)}>
               Cancel
             </Button>
-            <Button onClick={handleSubmit} disabled={submitting} className="bg-purple-600 hover:bg-purple-700">
+            <Button onClick={handleSubmit} disabled={submitting}>
               {submitting ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />

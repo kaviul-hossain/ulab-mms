@@ -5,6 +5,65 @@ import dbConnect from '@/lib/mongodb';
 import Student from '@/models/Student';
 import Course from '@/models/Course';
 
+// GET all students (with optional filtering)
+export async function GET(request: NextRequest) {
+  try {
+    await dbConnect();
+
+    const { searchParams } = new URL(request.url);
+    const courseId = searchParams.get('courseId');
+    const semester = searchParams.get('semester');
+    const year = searchParams.get('year');
+    const includeArchivedCourses = searchParams.get('includeArchived') === 'true';
+
+    let query: any = {};
+
+    // If courseId is specified, filter by that course
+    if (courseId) {
+      query.courseId = courseId;
+    } else if (semester || year) {
+      // Filter by semester/year - need to find courses first
+      let courseQuery: any = {};
+      
+      if (semester) {
+        courseQuery.semester = semester;
+      }
+      if (year) {
+        courseQuery.year = parseInt(year);
+      }
+      if (!includeArchivedCourses) {
+        courseQuery.isArchived = { $ne: true };
+      }
+
+      const courses = await Course.find(courseQuery);
+      const courseIds = courses.map(c => c._id);
+      
+      if (courseIds.length > 0) {
+        query.courseId = { $in: courseIds };
+      } else {
+        // No courses found for the given criteria
+        return NextResponse.json([], { status: 200 });
+      }
+    }
+
+    // Fetch students with course details
+    const students = await Student.find(query)
+      .populate({
+        path: 'courseId',
+        select: 'name code semester year section courseType',
+      })
+      .sort({ createdAt: -1 });
+
+    return NextResponse.json(students, { status: 200 });
+  } catch (error: any) {
+    console.error('Get students error:', error);
+    return NextResponse.json(
+      { error: error.message || 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}
+
 // POST create students (bulk import)
 export async function POST(request: NextRequest) {
   try {
