@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import dbConnect from '@/lib/mongodb';
 import CapstoneGroup from '@/models/CapstoneGroup';
+import Course from '@/models/Course';
 import User from '@/models/User';
 
 const ALLOWED_COURSES = ['CSE4098A', 'CSE4098B', 'CSE4098C', 'CSE499'];
@@ -21,12 +22,27 @@ export async function GET(request: NextRequest) {
     // Check if requesting all groups
     const url = new URL(request.url);
     const getAll = url.searchParams.get('all') === 'true';
+    const courseCode = url.searchParams.get('courseCode');
+    const semester = url.searchParams.get('semester');
 
     let query: any = {};
 
     if (!getAll) {
       // Filter by current supervisor if not requesting all
       query.supervisorId = session.user.id;
+    }
+
+    // If courseCode is provided, find the course and add to query
+    if (courseCode) {
+      const course = await Course.findOne({ code: courseCode });
+      if (course) {
+        query.courseId = course._id;
+      }
+    }
+
+    // If semester is provided, add to query
+    if (semester) {
+      query.semester = semester;
     }
 
     // Get capstone groups

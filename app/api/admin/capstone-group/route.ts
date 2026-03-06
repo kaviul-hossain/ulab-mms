@@ -122,6 +122,7 @@ export async function POST(request: NextRequest) {
       description,
       studentIds,
       supervisorId,
+      semester,
     } = body;
 
     // Validation
@@ -162,6 +163,7 @@ export async function POST(request: NextRequest) {
       courseId,
       groupName,
       description: description || '',
+      semester: semester || '',
       studentIds: finalStudentIds,
       supervisorId,
       evaluatorAssignments: [],

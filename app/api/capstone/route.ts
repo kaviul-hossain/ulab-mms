@@ -5,6 +5,7 @@ import dbConnect from '@/lib/mongodb';
 import CapstoneMarks from '@/models/CapstoneMarks';
 import Student from '@/models/Student';
 import User from '@/models/User';
+import Course from '@/models/Course';
 import mongoose from 'mongoose';
 
 // GET - Fetch capstone marks with filters
@@ -20,6 +21,9 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const submissionType = searchParams.get('submissionType');
     const studentId = searchParams.get('studentId');
+    const courseId = searchParams.get('courseId');
+    const courseCode = searchParams.get('courseCode');
+    const groupId = searchParams.get('groupId');
 
     let query: any = { submittedBy: new mongoose.Types.ObjectId(session.user.id) };
 
@@ -31,8 +35,23 @@ export async function GET(request: NextRequest) {
       query.studentId = studentId;
     }
 
+    if (groupId) {
+      query.groupId = new mongoose.Types.ObjectId(groupId);
+    }
+
+    // IMPORTANT: Filter by courseId if provided to prevent cross-course data leakage
+    if (courseId) {
+      query.courseId = new mongoose.Types.ObjectId(courseId);
+    } else if (courseCode) {
+      // If courseCode provided, look up the courseId
+      const course = await Course.findOne({ code: courseCode });
+      if (course) {
+        query.courseId = course._id;
+      }
+    }
+
     const capstoneMarks = await CapstoneMarks.find(query)
-      .populate('studentId', 'name rollNumber')
+      .populate('studentId', '_id name rollNumber studentId')
       .populate('supervisorId', 'name email')
       .populate('evaluatorId', 'name email')
       .sort({ createdAt: -1 });
@@ -60,18 +79,27 @@ export async function POST(request: NextRequest) {
     const {
       studentId,
       supervisorId,
+      courseId,
+      groupId,
       evaluatorId,
       supervisorMarks,
       supervisorComments,
       evaluatorMarks,
       evaluatorComments,
+      weeklyJournalMarks,
+      weeklyJournalComments,
+      peerMarks,
+      peerComments,
+      reportRubrics,
+      reportMarks,
+      reportComments,
       submissionType,
     } = await request.json();
 
-    // Validate required fields
-    if (!studentId || !supervisorId || !submissionType) {
+    // Validate required fields - courseId is now required
+    if (!studentId || !supervisorId || !submissionType || !courseId) {
       return NextResponse.json(
-        { error: 'Missing required fields' },
+        { error: 'Missing required fields: studentId, supervisorId, courseId, and submissionType are required' },
         { status: 400 }
       );
     }
@@ -95,17 +123,30 @@ export async function POST(request: NextRequest) {
     }
 
     // Find or create capstone marks record
-    let capstoneMarks = await CapstoneMarks.findOne({
+    // IMPORTANT: Always include courseId AND groupId in the query to prevent cross-group contamination
+    const query: any = {
       studentId,
+      courseId,
       supervisorId,
-    });
+      submissionType,
+    };
+    
+    // Include groupId if provided to ensure group isolation
+    if (groupId) {
+      query.groupId = groupId;
+    }
+    
+    let capstoneMarks = await CapstoneMarks.findOne(query);
 
     if (!capstoneMarks) {
       capstoneMarks = new CapstoneMarks({
         studentId,
         supervisorId,
+        courseId,
+        groupId: groupId || null,
         evaluatorId: evaluatorId || null,
         submittedBy: session.user.id,
+        submissionType,
       });
     }
 
@@ -117,6 +158,16 @@ export async function POST(request: NextRequest) {
       capstoneMarks.evaluatorId = evaluatorId;
       capstoneMarks.evaluatorMarks = evaluatorMarks;
       capstoneMarks.evaluatorComments = evaluatorComments || '';
+    } else if (submissionType === 'weeklyJournal') {
+      capstoneMarks.weeklyJournalMarks = weeklyJournalMarks;
+      capstoneMarks.weeklyJournalComments = weeklyJournalComments || '';
+    } else if (submissionType === 'peer') {
+      capstoneMarks.peerMarks = peerMarks;
+      capstoneMarks.peerComments = peerComments || '';
+    } else if (submissionType === 'report') {
+      capstoneMarks.reportRubrics = reportRubrics || {};
+      capstoneMarks.reportMarks = reportMarks;
+      capstoneMarks.reportComments = reportComments || '';
     }
 
     capstoneMarks.submissionType = submissionType;
@@ -128,7 +179,22 @@ export async function POST(request: NextRequest) {
         (capstoneMarks.supervisorMarks + capstoneMarks.evaluatorMarks) / 2;
     }
 
-    await capstoneMarks.save();
+    try {
+      await capstoneMarks.save();
+    } catch (saveError: any) {
+      // Handle duplicate key error from unique index
+      if (saveError.code === 11000) {
+        console.warn('Duplicate record attempt, refetching and updating:', saveError.message);
+        // Refetch and update instead
+        const existing = await CapstoneMarks.findOne(query);
+        if (existing) {
+          Object.assign(existing, capstoneMarks.toObject());
+          await existing.save();
+          return NextResponse.json(existing);
+        }
+      }
+      throw saveError;
+    }
 
     return NextResponse.json(capstoneMarks);
   } catch (error) {

@@ -55,12 +55,16 @@ export default function WeeklyJournalPage() {
   const [capstoneRecords, setCapstoneRecords] = useState<CapstoneRecord[]>([]);
   const [capstoneGroups, setCapstoneGroups] = useState<CapstoneGroup[]>([]);
   const [groupSearchQuery, setGroupSearchQuery] = useState<string>('');
+  const [selectedGroup, setSelectedGroup] = useState<CapstoneGroup | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [showModal, setShowModal] = useState(false);
+  const [showGroupMarksModal, setShowGroupMarksModal] = useState(false);
+  const [groupMarks, setGroupMarks] = useState<{ [studentId: string]: { marks: string; comments: string } }>({});
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [marks, setMarks] = useState('');
   const [comments, setComments] = useState('');
+  const [courseId, setCourseId] = useState<string | null>(null);
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -86,7 +90,7 @@ export default function WeeklyJournalPage() {
 
   const fetchCapstoneRecords = async () => {
     try {
-      const response = await fetch('/api/capstone?submissionType=weeklyJournal');
+      const response = await fetch(`/api/capstone?submissionType=weeklyJournal&courseCode=${category}`);
       if (!response.ok) throw new Error('Failed to fetch records');
       const data = await response.json();
       setCapstoneRecords(data);
@@ -99,10 +103,20 @@ export default function WeeklyJournalPage() {
 
   const fetchCapstoneGroups = async () => {
     try {
-      const response = await fetch('/api/capstone-groups?all=true');
+      // Build query parameters for filtering
+      const params = new URLSearchParams({
+        courseCode: category,
+        semester: semester,
+      });
+      
+      const response = await fetch(`/api/capstone-groups?${params.toString()}`);
       if (!response.ok) throw new Error('Failed to fetch groups');
       const data: CapstoneGroup[] = await response.json();
       setCapstoneGroups(data);
+      // Extract courseId from first group for individual student marking
+      if (data.length > 0) {
+        setCourseId(data[0].courseId._id);
+      }
     } catch (error) {
       console.error('Error fetching capstone groups:', error);
       toast.error('Failed to load capstone groups');
@@ -130,6 +144,11 @@ export default function WeeklyJournalPage() {
       return;
     }
 
+    if (!courseId) {
+      toast.error('Course information not loaded. Please refresh the page.');
+      return;
+    }
+
     const marksNum = parseFloat(marks);
     if (isNaN(marksNum) || marksNum < 0 || marksNum > 100) {
       toast.error('Marks must be between 0 and 100');
@@ -144,6 +163,7 @@ export default function WeeklyJournalPage() {
         body: JSON.stringify({
           studentId: selectedStudent._id,
           supervisorId: session?.user?.id,
+          courseId: courseId,
           weeklyJournalMarks: marksNum,
           weeklyJournalComments: comments,
           submissionType: 'weeklyJournal',
@@ -163,7 +183,60 @@ export default function WeeklyJournalPage() {
     }
   };
 
-  const getFilteredCapstoneGroups = () => {
+  const handleSubmitGroupMarks = async () => {
+    if (!selectedGroup) return;
+
+    // Validate all marks
+    for (const studentId of selectedGroup.studentIds.map((s) => s._id)) {
+      const marksStr = groupMarks[studentId]?.marks || '';
+      if (marksStr === '') {
+        toast.error('Please fill in all required marks');
+        return;
+      }
+      const marksNum = parseFloat(marksStr);
+      if (isNaN(marksNum) || marksNum < 0 || marksNum > 10) {
+        toast.error('Weekly Journal marks must be between 0 and 10');
+        return;
+      }
+    }
+
+    setSubmitting(true);
+    try {
+      // Submit marks for all students in the group
+      for (const student of selectedGroup.studentIds) {
+        const marksNum = parseFloat(groupMarks[student._id]?.marks || '0');
+        const commentsText = groupMarks[student._id]?.comments || '';
+
+        const response = await fetch('/api/capstone', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            studentId: student._id,
+            supervisorId: session?.user?.id,
+            courseId: selectedGroup.courseId._id,
+            groupId: selectedGroup._id,
+            weeklyJournalMarks: marksNum,
+            weeklyJournalComments: commentsText,
+            submissionType: 'weeklyJournal',
+          }),
+        });
+
+        if (!response.ok) throw new Error(`Failed to submit marks for ${student.name}`);
+      }
+
+      toast.success('All marks submitted successfully');
+      setShowGroupMarksModal(false);
+      setSelectedGroup(null);
+      setGroupMarks({});
+      fetchCapstoneRecords();
+    } catch (error) {
+      console.error('Error submitting group marks:', error);
+      toast.error('Failed to submit marks');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+const getFilteredCapstoneGroups = () => {
     if (!groupSearchQuery.trim()) {
       return capstoneGroups;
     }
@@ -260,33 +333,57 @@ export default function WeeklyJournalPage() {
                     getFilteredCapstoneGroups().map((group) => (
                       <div
                         key={group._id}
-                        className="p-3 bg-muted rounded-lg border border-border hover:border-blue-300 transition-colors"
+                        className={`p-3 bg-muted rounded-lg border transition-colors flex justify-between items-center gap-4 ${
+                          selectedGroup?._id === group._id
+                            ? 'border-blue-500 bg-blue-50 dark:bg-blue-950'
+                            : 'border-border hover:border-blue-300'
+                        }`}
                       >
-                        <div className="flex justify-between items-start mb-2">
-                          <div>
+                        <div className="flex-grow">
+                          <div className="mb-2">
                             <p className="font-semibold text-sm">{group.groupName}</p>
                             <p className="text-xs text-muted-foreground">
                               {group.courseId?.code} • Course: {group.courseId?.name}
                               {group.semester && ` • Semester: ${group.semester}`}
                             </p>
                           </div>
-                          <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
-                            {group.studentIds?.length || 0} members
-                          </span>
+                          <p className="text-xs text-muted-foreground mb-2">
+                            Supervisor: <span className="font-medium">{group.supervisorId?.name}</span>
+                          </p>
+                          <div className="text-xs">
+                            <p className="font-medium text-muted-foreground mb-1">Members:</p>
+                            <ul className="space-y-1 pl-2">
+                              {group.studentIds?.map((student) => (
+                                <li key={student._id} className="text-muted-foreground">
+                                  • {student.name} ({student.studentId})
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
                         </div>
-                        <p className="text-xs text-muted-foreground mb-2">
-                          Supervisor: <span className="font-medium">{group.supervisorId?.name}</span>
-                        </p>
-                        <div className="text-xs">
-                          <p className="font-medium text-muted-foreground mb-1">Members:</p>
-                          <ul className="space-y-1 pl-2">
-                            {group.studentIds?.map((student) => (
-                              <li key={student._id} className="text-muted-foreground">
-                                • {student.name} ({student.studentId})
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
+                        <Button
+                          onClick={() => {
+                            setSelectedGroup(group);
+                            // Initialize groupMarks with existing records if any
+                            const initialMarks: { [studentId: string]: { marks: string; comments: string } } = {};
+                            group.studentIds?.forEach((student) => {
+                              const existingRecord = capstoneRecords.find(
+                                (r) => r.studentId._id === student._id
+                              );
+                              initialMarks[student._id] = {
+                                marks: existingRecord?.weeklyJournalMarks?.toString() || '',
+                                comments: existingRecord?.weeklyJournalComments || '',
+                              };
+                            });
+                            setGroupMarks(initialMarks);
+                            setShowGroupMarksModal(true);
+                          }}
+                          variant={selectedGroup?._id === group._id ? 'default' : 'outline'}
+                          size="sm"
+                          className="flex-shrink-0 min-w-max whitespace-nowrap"
+                        >
+                          Submit Marks
+                        </Button>
                       </div>
                     ))
                   ) : (
@@ -299,77 +396,6 @@ export default function WeeklyJournalPage() {
             )}
           </CardContent>
         </Card>
-
-        {/* Students Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {students.length > 0 ? (
-            students.map((student) => {
-              const record = capstoneRecords.find(
-                (r) => r.studentId._id === student._id
-              );
-              const hasSubmitted = !!record?.weeklyJournalMarks;
-
-              return (
-                <Card key={student._id} className="flex flex-col">
-                  <CardHeader>
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <CardTitle className="text-lg">{student.name}</CardTitle>
-                        <CardDescription>{student.rollNumber}</CardDescription>
-                      </div>
-                      {hasSubmitted && (
-                        <Badge variant="default" className="bg-green-600">
-                          <CheckCircle2 className="h-3 w-3 mr-1" />
-                          Submitted
-                        </Badge>
-                      )}
-                    </div>
-                  </CardHeader>
-                  <CardContent className="flex-grow">
-                    {hasSubmitted && (
-                      <div className="mb-4">
-                        <p className="text-sm text-muted-foreground">Marks</p>
-                        <p className="text-2xl font-bold text-blue-600">
-                          {record?.weeklyJournalMarks}/100
-                        </p>
-                        {record?.weeklyJournalComments && (
-                          <p className="text-sm mt-2 text-muted-foreground">
-                            {record.weeklyJournalComments}
-                          </p>
-                        )}
-                      </div>
-                    )}
-                    <Button
-                      onClick={() => handleOpenModal(student)}
-                      className="w-full"
-                      variant={hasSubmitted ? 'outline' : 'default'}
-                    >
-                      {hasSubmitted ? (
-                        <>
-                          <Edit className="h-4 w-4 mr-2" />
-                          Edit Marks
-                        </>
-                      ) : (
-                        <>
-                          <Plus className="h-4 w-4 mr-2" />
-                          Add Marks
-                        </>
-                      )}
-                    </Button>
-                  </CardContent>
-                </Card>
-              );
-            })
-          ) : (
-            <Card className="md:col-span-2 lg:col-span-3">
-              <CardContent className="pt-6 text-center">
-                <p className="text-muted-foreground">
-                  No students available
-                </p>
-              </CardContent>
-            </Card>
-          )}
-        </div>
       </div>
 
       {/* Modal */}
@@ -421,6 +447,85 @@ export default function WeeklyJournalPage() {
                 </>
               ) : (
                 'Submit Marks'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Group Marks Modal */}
+      <Dialog open={showGroupMarksModal} onOpenChange={setShowGroupMarksModal}>
+        <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Submit Weekly Journal Marks - {selectedGroup?.groupName}</DialogTitle>
+            <DialogDescription>
+              Enter marks (0-10) for all students in this group
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            {selectedGroup?.studentIds?.map((student) => (
+              <div key={student._id} className="border rounded-lg p-4 space-y-3">
+                <div>
+                  <h4 className="font-semibold text-sm">{student.name}</h4>
+                  <p className="text-xs text-muted-foreground">{student.rollNumber} • {student.studentId}</p>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor={`marks-${student._id}`}>
+                      Marks (0-10) <span className="text-red-500">*</span>
+                    </Label>
+                    <Input
+                      id={`marks-${student._id}`}
+                      type="number"
+                      min="0"
+                      max="10"
+                      step="0.5"
+                      placeholder="Enter marks"
+                      value={groupMarks[student._id]?.marks || ''}
+                      onChange={(e) => {
+                        setGroupMarks({
+                          ...groupMarks,
+                          [student._id]: {
+                            ...groupMarks[student._id],
+                            marks: e.target.value,
+                          },
+                        });
+                      }}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor={`comments-${student._id}`}>Comments</Label>
+                    <Input
+                      id={`comments-${student._id}`}
+                      placeholder="Add comments (optional)"
+                      value={groupMarks[student._id]?.comments || ''}
+                      onChange={(e) => {
+                        setGroupMarks({
+                          ...groupMarks,
+                          [student._id]: {
+                            ...groupMarks[student._id],
+                            comments: e.target.value,
+                          },
+                        });
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowGroupMarksModal(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleSubmitGroupMarks} disabled={submitting}>
+              {submitting ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Submitting...
+                </>
+              ) : (
+                'Submit All Marks'
               )}
             </Button>
           </DialogFooter>

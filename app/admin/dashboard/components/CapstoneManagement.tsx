@@ -680,36 +680,42 @@ export default function CapstoneManagement() {
               </Popover>
             </div>
 
-            {/* Semester Field - Dropdown */}
+            {/* Semester Field - Dropdown or Input */}
             <div>
               <Label htmlFor="semester" className="font-semibold">
                 Semester <span className="text-red-500">*</span>
               </Label>
-              <Select
-                value={formData.semester}
-                onValueChange={(value) => setFormData({ ...formData, semester: value })}
-              >
-                <SelectTrigger className="mt-1" id="semester">
-                  <SelectValue placeholder="Select a semester" />
-                </SelectTrigger>
-                <SelectContent>
-                  {semesters.length > 0 ? (
-                    semesters.map((semester) => (
-                      <SelectItem key={semester._id} value={semester.name}>
+              {semesters.length > 0 ? (
+                <Select
+                  value={formData.semester || ''}
+                  onValueChange={(value) => setFormData({ ...formData, semester: value })}
+                >
+                  <SelectTrigger className="mt-1" id="semester">
+                    <SelectValue placeholder="Select a semester" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {semesters.map((semester) => (
+                      <SelectItem key={semester._id} value={semester.name || ''}>
                         {semester.name}
                         {semester.description && ` - ${semester.description}`}
                       </SelectItem>
-                    ))
-                  ) : (
-                    <SelectItem value="" disabled>
-                      No semesters available
-                    </SelectItem>
-                  )}
-                </SelectContent>
-              </Select>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Input
+                  id="semester"
+                  placeholder="e.g., Spring2024, Fall2024, F23"
+                  value={formData.semester}
+                  onChange={(e) => setFormData({ ...formData, semester: e.target.value })}
+                  pattern="[a-zA-Z0-9\-_]+"
+                  title="Semester must be alphanumeric (can include hyphens and underscores)"
+                  className="mt-1"
+                />
+              )}
               {semesters.length === 0 && (
                 <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-1">
-                  No semesters created. Please create a semester in Semester Management.
+                  No semesters created. Please create a semester in Semester Management or enter manually.
                 </p>
               )}
             </div>
