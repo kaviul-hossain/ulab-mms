@@ -1,18 +1,63 @@
 "use client";
 
-import { useEffect, useState } from 'react';
-import { signIn, useSession } from 'next-auth/react';
+import { useEffect, useState, use } from 'react';
+import { useSession } from 'next-auth/react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Separator } from '@/components/ui/separator';
 
-export default function AttendanceCheckInPage({ params }: { params: { sessionCode: string } }) {
-  const { data: session } = useSession();
-  const courseId = params.sessionCode;
-  const [status, setStatus] = useState<string>('Preparing check-in...');
+interface CourseInfo {
+  _id: string;
+  name: string;
+  code: string;
+  section: string;
+  semester: string;
+  year: number;
+  open: boolean;
+  dateLabel: string;
+  hasActiveSession: boolean;
+}
+
+export default function AttendanceCheckInPage({ params }: { params: Promise<{ sessionCode: string }> }) {
+  const { data: session, status } = useSession();
+  const resolvedParams = use(params);
+  const courseId = resolvedParams.sessionCode;
+  const [course, setCourse] = useState<CourseInfo | null>(null);
+  const [message, setMessage] = useState('Preparing check-in...');
+  const [signingIn, setSigningIn] = useState(false);
+  const [currentUrl, setCurrentUrl] = useState<string>('');
 
   useEffect(() => {
-    if (!session) return;
+    setCurrentUrl(`${window.location.origin}/attendance/checkin/${courseId}`);
+  }, [courseId]);
+
+  const fetchCourseInfo = async () => {
+    try {
+      const res = await fetch(`/api/attendance/course/${courseId}`);
+      const data = await res.json();
+      if (res.ok) {
+        setCourse(data.course);
+        if (!data.course?.hasActiveSession) {
+          setMessage('Attendance is currently closed. Please wait for the instructor to turn it on.');
+        }
+      } else {
+        setMessage(data.error || 'Unable to load course info');
+      }
+    } catch {
+      setMessage('Network error while loading course info');
+    }
+  };
+
+  useEffect(() => {
+    fetchCourseInfo();
+  }, [courseId]);
+
+  useEffect(() => {
+    if (status !== 'authenticated' || !session?.user?.email || !course?.hasActiveSession) return;
 
     const markAttendance = async () => {
-      setStatus('Recording attendance...');
+      setMessage('Recording attendance...');
       try {
         const res = await fetch('/api/attendance/checkin', {
           method: 'POST',
@@ -21,38 +66,94 @@ export default function AttendanceCheckInPage({ params }: { params: { sessionCod
         });
         const data = await res.json();
         if (res.ok) {
-          setStatus(data.message || 'Attendance recorded');
+          setMessage(data.message || 'Attendance recorded successfully.');
         } else {
-          setStatus(data.error || 'Unable to record attendance');
+          setMessage(data.error || 'Unable to record attendance');
         }
-      } catch (err) {
-        setStatus('Network error');
+      } catch {
+        setMessage('Network error while recording attendance');
       }
     };
 
     markAttendance();
-  }, [session, courseId]);
+  }, [status, session, course?.hasActiveSession, courseId]);
+
+  const handleGoogleSignIn = async () => {
+    setSigningIn(true);
+    const callbackUrl = currentUrl || `/attendance/checkin/${courseId}`;
+    // Direct Google provider endpoint avoids the app's login page and returns here after OAuth.
+    window.location.href = `/api/auth/signin/google?callbackUrl=${encodeURIComponent(callbackUrl)}`;
+  };
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4">
-      <div className="w-full max-w-lg rounded-2xl border bg-background p-6 shadow-lg">
-        <h1 className="text-2xl font-semibold">Attendance Check-in</h1>
-        <p className="mt-2 text-sm text-muted-foreground">Sign in with your ULAB Google account to mark attendance.</p>
+    <main className="min-h-screen bg-linear-to-b from-background via-background to-muted/30 px-4 py-4 sm:py-8">
+      <div className="mx-auto flex w-full max-w-md flex-col gap-4 sm:max-w-2xl">
+        <Card className="overflow-hidden border-2 shadow-xl">
+          <CardContent className="p-0">
+            <div className="bg-linear-to-br from-emerald-600 via-green-600 to-teal-600 px-5 py-6 text-white sm:px-6 sm:py-8">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold uppercase tracking-[0.24em] text-white/80">Attendance Check-in</p>
+                  <h1 className="mt-2 text-2xl font-bold leading-tight sm:text-3xl">{course ? course.name : 'Loading course...'}</h1>
+                  <p className="mt-2 text-sm text-white/90 sm:text-base">
+                    {course ? `${course.code} • Section ${course.section}` : 'Please wait...'}
+                  </p>
+                </div>
+                <Badge className="bg-white/15 text-white hover:bg-white/20">{course ? course.semester : '...'}</Badge>
+              </div>
+            </div>
 
-        {!session ? (
-          <button
-            className="mt-6 inline-flex items-center justify-center rounded-lg bg-green-600 px-4 py-2 font-medium text-white hover:bg-green-700"
-            onClick={() => signIn('google', { callbackUrl: window.location.href })}
-          >
-            Sign in with Google
-          </button>
-        ) : (
-          <div className="mt-6 space-y-2 text-sm">
-            <p>Signed in as {session.user?.email}</p>
-            <p className="font-medium">{status}</p>
-          </div>
-        )}
+            <div className="space-y-4 px-5 py-5 sm:px-6">
+              <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
+                <div className="rounded-xl border bg-muted/40 p-3">
+                  <div className="text-xs uppercase tracking-wide text-muted-foreground">Code</div>
+                  <div className="mt-1 font-semibold">{course?.code || '-'}</div>
+                </div>
+                <div className="rounded-xl border bg-muted/40 p-3">
+                  <div className="text-xs uppercase tracking-wide text-muted-foreground">Section</div>
+                  <div className="mt-1 font-semibold">{course?.section || '-'}</div>
+                </div>
+                <div className="rounded-xl border bg-muted/40 p-3">
+                  <div className="text-xs uppercase tracking-wide text-muted-foreground">Semester</div>
+                  <div className="mt-1 font-semibold">{course ? `${course.semester} ${course.year}` : '-'}</div>
+                </div>
+                <div className="rounded-xl border bg-muted/40 p-3">
+                  <div className="text-xs uppercase tracking-wide text-muted-foreground">Date</div>
+                  <div className="mt-1 font-semibold">{course?.dateLabel || new Date().toLocaleDateString()}</div>
+                </div>
+              </div>
+
+              <Separator />
+
+              <div className="rounded-2xl border bg-background p-4 sm:p-5">
+                <p className="text-sm text-muted-foreground">Sign in with your ULAB Google account to continue. After Google sign-in, this page will come back here and complete attendance automatically.</p>
+
+                <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
+                  <Button
+                    type="button"
+                    onClick={handleGoogleSignIn}
+                    disabled={signingIn || !course?.hasActiveSession}
+                    className="w-full bg-green-600 text-white hover:bg-green-700 sm:w-auto"
+                  >
+                    {signingIn ? 'Redirecting to Google...' : 'Sign in with Google'}
+                  </Button>
+                  <div className="text-xs text-muted-foreground">
+                    {course?.hasActiveSession ? 'Attendance is open now.' : 'Attendance is closed right now.'}
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-dashed bg-muted/20 p-4">
+                <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Status</div>
+                <div className="mt-2 text-sm leading-6">{message}</div>
+                {session?.user?.email && (
+                  <div className="mt-3 text-sm text-muted-foreground">Signed in as {session.user.email}</div>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
-    </div>
+    </main>
   );
 }
