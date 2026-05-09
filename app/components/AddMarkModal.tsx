@@ -399,8 +399,14 @@ export default function AddMarkModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
-      <div className="bg-gradient-to-br from-gray-800 to-gray-800/80 rounded-2xl shadow-2xl max-w-3xl w-full border border-gray-700/50 p-6 max-h-[90vh] overflow-y-auto">
+    <div
+      className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-100 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-linear-to-br from-gray-800 to-gray-800/80 rounded-2xl shadow-2xl max-w-3xl w-full border border-gray-700/50 p-6 max-h-[90vh] overflow-y-auto"
+        onClick={(event) => event.stopPropagation()}
+      >
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-2xl font-bold text-gray-100">Add/Edit Marks</h2>
           <button
@@ -648,7 +654,7 @@ export default function AddMarkModal({
                     ref={saveButtonRef}
                     onClick={validateAndSave}
                     onKeyDown={(e) => handleKeyDown(e, 'save')}
-                    className="flex-1 px-6 py-3 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-lg hover:from-green-700 hover:to-green-800 transition-all shadow-lg font-medium text-lg focus:ring-4 focus:ring-green-500"
+                    className="flex-1 px-6 py-3 bg-linear-to-r from-green-600 to-green-700 text-white rounded-lg hover:from-green-700 hover:to-green-800 transition-all shadow-lg font-medium text-lg focus:ring-4 focus:ring-green-500"
                   >
                     💾 Save Mark
                   </button>
