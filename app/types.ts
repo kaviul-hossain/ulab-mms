@@ -2,17 +2,14 @@ export interface Student {
   id: string;
   name: string;
   marks: { [examId: string]: number }; // Raw marks entered (unscaled)
-  scaledMarks?: { [examId: string]: number }; // Scaled marks after bell curve
-  roundedMarks?: { [examId: string]: number }; // Rounded scaled marks
+  weightedMarks?: { [examId: string]: number }; // Weighted marks based on exam weightage
 }
 
 export interface Exam {
   id: string;
   name: string;
   totalMarks: number;
-  scalingValue: number; // Final scaled maximum
-  scalingTarget?: number; // Target value to scale to (if specified, overrides scalingValue)
-  scalingMethod?: 'bellCurve' | 'linearNormalization' | 'minMaxNormalization' | 'percentile'; // Scaling method used
+  weightage: number;
 }
 
 export interface MarksData {

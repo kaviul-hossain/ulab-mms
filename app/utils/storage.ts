@@ -30,9 +30,9 @@ export const clearLocalStorage = (): void => {
 };
 
 export const exportToJSON = (data: MarksData): void => {
-  // Export only unscaled marks (remove scaledMarks and roundedMarks from export)
+  // Export marks without derived weighted marks
   const exportData = {
-    students: data.students.map(({ scaledMarks, roundedMarks, ...student }) => student),
+    students: data.students.map(({ weightedMarks, ...student }) => student),
     exams: data.exams
   };
   const jsonString = JSON.stringify(exportData, null, 2);

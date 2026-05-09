@@ -72,12 +72,9 @@ interface Exam {
   examType: 'midterm' | 'final' | 'labFinal' | 'oel' | 'custom';
   totalMarks: number;
   weightage: number;
-  scalingEnabled: boolean;
   isRequired: boolean;
   numberOfCOs?: number;
   numberOfQuestions?: number;
-  scalingMethod?: string;
-  scalingTarget?: number;
   examCategory?: 'Quiz' | 'Assignment' | 'Project' | 'Attendance' | 'MainExam' | 'ClassPerformance' | 'Others';
 }
 
@@ -87,8 +84,8 @@ interface Mark {
   examId: string;
   rawMark: number;
   coMarks?: number[];
-  scaledMark?: number;
-  roundedMark?: number;
+  questionMarks?: number[];
+  weightedMark?: number;
 }
 
 interface Course {
@@ -138,7 +135,6 @@ export default function CoursePage() {
   const [courseSettingsTab, setCourseSettingsTab] = useState<'aggregation' | 'grading'>('aggregation');
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [activeView, setActiveView] = useState<'overview' | 'exams' | 'students' | 'marks'>('overview');
-  const [expandedExam, setExpandedExam] = useState<string | null>(null);
   const [searchStudentId, setSearchStudentId] = useState('');
   const [showStudentStatsModal, setShowStudentStatsModal] = useState(false);
   const [selectedStudentForStats, setSelectedStudentForStats] = useState<Student | null>(null);
@@ -181,7 +177,6 @@ export default function CoursePage() {
     assignmentWeightage: '',
     gradingScale: DEFAULT_GRADING_SCALE,
   });
-  const [scalingTargets, setScalingTargets] = useState<{ [examId: string]: string | undefined }>({});
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -535,91 +530,6 @@ export default function CoursePage() {
     }
   };
 
-  const handleToggleScaling = async (examId: string, currentValue: boolean) => {
-    try {
-      const response = await fetch(`/api/exams/${examId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ scalingEnabled: !currentValue }),
-      });
-
-      if (response.ok) {
-        await fetchCourseData();
-        const exam = exams.find(e => e._id === examId);
-        if (exam && !currentValue) {
-          notify.scaling.toggledOn();
-        } else if (exam && currentValue) {
-          notify.scaling.toggledOff();
-        }
-      } else {
-        notify.scaling.toggleError();
-      }
-    } catch (err) {
-      console.error('Error toggling scaling:', err);
-      notify.scaling.toggleError();
-    }
-  };
-
-  const handleUpdateScalingTarget = async (examId: string, target: number) => {
-    if (isNaN(target) || target <= 0) {
-      notify.scaling.invalidTarget();
-      return;
-    }
-
-    const exam = exams.find(e => e._id === examId);
-    if (exam && target > exam.totalMarks) {
-      notify.scaling.targetExceedsTotal(exam.totalMarks);
-      return;
-    }
-
-    try {
-      // Update the scaling target in the database
-      const response = await fetch(`/api/exams/${examId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ scalingTarget: target }),
-      });
-
-      if (response.ok) {
-        // If exam has a scaling method set, recalculate the scaling with new target
-        if (exam?.scalingMethod) {
-          const scalingResponse = await fetch('/api/scaling', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ examId, method: exam.scalingMethod, applyRound: false }),
-          });
-
-          if (scalingResponse.ok) {
-            await fetchCourseData();
-            // Clear the temporary input value
-            setScalingTargets(prev => {
-              const updated = { ...prev };
-              delete updated[examId];
-              return updated;
-            });
-            notify.scaling.targetUpdatedAndRecalculated();
-          } else {
-            notify.scaling.recalculateError();
-            await fetchCourseData();
-          }
-        } else {
-          await fetchCourseData();
-          // Clear the temporary input value
-          setScalingTargets(prev => {
-            const updated = { ...prev };
-            delete updated[examId];
-            return updated;
-          });
-          notify.scaling.targetUpdated();
-        }
-      } else {
-        notify.scaling.targetError();
-      }
-    } catch (err) {
-      console.error('Error updating scaling target:', err);
-      notify.scaling.targetError();
-    }
-  };
 
   const handleUpdateExamSettings = async () => {
     if (!showExamSettings) return;
@@ -676,32 +586,6 @@ export default function CoursePage() {
     } catch (err) {
       console.error('Error deleting exam:', err);
       notify.exam.deleteError();
-    }
-  };
-
-  const handleApplyRounding = async (examId: string) => {
-    try {
-      const exam = exams.find(e => e._id === examId);
-      if (!exam?.scalingMethod) {
-        notify.scaling.methodRequired();
-        return;
-      }
-
-      const response = await fetch('/api/scaling', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ examId, method: exam.scalingMethod, applyRound: true }),
-      });
-
-      if (response.ok) {
-        await fetchCourseData();
-        notify.scaling.roundingApplied();
-      } else {
-        notify.scaling.roundingError();
-      }
-    } catch (err) {
-      console.error('Error applying rounding:', err);
-      notify.scaling.roundingError();
     }
   };
 
@@ -845,7 +729,7 @@ export default function CoursePage() {
   };
 
   // Calculate aggregated mark for a student based on exam category
-  const getAggregatedMark = (studentId: string, category: 'Quiz' | 'Assignment'): Mark | { rawMark: number; scaledMark: number; roundedMark: number; isAggregated: boolean; examId?: string } | null => {
+  const getAggregatedMark = (studentId: string, category: 'Quiz' | 'Assignment'): Mark | { rawMark: number; isAggregated: boolean; examId?: string } | null => {
     // Get all exams of this category
     const categoryExams = exams.filter(exam => exam.examCategory === category);
     
@@ -864,20 +748,15 @@ export default function CoursePage() {
       : course?.assignmentAggregation || 'average';
 
     if (aggregationMethod === 'best') {
-      // Find the best mark (highest actual mark, using scaled if available)
+      // Find the best mark (highest actual mark)
       let bestMark = categoryMarks[0];
       let bestValue = 0;
 
       categoryMarks.forEach(mark => {
         const exam = categoryExams.find(e => e._id === mark.examId);
         if (exam) {
-          // Use scaled mark if available and exam has scaling enabled, otherwise use raw mark
-          const markToUse = (exam.scalingEnabled && mark.scaledMark !== undefined && mark.scaledMark !== null) 
-            ? mark.scaledMark 
-            : mark.rawMark;
-          
-          if (markToUse > bestValue) {
-            bestValue = markToUse;
+          if (mark.rawMark > bestValue) {
+            bestValue = mark.rawMark;
             bestMark = mark;
           }
         }
@@ -891,11 +770,7 @@ export default function CoursePage() {
       categoryMarks.forEach(mark => {
         const exam = categoryExams.find(e => e._id === mark.examId);
         if (exam) {
-          // Use scaled mark if available and exam has scaling enabled, otherwise use raw mark
-          const markToUse = (exam.scalingEnabled && mark.scaledMark !== undefined && mark.scaledMark !== null) 
-            ? mark.scaledMark 
-            : mark.rawMark;
-          totalMarks += markToUse;
+          totalMarks += mark.rawMark;
         }
       });
 
@@ -904,8 +779,6 @@ export default function CoursePage() {
       // Return a synthetic mark object for display
       return {
         rawMark: avgMark,
-        scaledMark: avgMark, // For aggregated marks, scaled = raw (already calculated from scaled marks if available)
-        roundedMark: Math.round(avgMark),
         isAggregated: true,
       };
     }
@@ -938,26 +811,14 @@ export default function CoursePage() {
 
       const mark = getMark(studentId, exam._id);
       if (mark) {
-        // Use scaled mark if available and scaling is enabled, otherwise raw mark
-        const markToUse = (exam.scalingEnabled && mark.scaledMark !== undefined && mark.scaledMark !== null) 
-          ? mark.scaledMark 
-          : mark.rawMark;
-        
-        // Use scalingTarget if scaling is enabled and mark is scaled, otherwise use totalMarks
-        const totalMarksToUse = (exam.scalingEnabled && mark.scaledMark !== undefined && mark.scaledMark !== null && exam.scalingTarget) 
-          ? exam.scalingTarget 
-          : exam.totalMarks;
-        
-        // Calculate percentage
-        const percentage = (markToUse / totalMarksToUse) * 100;
-        
-        // Calculate contribution (percentage * weightage / 100)
-        const contribution = (percentage * exam.weightage) / 100;
+        const contribution = mark.weightedMark !== undefined && mark.weightedMark !== null
+          ? mark.weightedMark
+          : (mark.rawMark / exam.totalMarks) * exam.weightage;
         
         breakdown.push({
           name: exam.displayName,
-          mark: markToUse,
-          totalMarks: totalMarksToUse,
+          mark: mark.rawMark,
+          totalMarks: exam.totalMarks,
           weightage: exam.weightage,
           contribution: contribution,
         });
@@ -980,25 +841,14 @@ export default function CoursePage() {
           // This handles cases where different quizzes have different scaling targets
           const quizExams = exams.filter(e => e.examCategory === 'Quiz');
           if (quizExams.length > 0) {
-            // Find the max scalingTarget among scaled exams, or max totalMarks if none are scaled
-            const scaledExams = quizExams.filter(e => e.scalingEnabled && e.scalingTarget);
-            if (scaledExams.length > 0) {
-              totalMarks = Math.max(...scaledExams.map(e => e.scalingTarget!));
-            } else {
-              totalMarks = Math.max(...quizExams.map(e => e.totalMarks));
-            }
+            totalMarks = Math.max(...quizExams.map(e => e.totalMarks));
           }
         } else {
           // Best mode: get the actual mark
           const exam = exams.find(e => e._id === aggMark.examId);
           if (exam) {
-            markToUse = (exam.scalingEnabled && aggMark.scaledMark !== undefined && aggMark.scaledMark !== null) 
-              ? aggMark.scaledMark 
-              : aggMark.rawMark;
-            // Use scalingTarget if scaling is enabled and mark is scaled, otherwise use totalMarks
-            totalMarks = (exam.scalingEnabled && aggMark.scaledMark !== undefined && aggMark.scaledMark !== null && exam.scalingTarget) 
-              ? exam.scalingTarget 
-              : exam.totalMarks;
+            markToUse = aggMark.rawMark;
+            totalMarks = exam.totalMarks;
           }
         }
         
@@ -1035,25 +885,14 @@ export default function CoursePage() {
           // This handles cases where different assignments have different scaling targets
           const assignmentExams = exams.filter(e => e.examCategory === 'Assignment');
           if (assignmentExams.length > 0) {
-            // Find the max scalingTarget among scaled exams, or max totalMarks if none are scaled
-            const scaledExams = assignmentExams.filter(e => e.scalingEnabled && e.scalingTarget);
-            if (scaledExams.length > 0) {
-              totalMarks = Math.max(...scaledExams.map(e => e.scalingTarget!));
-            } else {
-              totalMarks = Math.max(...assignmentExams.map(e => e.totalMarks));
-            }
+            totalMarks = Math.max(...assignmentExams.map(e => e.totalMarks));
           }
         } else {
           // Best mode
           const exam = exams.find(e => e._id === aggMark.examId);
           if (exam) {
-            markToUse = (exam.scalingEnabled && aggMark.scaledMark !== undefined && aggMark.scaledMark !== null) 
-              ? aggMark.scaledMark 
-              : aggMark.rawMark;
-            // Use scalingTarget if scaling is enabled and mark is scaled, otherwise use totalMarks
-            totalMarks = (exam.scalingEnabled && aggMark.scaledMark !== undefined && aggMark.scaledMark !== null && exam.scalingTarget) 
-              ? exam.scalingTarget 
-              : exam.totalMarks;
+            markToUse = aggMark.rawMark;
+            totalMarks = exam.totalMarks;
           }
         }
         
@@ -1138,12 +977,7 @@ export default function CoursePage() {
     if (examMarks.length === 0) return null;
 
     const exam = exams.find(e => e._id === examId);
-    const values = examMarks.map(m => {
-      if (!exam) return m.rawMark;
-      return exam.scalingEnabled && m.scaledMark !== undefined && m.scaledMark !== null
-        ? m.scaledMark
-        : m.rawMark;
-    });
+    const values = examMarks.map(m => m.rawMark);
 
     return {
       average: values.reduce((sum, val) => sum + val, 0) / values.length,
@@ -1449,18 +1283,10 @@ export default function CoursePage() {
             {activeView === 'exams' && (
               <ExamsView
                 exams={exams}
-                expandedExam={expandedExam}
-                scalingTargets={scalingTargets}
-                onSetExpandedExam={setExpandedExam}
-                onSetScalingTargets={setScalingTargets}
                 onShowExamModal={() => setShowExamModal(true)}
                 onShowExamSettings={(examId) => setShowExamSettings(examId)}
                 onSetExamSettings={setExamSettings}
                 onDeleteExam={handleDeleteExam}
-                onToggleScaling={handleToggleScaling}
-                onUpdateScalingTarget={handleUpdateScalingTarget}
-                onApplyScaling={handleApplyScaling}
-                onApplyRounding={handleApplyRounding}
               />
             )}
 
@@ -2489,9 +2315,6 @@ export default function CoursePage() {
                       <div className="text-xs text-gray-400 space-y-1">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span>📝 Total: {exam.totalMarks} marks</span>
-                          {exam.scalingTarget && exam.scalingEnabled && (
-                            <span className="text-emerald-400">• Scaled to: {exam.scalingTarget}</span>
-                          )}
                         </div>
                         <div>⚖️ Weightage: {exam.weightage}%</div>
                       </div>
@@ -2500,7 +2323,7 @@ export default function CoursePage() {
                     {mark ? (
                       <>
                         {/* Marks Display */}
-                        <div className="grid grid-cols-3 gap-2 mb-4">
+                        <div className="grid grid-cols-2 gap-2 mb-4">
                           <div className="p-3 rounded-lg bg-blue-900/40 border border-blue-700/50 text-center">
                             <div className="text-xs text-gray-400 mb-1">Raw</div>
                             <div className="text-lg font-bold text-blue-300">
@@ -2509,43 +2332,20 @@ export default function CoursePage() {
                             <div className="text-xs text-gray-500">/{exam.totalMarks}</div>
                           </div>
 
-                          {exam.scalingEnabled && mark.scaledMark !== undefined && mark.scaledMark !== null ? (
-                            <div className="p-3 rounded-lg bg-emerald-900/40 border border-emerald-700/50 text-center">
-                              <div className="text-xs text-gray-400 mb-1">Scaled</div>
-                              <div className="text-lg font-bold text-emerald-300">
-                                {mark.scaledMark.toFixed(2)}
-                              </div>
-                              {exam.scalingTarget && (
-                                <div className="text-xs text-gray-500">/{exam.scalingTarget}</div>
-                              )}
+                          <div className="p-3 rounded-lg bg-emerald-900/40 border border-emerald-700/50 text-center">
+                            <div className="text-xs text-gray-400 mb-1">Weighted</div>
+                            <div className="text-lg font-bold text-emerald-300">
+                              {(mark.weightedMark !== undefined && mark.weightedMark !== null
+                                ? mark.weightedMark
+                                : (mark.rawMark / exam.totalMarks) * exam.weightage
+                              ).toFixed(2)}
                             </div>
-                          ) : (
-                            <div className="p-3 rounded-lg bg-gray-700/30 border border-gray-600/50 text-center">
-                              <div className="text-xs text-gray-400 mb-1">Scaled</div>
-                              <div className="text-xs text-gray-500 italic">Not scaled</div>
-                            </div>
-                          )}
-
-                          {exam.scalingEnabled && mark.roundedMark !== undefined && mark.roundedMark !== null ? (
-                            <div className="p-3 rounded-lg bg-purple-900/40 border border-purple-700/50 text-center">
-                              <div className="text-xs text-gray-400 mb-1">Final</div>
-                              <div className="text-lg font-bold text-purple-300">
-                                {mark.roundedMark}
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="p-3 rounded-lg bg-gray-700/30 border border-gray-600/50 text-center">
-                              <div className="text-xs text-gray-400 mb-1">Final</div>
-                              <div className="text-xs text-gray-500 italic">N/A</div>
-                            </div>
-                          )}
+                          </div>
                         </div>
 
                         {/* Performance Visualization */}
                         {stats && stats.count > 0 && (() => {
-                          const studentMark = exam.scalingEnabled && mark.scaledMark !== undefined && mark.scaledMark !== null
-                            ? mark.scaledMark
-                            : mark.rawMark;
+                          const studentMark = mark.rawMark;
                           const avgPercent = (stats.average / stats.highest) * 100;
                           const studentPercent = (studentMark / stats.highest) * 100;
 

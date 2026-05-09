@@ -20,9 +20,6 @@ interface Exam {
   totalMarks: number;
   weightage: number;
   numberOfCOs?: number;
-  scalingEnabled: boolean;
-  scalingMethod?: string;
-  scalingTarget?: number;
   examCategory?: 'Quiz' | 'Assignment' | 'Project' | 'Attendance' | 'MainExam' | 'ClassPerformance' | 'Others';
 }
 
@@ -32,8 +29,7 @@ interface Mark {
   examId: string;
   rawMark: number;
   coMarks?: number[];
-  scaledMark?: number;
-  roundedMark?: number;
+  weightedMark?: number;
 }
 
 interface Course {
@@ -73,7 +69,7 @@ export default function StudentDetailModal({
   const studentMarks = marks.filter(m => m.studentId === student._id);
 
   // Helper function to get aggregated mark for Quiz or Assignment
-  const getAggregatedMark = (category: 'Quiz' | 'Assignment'): Mark | { rawMark: number; scaledMark: number; roundedMark: number; isAggregated: boolean; examId?: string } | null => {
+  const getAggregatedMark = (category: 'Quiz' | 'Assignment'): Mark | { rawMark: number; isAggregated: boolean; examId?: string } | null => {
     const categoryExams = exams.filter(exam => exam.examCategory === category);
     
     if (categoryExams.length === 0) return null;
@@ -95,12 +91,8 @@ export default function StudentDetailModal({
       categoryMarks.forEach(mark => {
         const exam = categoryExams.find(e => e._id === mark!.examId);
         if (exam) {
-          const markToUse = (exam.scalingEnabled && mark!.scaledMark !== undefined && mark!.scaledMark !== null) 
-            ? mark!.scaledMark 
-            : mark!.rawMark;
-          
-          if (markToUse > bestValue) {
-            bestValue = markToUse;
+          if (mark!.rawMark > bestValue) {
+            bestValue = mark!.rawMark;
             bestMark = mark!;
           }
         }
@@ -113,10 +105,7 @@ export default function StudentDetailModal({
       categoryMarks.forEach(mark => {
         const exam = categoryExams.find(e => e._id === mark!.examId);
         if (exam) {
-          const markToUse = (exam.scalingEnabled && mark!.scaledMark !== undefined && mark!.scaledMark !== null) 
-            ? mark!.scaledMark 
-            : mark!.rawMark;
-          totalMarks += markToUse;
+          totalMarks += mark!.rawMark;
         }
       });
 
@@ -124,8 +113,6 @@ export default function StudentDetailModal({
       
       return {
         rawMark: avgMark,
-        scaledMark: avgMark,
-        roundedMark: Math.round(avgMark),
         isAggregated: true,
       };
     }
@@ -147,21 +134,14 @@ export default function StudentDetailModal({
 
       const mark = studentMarks.find(m => m.examId === exam._id);
       if (mark) {
-        const markToUse = (exam.scalingEnabled && mark.scaledMark !== undefined && mark.scaledMark !== null) 
-          ? mark.scaledMark 
-          : mark.rawMark;
-        
-        const totalMarksToUse = (exam.scalingEnabled && mark.scaledMark !== undefined && mark.scaledMark !== null && exam.scalingTarget) 
-          ? exam.scalingTarget 
-          : exam.totalMarks;
-        
-        const percentage = (markToUse / totalMarksToUse) * 100;
-        const contribution = (percentage * exam.weightage) / 100;
+        const contribution = mark.weightedMark !== undefined && mark.weightedMark !== null
+          ? mark.weightedMark
+          : (mark.rawMark / exam.totalMarks) * exam.weightage;
         
         breakdown.push({
           name: exam.displayName,
-          mark: markToUse,
-          totalMarks: totalMarksToUse,
+          mark: mark.rawMark,
+          totalMarks: exam.totalMarks,
           weightage: exam.weightage,
           contribution: contribution,
         });
@@ -181,22 +161,13 @@ export default function StudentDetailModal({
           markToUse = aggMark.rawMark;
           const quizExams = exams.filter(e => e.examCategory === 'Quiz');
           if (quizExams.length > 0) {
-            const scaledExams = quizExams.filter(e => e.scalingEnabled && e.scalingTarget);
-            if (scaledExams.length > 0) {
-              totalMarks = Math.max(...scaledExams.map(e => e.scalingTarget!));
-            } else {
-              totalMarks = Math.max(...quizExams.map(e => e.totalMarks));
-            }
+            totalMarks = Math.max(...quizExams.map(e => e.totalMarks));
           }
         } else {
           const exam = exams.find(e => e._id === aggMark.examId);
           if (exam) {
-            markToUse = (exam.scalingEnabled && aggMark.scaledMark !== undefined && aggMark.scaledMark !== null) 
-              ? aggMark.scaledMark 
-              : aggMark.rawMark;
-            totalMarks = (exam.scalingEnabled && aggMark.scaledMark !== undefined && aggMark.scaledMark !== null && exam.scalingTarget) 
-              ? exam.scalingTarget 
-              : exam.totalMarks;
+            markToUse = aggMark.rawMark;
+            totalMarks = exam.totalMarks;
           }
         }
         
@@ -227,22 +198,13 @@ export default function StudentDetailModal({
           markToUse = aggMark.rawMark;
           const assignmentExams = exams.filter(e => e.examCategory === 'Assignment');
           if (assignmentExams.length > 0) {
-            const scaledExams = assignmentExams.filter(e => e.scalingEnabled && e.scalingTarget);
-            if (scaledExams.length > 0) {
-              totalMarks = Math.max(...scaledExams.map(e => e.scalingTarget!));
-            } else {
-              totalMarks = Math.max(...assignmentExams.map(e => e.totalMarks));
-            }
+            totalMarks = Math.max(...assignmentExams.map(e => e.totalMarks));
           }
         } else {
           const exam = exams.find(e => e._id === aggMark.examId);
           if (exam) {
-            markToUse = (exam.scalingEnabled && aggMark.scaledMark !== undefined && aggMark.scaledMark !== null) 
-              ? aggMark.scaledMark 
-              : aggMark.rawMark;
-            totalMarks = (exam.scalingEnabled && aggMark.scaledMark !== undefined && aggMark.scaledMark !== null && exam.scalingTarget) 
-              ? exam.scalingTarget 
-              : exam.totalMarks;
+            markToUse = aggMark.rawMark;
+            totalMarks = exam.totalMarks;
           }
         }
         
@@ -535,13 +497,10 @@ export default function StudentDetailModal({
                     <div className="font-semibold text-gray-100 mb-1">{exam.displayName}</div>
                     <div className="text-sm text-gray-400">
                       Total: {exam.totalMarks} marks • Weightage: {exam.weightage}%
-                      {exam.scalingMethod && (
-                        <span className="ml-2 text-emerald-400">• Scaling: {exam.scalingMethod}</span>
-                      )}
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
                     <div className="p-3 rounded-lg bg-blue-900/30 border border-blue-700/50">
                       <div className="text-xs text-gray-400 mb-1">Raw Mark</div>
                       <div className="text-2xl font-bold text-blue-300">
@@ -549,34 +508,15 @@ export default function StudentDetailModal({
                         <span className="text-sm text-gray-400 ml-1">/ {exam.totalMarks}</span>
                       </div>
                     </div>
-
-                    {exam.scalingEnabled && mark.scaledMark !== undefined && mark.scaledMark !== null ? (
-                      <div className="p-3 rounded-lg bg-emerald-900/30 border border-emerald-700/50">
-                        <div className="text-xs text-gray-400 mb-1">Scaled Mark</div>
-                        <div className="text-2xl font-bold text-emerald-300">
-                          {mark.scaledMark.toFixed(2)}
-                        </div>
+                    <div className="p-3 rounded-lg bg-emerald-900/30 border border-emerald-700/50">
+                      <div className="text-xs text-gray-400 mb-1">Weighted Mark</div>
+                      <div className="text-2xl font-bold text-emerald-300">
+                        {(mark.weightedMark !== undefined && mark.weightedMark !== null
+                          ? mark.weightedMark
+                          : (mark.rawMark / exam.totalMarks) * exam.weightage
+                        ).toFixed(2)}
                       </div>
-                    ) : (
-                      <div className="p-3 rounded-lg bg-gray-700/30 border border-gray-600/50">
-                        <div className="text-xs text-gray-400 mb-1">Scaled Mark</div>
-                        <div className="text-sm text-gray-500 italic">Not scaled</div>
-                      </div>
-                    )}
-
-                    {exam.scalingEnabled && mark.roundedMark !== undefined && mark.roundedMark !== null ? (
-                      <div className="p-3 rounded-lg bg-purple-900/30 border border-purple-700/50">
-                        <div className="text-xs text-gray-400 mb-1">Rounded Mark</div>
-                        <div className="text-2xl font-bold text-purple-300">
-                          {mark.roundedMark}
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="p-3 rounded-lg bg-gray-700/30 border border-gray-600/50">
-                        <div className="text-xs text-gray-400 mb-1">Rounded Mark</div>
-                        <div className="text-sm text-gray-500 italic">Not rounded</div>
-                      </div>
-                    )}
+                    </div>
                   </div>
 
                   {/* CO Marks Breakdown */}
@@ -647,8 +587,10 @@ export default function StudentDetailModal({
                   {studentMarks.reduce((sum, m) => {
                     const exam = exams.find(e => e._id === m.examId);
                     if (!exam) return sum;
-                    const finalMark = m.roundedMark ?? m.scaledMark ?? m.rawMark;
-                    return sum + (finalMark / exam.totalMarks) * exam.weightage;
+                    const weighted = m.weightedMark !== undefined && m.weightedMark !== null
+                      ? m.weightedMark
+                      : (m.rawMark / exam.totalMarks) * exam.weightage;
+                    return sum + weighted;
                   }, 0).toFixed(2)}
                 </div>
               </div>

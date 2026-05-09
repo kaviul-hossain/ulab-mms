@@ -72,14 +72,7 @@ export async function GET(request: NextRequest) {
               };
             }
 
-            // Use scaled marks if available, otherwise raw marks
-            const markValues = examMarks.map(m => {
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              if ((exam as any).scalingEnabled && m.scaledMark !== undefined && m.scaledMark !== null) {
-                return m.scaledMark;
-              }
-              return m.rawMark;
-            });
+            const markValues = examMarks.map(m => m.rawMark);
 
             return {
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -117,20 +110,18 @@ export async function GET(request: NextRequest) {
             displayName: exam.displayName,
             totalMarks: exam.totalMarks,
             weightage: exam.weightage,
-            scalingEnabled: exam.scalingEnabled,
-            scalingMethod: exam.scalingMethod,
-            scalingTarget: exam.scalingTarget,
             examType: exam.examType,
             examCategory: exam.examCategory,
             numberOfCOs: exam.numberOfCOs,
+            numberOfQuestions: exam.numberOfQuestions,
           })),
           marks: marks.map(mark => ({
             _id: mark._id,
             examId: mark.examId,
             rawMark: mark.rawMark,
             coMarks: mark.coMarks,
-            scaledMark: mark.scaledMark,
-            roundedMark: mark.roundedMark,
+            questionMarks: mark.questionMarks,
+            weightedMark: mark.weightedMark,
           })),
           classStats,
         };

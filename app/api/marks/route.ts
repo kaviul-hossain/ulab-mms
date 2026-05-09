@@ -6,6 +6,12 @@ import Mark from '@/models/Mark';
 import Student from '@/models/Student';
 import Exam from '@/models/Exam';
 
+const calculateWeightedMark = (rawMark: number, totalMarks: number, weightage: number) => {
+  if (totalMarks <= 0) return 0;
+  const weighted = (rawMark / totalMarks) * weightage;
+  return Math.round(weighted * 100) / 100;
+};
+
 // Helper function to handle bulk mark creation
 async function handleBulkCreate(marksArray: any[], userId: string) {
   try {
@@ -36,6 +42,8 @@ async function handleBulkCreate(marksArray: any[], userId: string) {
         continue; // Skip if mark already exists
       }
 
+      const weightedMark = calculateWeightedMark(rawMark, exam.totalMarks, exam.weightage);
+
       // Create the mark
       const mark = await Mark.create({
         studentId,
@@ -43,6 +51,7 @@ async function handleBulkCreate(marksArray: any[], userId: string) {
         courseId: exam.courseId,
         userId,
         rawMark,
+        weightedMark,
       });
 
       createdMarks.push(mark);
@@ -173,12 +182,15 @@ export async function POST(request: NextRequest) {
     }
 
     // Create or update mark
+    const weightedMark = calculateWeightedMark(rawMark, exam.totalMarks, exam.weightage);
+
     const markData: any = {
       studentId,
       examId,
       courseId,
       userId: session.user.id,
       rawMark,
+      weightedMark,
     };
 
     if (coMarks && Array.isArray(coMarks) && coMarks.length > 0) {

@@ -69,16 +69,13 @@ export async function POST(
     }
 
     // 4. Import exams
-    const examMap = new Map(); // Map old exam displayName to new _id
+    const examMap = new Map(); // Map old exam displayName to new exam info
     for (const examData of importData.exams) {
       const exam = await Exam.create({
         displayName: examData.displayName,
         examType: examData.examType,
         totalMarks: examData.totalMarks,
         weightage: examData.weightage,
-        scalingEnabled: examData.scalingEnabled,
-        scalingMethod: examData.scalingMethod,
-        scalingTarget: examData.scalingTarget,
         isRequired: examData.isRequired,
         examCategory: examData.examCategory,
         numberOfCOs: examData.numberOfCOs,
@@ -86,24 +83,34 @@ export async function POST(
         courseId,
         userId: session.user.id,
       });
-      examMap.set(examData.displayName, exam._id);
+      examMap.set(examData.displayName, {
+        id: exam._id,
+        totalMarks: exam.totalMarks,
+        weightage: exam.weightage,
+      });
     }
 
     // 5. Import marks
     for (const markData of importData.marks) {
       const studentId = studentMap.get(markData.studentId);
-      const examId = examMap.get(markData.examDisplayName);
+      const examInfo = examMap.get(markData.examDisplayName);
 
-      if (studentId && examId) {
+      if (studentId && examInfo) {
+        const weightedMark =
+          markData.weightedMark !== undefined && markData.weightedMark !== null
+            ? markData.weightedMark
+            : examInfo.totalMarks > 0
+              ? Math.round(((markData.rawMark / examInfo.totalMarks) * examInfo.weightage) * 100) / 100
+              : 0;
+
         await Mark.create({
           studentId,
-          examId,
+          examId: examInfo.id,
           courseId,
           rawMark: markData.rawMark,
           coMarks: markData.coMarks,
           questionMarks: markData.questionMarks,
-          scaledMark: markData.scaledMark,
-          roundedMark: markData.roundedMark,
+          weightedMark,
           userId: session.user.id,
         });
       }

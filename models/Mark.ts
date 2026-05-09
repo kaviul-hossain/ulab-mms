@@ -8,8 +8,7 @@ export interface IMark extends Document {
   rawMark: number;
   coMarks?: number[]; // Array of CO marks [CO1, CO2, CO3, ...]
   questionMarks?: number[]; // Array of Question marks [Q1, Q2, Q3, ...]
-  scaledMark?: number;
-  roundedMark?: number;
+  weightedMark?: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -49,11 +48,7 @@ const MarkSchema: Schema = new Schema(
       type: [Number],
       default: null,
     },
-    scaledMark: {
-      type: Number,
-      default: null,
-    },
-    roundedMark: {
+    weightedMark: {
       type: Number,
       default: null,
     },

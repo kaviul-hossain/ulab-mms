@@ -17,8 +17,6 @@ interface Exam {
   displayName: string;
   totalMarks: number;
   weightage: number;
-  scalingEnabled?: boolean;
-  scalingTarget?: number | null;
   examCategory?: 'Quiz' | 'Assignment' | 'Project' | 'Attendance' | 'MainExam' | 'ClassPerformance' | 'Others';
 }
 
@@ -27,8 +25,7 @@ interface Mark {
   studentId: string;
   examId: string;
   rawMark: number;
-  scaledMark?: number;
-  roundedMark?: number;
+  weightedMark?: number;
 }
 
 interface Course {
@@ -67,7 +64,7 @@ interface StudentsViewProps {
   hasQuizzes: boolean;
   hasAssignments: boolean;
   getMark: (studentId: string, examId: string) => Mark | undefined;
-  getAggregatedMark: (studentId: string, category: 'Quiz' | 'Assignment') => Mark | { rawMark: number; scaledMark: number; roundedMark: number; isAggregated: boolean; examId?: string } | null;
+  getAggregatedMark: (studentId: string, category: 'Quiz' | 'Assignment') => Mark | { rawMark: number; isAggregated: boolean; examId?: string } | null;
   calculateFinalGrade: (studentId: string) => GradeData;
   calculateLetterGrade: (percentage: number, gradingScale?: string) => LetterGrade | null;
   getGradeDisplay: (letter: string, modifier?: string) => string;
@@ -156,7 +153,7 @@ export default function StudentsView({
                 {exams.map(exam => (
                   <th key={exam._id} className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider">
                     <div>{exam.displayName}</div>
-                    <div className="text-[10px] font-normal mt-0.5 text-muted-foreground">Raw / Scaled / Rounded</div>
+                    <div className="text-[10px] font-normal mt-0.5 text-muted-foreground">Raw / Weighted</div>
                   </th>
                 ))}
                 {hasQuizzes && (
@@ -220,31 +217,18 @@ export default function StudentsView({
                         <div className="flex items-center gap-2">
                           <div className="flex-1">
                             {mark ? (
-                              exam.scalingEnabled ? (
-                                <div className="flex flex-col gap-1">
-                                  <Badge variant="secondary" className="font-medium justify-start">
-                                    Raw: {mark.rawMark}
-                                  </Badge>
-                                  {mark.scaledMark !== undefined && mark.scaledMark !== null ? (
-                                    <Badge variant="secondary" className="font-medium bg-emerald-500/20 justify-start">
-                                      Scaled: {mark.scaledMark}
-                                    </Badge>
-                                  ) : (
-                                    <span className="text-xs italic text-muted-foreground">Not scaled</span>
-                                  )}
-                                  {mark.roundedMark !== undefined && mark.roundedMark !== null ? (
-                                    <Badge variant="secondary" className="font-medium bg-purple-500/20">
-                                      Rounded: {mark.roundedMark}
-                                    </Badge>
-                                  ) : mark.scaledMark !== undefined && mark.scaledMark !== null ? (
-                                    <span className="text-xs italic text-muted-foreground">Not rounded</span>
-                                  ) : null}
-                                </div>
-                              ) : (
-                                <Badge variant="secondary" className="font-medium">
-                                  {mark.rawMark}
+                              <div className="flex flex-col gap-1">
+                                <Badge variant="secondary" className="font-medium justify-start">
+                                  Raw: {mark.rawMark}
                                 </Badge>
-                              )
+                                <Badge variant="secondary" className="font-medium bg-emerald-500/20 justify-start">
+                                  Weighted:{' '}
+                                  {(mark.weightedMark !== undefined && mark.weightedMark !== null
+                                    ? mark.weightedMark
+                                    : (mark.rawMark / exam.totalMarks) * exam.weightage
+                                  ).toFixed(2)}
+                                </Badge>
+                              </div>
                             ) : (
                               <span className="text-muted-foreground">0</span>
                             )}
@@ -265,29 +249,19 @@ export default function StudentsView({
                               <span className="px-2 py-1 rounded font-medium text-xs bg-amber-900/40 text-amber-200">
                                 Avg: {aggMark.rawMark.toFixed(2)}
                               </span>
-                              <span className="px-2 py-1 rounded font-medium text-xs bg-amber-800/40 text-amber-300">
-                                Rounded: {aggMark.roundedMark}
-                              </span>
                             </div>
                           );
                         } else {
                           const exam = exams.find(e => e._id === aggMark.examId);
                           if (!exam) return <span className="text-gray-600">0</span>;
                           
-                          const markToUse = (exam.scalingEnabled && aggMark.scaledMark !== undefined && aggMark.scaledMark !== null) 
-                            ? aggMark.scaledMark 
-                            : aggMark.rawMark;
-                          const markLabel = (exam.scalingEnabled && aggMark.scaledMark !== undefined && aggMark.scaledMark !== null) 
-                            ? 'Scaled' 
-                            : 'Raw';
-                          
                           return (
                             <div className="flex flex-col gap-1">
                               <span className="px-2 py-1 rounded font-medium text-xs bg-amber-900/40 text-amber-200">
-                                Best: {markToUse}
+                                Best: {aggMark.rawMark}
                               </span>
                               <span className="text-xs italic text-gray-500">
-                                ({markLabel}: {markToUse}/{exam.totalMarks})
+                                (Raw: {aggMark.rawMark}/{exam.totalMarks})
                               </span>
                             </div>
                           );
@@ -307,29 +281,19 @@ export default function StudentsView({
                               <span className="px-2 py-1 rounded font-medium text-xs bg-blue-900/40 text-blue-200">
                                 Avg: {aggMark.rawMark.toFixed(2)}
                               </span>
-                              <span className="px-2 py-1 rounded font-medium text-xs bg-blue-800/40 text-blue-300">
-                                Rounded: {aggMark.roundedMark}
-                              </span>
                             </div>
                           );
                         } else {
                           const exam = exams.find(e => e._id === aggMark.examId);
                           if (!exam) return <span className="text-gray-600">0</span>;
                           
-                          const markToUse = (exam.scalingEnabled && aggMark.scaledMark !== undefined && aggMark.scaledMark !== null) 
-                            ? aggMark.scaledMark 
-                            : aggMark.rawMark;
-                          const markLabel = (exam.scalingEnabled && aggMark.scaledMark !== undefined && aggMark.scaledMark !== null) 
-                            ? 'Scaled' 
-                            : 'Raw';
-                          
                           return (
                             <div className="flex flex-col gap-1">
                               <span className="px-2 py-1 rounded font-medium text-xs bg-blue-900/40 text-blue-200">
-                                Best: {markToUse}
+                                Best: {aggMark.rawMark}
                               </span>
                               <span className="text-xs italic text-gray-500">
-                                ({markLabel}: {markToUse}/{exam.totalMarks})
+                                (Raw: {aggMark.rawMark}/{exam.totalMarks})
                               </span>
                             </div>
                           );

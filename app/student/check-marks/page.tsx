@@ -51,9 +51,6 @@ interface Exam {
   displayName: string;
   totalMarks: number;
   weightage: number;
-  scalingEnabled: boolean;
-  scalingMethod?: string;
-  scalingTarget?: number;
   examType: string;
   examCategory?: 'Quiz' | 'Assignment' | 'Project' | 'Attendance' | 'MainExam' | 'ClassPerformance' | 'Others';
   numberOfCOs?: number;
@@ -66,8 +63,7 @@ interface Mark {
   rawMark: number;
   coMarks?: number[];
   questionMarks?: number[];
-  scaledMark?: number;
-  roundedMark?: number;
+  weightedMark?: number;
 }
 
 interface ClassStats {
@@ -155,12 +151,8 @@ export default function StudentCheckMarks() {
       categoryMarks.forEach(mark => {
         const exam = categoryExams.find(e => e._id === mark!.examId);
         if (exam) {
-          const markToUse = (exam.scalingEnabled && mark!.scaledMark !== undefined && mark!.scaledMark !== null) 
-            ? mark!.scaledMark 
-            : mark!.rawMark;
-          
-          if (markToUse > bestValue) {
-            bestValue = markToUse;
+          if (mark!.rawMark > bestValue) {
+            bestValue = mark!.rawMark;
             bestMark = mark!;
           }
         }
@@ -168,12 +160,8 @@ export default function StudentCheckMarks() {
 
       const exam = categoryExams.find(e => e._id === bestMark!.examId);
       if (exam) {
-        const markValue = (exam.scalingEnabled && bestMark!.scaledMark !== undefined && bestMark!.scaledMark !== null) 
-          ? bestMark!.scaledMark 
-          : bestMark!.rawMark;
-        const totalMarks = (exam.scalingEnabled && bestMark!.scaledMark !== undefined && bestMark!.scaledMark !== null && exam.scalingTarget) 
-          ? exam.scalingTarget 
-          : exam.totalMarks;
+        const markValue = bestMark!.rawMark;
+        const totalMarks = exam.totalMarks;
         
         return { mark: markValue, totalMarks };
       }
@@ -184,20 +172,13 @@ export default function StudentCheckMarks() {
       categoryMarks.forEach(mark => {
         const exam = categoryExams.find(e => e._id === mark!.examId);
         if (exam) {
-          const markToUse = (exam.scalingEnabled && mark!.scaledMark !== undefined && mark!.scaledMark !== null) 
-            ? mark!.scaledMark 
-            : mark!.rawMark;
-          totalMarks += markToUse;
+          totalMarks += mark!.rawMark;
         }
       });
 
       const avgMark = totalMarks / categoryMarks.length;
       
-      // Find max scalingTarget or totalMarks
-      const scaledExams = categoryExams.filter(e => e.scalingEnabled && e.scalingTarget);
-      const maxTotal = scaledExams.length > 0
-        ? Math.max(...scaledExams.map(e => e.scalingTarget!))
-        : Math.max(...categoryExams.map(e => e.totalMarks));
+      const maxTotal = Math.max(...categoryExams.map(e => e.totalMarks));
       
       return { mark: avgMark, totalMarks: maxTotal };
     }
@@ -221,21 +202,14 @@ export default function StudentCheckMarks() {
 
       const mark = getMark(courseData.marks, exam._id);
       if (mark) {
-        const markToUse = (exam.scalingEnabled && mark.scaledMark !== undefined && mark.scaledMark !== null) 
-          ? mark.scaledMark 
-          : mark.rawMark;
-        
-        const totalMarksToUse = (exam.scalingEnabled && mark.scaledMark !== undefined && mark.scaledMark !== null && exam.scalingTarget) 
-          ? exam.scalingTarget 
-          : exam.totalMarks;
-        
-        const percentage = (markToUse / totalMarksToUse) * 100;
-        const contribution = (percentage * exam.weightage) / 100;
+        const contribution = mark.weightedMark !== undefined && mark.weightedMark !== null
+          ? mark.weightedMark
+          : (mark.rawMark / exam.totalMarks) * exam.weightage;
         
         breakdown.push({
           name: exam.displayName,
-          mark: markToUse,
-          totalMarks: totalMarksToUse,
+          mark: mark.rawMark,
+          totalMarks: exam.totalMarks,
           weightage: exam.weightage,
           contribution: contribution,
         });
@@ -808,9 +782,6 @@ export default function StudentCheckMarks() {
                             <div className="text-xs text-muted-foreground space-y-1">
                             <div className="flex items-center gap-2 flex-wrap">
                               <span>📝 Total: {exam.totalMarks} marks</span>
-                              {exam.scalingTarget && exam.scalingEnabled && (
-                                <span className="text-emerald-400">• Scaled to: {exam.scalingTarget}</span>
-                              )}
                               {exam.numberOfCOs && (
                                 <span className="text-purple-400">• {exam.numberOfCOs} COs</span>
                               )}
@@ -821,16 +792,13 @@ export default function StudentCheckMarks() {
                             {exam.examCategory !== 'Quiz' && exam.examCategory !== 'Assignment' && (
                               <div>⚖️ Weightage: {exam.weightage}%</div>
                             )}
-                            {exam.scalingMethod && (
-                              <div className="text-purple-400">🔄 Method: {exam.scalingMethod}</div>
-                            )}
                           </div>
                         </div>
 
                         {mark ? (
                           <>
                             {/* Marks Display */}
-                            <div className="grid grid-cols-3 gap-2 mb-4">
+                            <div className="grid grid-cols-2 gap-2 mb-4">
                               <Card className="bg-blue-500/10 border-blue-500/20">
                                 <CardContent className="p-3 text-center">
                                   <div className="text-xs text-muted-foreground mb-1">Raw</div>
@@ -840,53 +808,23 @@ export default function StudentCheckMarks() {
                                   <div className="text-xs text-muted-foreground">/{exam.totalMarks}</div>
                                 </CardContent>
                               </Card>
-
-                              {exam.scalingEnabled && mark.scaledMark !== undefined && mark.scaledMark !== null ? (
-                                <Card className="bg-emerald-500/10 border-emerald-500/20">
-                                  <CardContent className="p-3 text-center">
-                                    <div className="text-xs text-muted-foreground mb-1">Scaled</div>
-                                    <div className="text-lg font-bold text-emerald-400">
-                                      {mark.scaledMark.toFixed(2)}
-                                    </div>
-                                    {exam.scalingTarget && (
-                                      <div className="text-xs text-muted-foreground">/{exam.scalingTarget}</div>
-                                    )}
-                                  </CardContent>
-                                </Card>
-                              ) : (
-                                <Card className="bg-muted/50">
-                                  <CardContent className="p-3 text-center">
-                                    <div className="text-xs text-muted-foreground mb-1">Scaled</div>
-                                    <div className="text-xs text-muted-foreground italic">Not scaled</div>
-                                  </CardContent>
-                                </Card>
-                              )}
-
-                              {exam.scalingEnabled && mark.roundedMark !== undefined && mark.roundedMark !== null ? (
-                                <Card className="bg-purple-500/10 border-purple-500/20">
-                                  <CardContent className="p-3 text-center">
-                                    <div className="text-xs text-muted-foreground mb-1">Final</div>
-                                    <div className="text-lg font-bold text-purple-400">
-                                      {mark.roundedMark}
-                                    </div>
-                                  </CardContent>
-                                </Card>
-                              ) : (
-                                <Card className="bg-muted/50">
-                                  <CardContent className="p-3 text-center">
-                                    <div className="text-xs text-muted-foreground mb-1">Final</div>
-                                    <div className="text-xs text-muted-foreground italic">N/A</div>
-                                  </CardContent>
-                                </Card>
-                              )}
+                              <Card className="bg-emerald-500/10 border-emerald-500/20">
+                                <CardContent className="p-3 text-center">
+                                  <div className="text-xs text-muted-foreground mb-1">Weighted</div>
+                                  <div className="text-lg font-bold text-emerald-400">
+                                    {(mark.weightedMark !== undefined && mark.weightedMark !== null
+                                      ? mark.weightedMark
+                                      : (mark.rawMark / exam.totalMarks) * exam.weightage
+                                    ).toFixed(2)}
+                                  </div>
+                                </CardContent>
+                              </Card>
                             </div>
 
                             {/* Performance Visualization */}
                             {stats && stats.count > 0 && (() => {
-                              const studentMark = exam.scalingEnabled && mark.scaledMark !== undefined && mark.scaledMark !== null
-                                ? mark.scaledMark
-                                : mark.rawMark;
-                              const maxValue = exam.scalingEnabled && exam.scalingTarget ? exam.scalingTarget : exam.totalMarks;
+                              const studentMark = mark.rawMark;
+                              const maxValue = exam.totalMarks;
                               const avgPercent = (stats.average / stats.highest) * 100;
                               const studentPercent = (studentMark / stats.highest) * 100;
 

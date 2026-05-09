@@ -51,7 +51,6 @@ export async function POST(
           examType: 'midterm',
           totalMarks: 30,
           weightage: 30,
-          scalingEnabled: false,
           isRequired: true,
           numberOfCOs: 3, // Default 3 COs, can be edited
           userId: session.user.id,
@@ -62,7 +61,6 @@ export async function POST(
           examType: 'final',
           totalMarks: 50,
           weightage: 50,
-          scalingEnabled: false,
           isRequired: true,
           numberOfCOs: 4, // Default 4 COs, can be edited
           userId: session.user.id,
@@ -77,7 +75,6 @@ export async function POST(
           examType: 'labFinal',
           totalMarks: 50,
           weightage: 50,
-          scalingEnabled: false,
           isRequired: true,
           userId: session.user.id,
         },
@@ -87,7 +84,6 @@ export async function POST(
           examType: 'oel',
           totalMarks: 50,
           weightage: 50,
-          scalingEnabled: false,
           isRequired: true,
           userId: session.user.id,
         },

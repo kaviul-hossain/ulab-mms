@@ -65,7 +65,6 @@ export async function POST(request: NextRequest) {
       examType: 'custom',
       totalMarks,
       weightage: weightage || 0, // Default to 0 for Quiz/Assignment
-      scalingEnabled: false,
       isRequired: false,
       userId: session.user.id,
     };

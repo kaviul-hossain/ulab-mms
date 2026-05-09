@@ -27,10 +27,10 @@ export const parseCSV = (csvText: string): Student[] => {
 };
 
 export const generateCSV = (students: Student[], exams: { id: string; name: string }[]): string => {
-  // Header row - include raw, scaled, and rounded columns for each exam
+  // Header row - include raw and weighted columns for each exam
   let csv = 'Student ID,Student Name';
   exams.forEach(exam => {
-    csv += `,${exam.name} (Raw),${exam.name} (Scaled),${exam.name} (Rounded)`;
+    csv += `,${exam.name} (Raw),${exam.name} (Weighted)`;
   });
   csv += '\n';
 
@@ -39,11 +39,9 @@ export const generateCSV = (students: Student[], exams: { id: string; name: stri
     csv += `${student.id},${student.name}`;
     exams.forEach(exam => {
       const rawMark = student.marks[exam.id];
-      const scaledMark = student.scaledMarks?.[exam.id];
-      const roundedMark = student.roundedMarks?.[exam.id];
+      const weightedMark = student.weightedMarks?.[exam.id];
       csv += `,${rawMark !== undefined ? rawMark : ''}`;
-      csv += `,${scaledMark !== undefined ? scaledMark : ''}`;
-      csv += `,${roundedMark !== undefined ? roundedMark : ''}`;
+      csv += `,${weightedMark !== undefined ? weightedMark : ''}`;
     });
     csv += '\n';
   });

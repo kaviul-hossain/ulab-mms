@@ -4,9 +4,6 @@ export interface IExam extends Document {
   displayName: string; // Renamable display name
   totalMarks: number;
   weightage: number; // Percentage weightage (not used for individual Quiz/Assignment exams)
-  scalingEnabled: boolean; // Toggle for scaling
-  scalingMethod?: 'bellCurve' | 'linearNormalization' | 'minMaxNormalization' | 'percentile';
-  scalingTarget?: number; // Target value to scale to (e.g., 80, 90, 100)
   isRequired: boolean; // True for Mid/Final (Theory) or Lab Final/OEL (Lab)
   examType: 'midterm' | 'final' | 'labFinal' | 'oel' | 'custom'; // Type of exam
   examCategory?: 'Quiz' | 'Assignment' | 'Project' | 'Attendance' | 'MainExam' | 'ClassPerformance' | 'Others'; // Category for grouping
@@ -35,20 +32,6 @@ const ExamSchema: Schema = new Schema(
       required: [true, 'Please provide weightage'],
       min: [0, 'Weightage cannot be negative'],
       max: [100, 'Weightage cannot exceed 100'],
-    },
-    scalingEnabled: {
-      type: Boolean,
-      default: false,
-    },
-    scalingMethod: {
-      type: String,
-      enum: ['bellCurve', 'linearNormalization', 'minMaxNormalization', 'percentile'],
-      default: null,
-    },
-    scalingTarget: {
-      type: Number,
-      min: [0, 'Scaling target cannot be negative'],
-      default: null,
     },
     isRequired: {
       type: Boolean,
