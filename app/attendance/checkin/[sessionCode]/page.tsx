@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState, use } from 'react';
-import { useSession } from 'next-auth/react';
+import { signIn, useSession } from 'next-auth/react';
+import { useSearchParams } from 'next/navigation';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -23,13 +24,16 @@ export default function AttendanceCheckInPage({ params }: { params: Promise<{ se
   const { data: session, status } = useSession();
   const resolvedParams = use(params);
   const courseId = resolvedParams.sessionCode;
+  const searchParams = useSearchParams();
+  const shouldAutoCheckIn = searchParams.get('attendance') === '1';
   const [course, setCourse] = useState<CourseInfo | null>(null);
   const [message, setMessage] = useState('Preparing check-in...');
   const [signingIn, setSigningIn] = useState(false);
   const [currentUrl, setCurrentUrl] = useState<string>('');
+  const [attendanceSubmitted, setAttendanceSubmitted] = useState(false);
 
   useEffect(() => {
-    setCurrentUrl(`${window.location.origin}/attendance/checkin/${courseId}`);
+    setCurrentUrl(`${window.location.origin}/attendance/checkin/${courseId}?attendance=1`);
   }, [courseId]);
 
   const fetchCourseInfo = async () => {
@@ -54,9 +58,18 @@ export default function AttendanceCheckInPage({ params }: { params: Promise<{ se
   }, [courseId]);
 
   useEffect(() => {
-    if (status !== 'authenticated' || !session?.user?.email || !course?.hasActiveSession) return;
+    if (
+      status !== 'authenticated' ||
+      !session?.user?.email ||
+      !course?.hasActiveSession ||
+      !shouldAutoCheckIn ||
+      attendanceSubmitted
+    ) {
+      return;
+    }
 
     const markAttendance = async () => {
+      setAttendanceSubmitted(true);
       setMessage('Recording attendance...');
       try {
         const res = await fetch('/api/attendance/checkin', {
@@ -76,13 +89,12 @@ export default function AttendanceCheckInPage({ params }: { params: Promise<{ se
     };
 
     markAttendance();
-  }, [status, session, course?.hasActiveSession, courseId]);
+  }, [status, session, course?.hasActiveSession, courseId, shouldAutoCheckIn, attendanceSubmitted]);
 
   const handleGoogleSignIn = async () => {
     setSigningIn(true);
     const callbackUrl = currentUrl || `/attendance/checkin/${courseId}`;
-    // Direct Google provider endpoint avoids the app's login page and returns here after OAuth.
-    window.location.href = `/api/auth/signin/google?callbackUrl=${encodeURIComponent(callbackUrl)}`;
+    await signIn('google', { callbackUrl });
   };
 
   return (
@@ -146,7 +158,7 @@ export default function AttendanceCheckInPage({ params }: { params: Promise<{ se
               <div className="rounded-2xl border border-dashed bg-muted/20 p-4">
                 <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Status</div>
                 <div className="mt-2 text-sm leading-6">{message}</div>
-                {session?.user?.email && (
+                {shouldAutoCheckIn && session?.user?.email && (
                   <div className="mt-3 text-sm text-muted-foreground">Signed in as {session.user.email}</div>
                 )}
               </div>
