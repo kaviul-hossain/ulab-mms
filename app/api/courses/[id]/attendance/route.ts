@@ -46,6 +46,9 @@ export async function POST(req: NextRequest, { params }: { params: any }) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
+    const body = await req.json().catch(() => ({}));
+    const selectedDate = typeof body?.date === 'string' ? body.date : '';
+
     const activeSession = await AttendanceSession.findOne({ courseId: new mongoose.Types.ObjectId(courseId), open: true });
 
     if (activeSession) {
@@ -54,13 +57,18 @@ export async function POST(req: NextRequest, { params }: { params: any }) {
       return NextResponse.json({ session: activeSession, action: 'closed' });
     }
 
-    const today = new Date();
+    const sessionDate = selectedDate ? new Date(selectedDate) : new Date();
+
+    if (Number.isNaN(sessionDate.getTime())) {
+      return NextResponse.json({ error: 'Invalid session date' }, { status: 400 });
+    }
+
     const sessionDoc = await AttendanceSession.create({
       courseId: new mongoose.Types.ObjectId(courseId),
       startedBy: new mongoose.Types.ObjectId(session.user.id),
-      date: today,
+      date: sessionDate,
       open: true,
-      sessionCode: `${courseId}-${today.getTime()}`,
+      sessionCode: `${courseId}-${sessionDate.getTime()}`,
       records: [],
     });
 

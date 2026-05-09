@@ -20,6 +20,11 @@ interface CourseInfo {
   hasActiveSession: boolean;
 }
 
+interface ConfirmationCandidate {
+  studentId: string;
+  name: string;
+}
+
 export default function AttendanceCheckInPage({ params }: { params: Promise<{ sessionCode: string }> }) {
   const { data: session, status } = useSession();
   const resolvedParams = use(params);
@@ -31,6 +36,8 @@ export default function AttendanceCheckInPage({ params }: { params: Promise<{ se
   const [signingIn, setSigningIn] = useState(false);
   const [currentUrl, setCurrentUrl] = useState<string>('');
   const [attendanceSubmitted, setAttendanceSubmitted] = useState(false);
+  const [pendingCandidate, setPendingCandidate] = useState<ConfirmationCandidate | null>(null);
+  const [confirmingAttendance, setConfirmingAttendance] = useState(false);
 
   useEffect(() => {
     setCurrentUrl(`${window.location.origin}/attendance/checkin/${courseId}?attendance=1`);
@@ -63,7 +70,8 @@ export default function AttendanceCheckInPage({ params }: { params: Promise<{ se
       !session?.user?.email ||
       !course?.hasActiveSession ||
       !shouldAutoCheckIn ||
-      attendanceSubmitted
+      attendanceSubmitted ||
+      pendingCandidate
     ) {
       return;
     }
@@ -79,6 +87,12 @@ export default function AttendanceCheckInPage({ params }: { params: Promise<{ se
         });
         const data = await res.json();
         if (res.ok) {
+          if (data.needsConfirmation && data.candidate) {
+            setPendingCandidate(data.candidate);
+            setMessage(data.message || 'Please confirm your name and student ID.');
+            return;
+          }
+
           setMessage(data.message || 'Attendance recorded successfully.');
         } else {
           setMessage(data.error || 'Unable to record attendance');
@@ -95,6 +109,34 @@ export default function AttendanceCheckInPage({ params }: { params: Promise<{ se
     setSigningIn(true);
     const callbackUrl = currentUrl || `/attendance/checkin/${courseId}`;
     await signIn('google', { callbackUrl });
+  };
+
+  const confirmAttendance = async () => {
+    if (!pendingCandidate) return;
+
+    setConfirmingAttendance(true);
+    setMessage('Recording attendance...');
+
+    try {
+      const res = await fetch('/api/attendance/checkin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ courseId, confirmedStudentId: pendingCandidate.studentId }),
+      });
+      const data = await res.json();
+
+      if (res.ok) {
+        setPendingCandidate(null);
+        setAttendanceSubmitted(true);
+        setMessage(data.message || 'Attendance recorded successfully.');
+      } else {
+        setMessage(data.error || 'Unable to record attendance');
+      }
+    } catch {
+      setMessage('Network error while recording attendance');
+    } finally {
+      setConfirmingAttendance(false);
+    }
   };
 
   return (
@@ -154,6 +196,39 @@ export default function AttendanceCheckInPage({ params }: { params: Promise<{ se
                   </div>
                 </div>
               </div>
+
+              {pendingCandidate && (
+                <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-900/40 dark:bg-emerald-950/20">
+                  <div className="text-xs font-medium uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
+                    Confirmation required
+                  </div>
+                  <div className="mt-2 text-sm leading-6 text-foreground">
+                    Is this you?
+                  </div>
+                  <div className="mt-2 rounded-xl border bg-background px-3 py-3">
+                    <div className="text-sm font-semibold">{pendingCandidate.name}</div>
+                    <div className="text-sm text-muted-foreground">ID: {pendingCandidate.studentId}</div>
+                  </div>
+                  <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                    <Button
+                      type="button"
+                      onClick={confirmAttendance}
+                      disabled={confirmingAttendance}
+                      className="bg-emerald-600 text-white hover:bg-emerald-700"
+                    >
+                      {confirmingAttendance ? 'Confirming...' : 'Yes, this is me'}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setPendingCandidate(null)}
+                      disabled={confirmingAttendance}
+                    >
+                      No, cancel
+                    </Button>
+                  </div>
+                </div>
+              )}
 
               <div className="rounded-2xl border border-dashed bg-muted/20 p-4">
                 <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Status</div>

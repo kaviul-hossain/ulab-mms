@@ -35,6 +35,13 @@ function buildQrUrl(courseId: string) {
   return `${window.location.origin}/attendance/checkin/${courseId}`;
 }
 
+function getLocalDateInputValue(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 export default function AttendanceView({ courseId }: { courseId: string }) {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
@@ -44,6 +51,8 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
   const [showQrModal, setShowQrModal] = useState(false);
   const [showManageModal, setShowManageModal] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [showSessionDialog, setShowSessionDialog] = useState(false);
+  const [sessionDate, setSessionDate] = useState(getLocalDateInputValue());
 
   const fetchAll = async () => {
     setLoading(true);
@@ -84,6 +93,12 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
   );
 
   const toggleAttendance = async () => {
+    if (!isActive) {
+      setSessionDate(getLocalDateInputValue());
+      setShowSessionDialog(true);
+      return;
+    }
+
     try {
       const res = await fetch(`/api/courses/${courseId}/attendance`, { method: 'POST' });
       const data = await res.json();
@@ -94,6 +109,25 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
       }
     } catch (err) {
       console.error('Error toggling attendance', err);
+    }
+  };
+
+  const openSessionWithDate = async () => {
+    try {
+      const res = await fetch(`/api/courses/${courseId}/attendance`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date: sessionDate }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setShowSessionDialog(false);
+        await fetchAll();
+      } else {
+        console.error(data.error || 'Unable to open attendance session');
+      }
+    } catch (err) {
+      console.error('Error opening attendance session', err);
     }
   };
 
@@ -152,7 +186,7 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
             onClick={toggleAttendance}
             className={isActive ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-slate-500 hover:bg-slate-600 text-white'}
           >
-            {isActive ? 'Session On' : 'Session Off'}
+            {isActive ? 'Close Session' : 'Open Session'}
           </Button>
 
           <Button type="button" variant="outline" onClick={() => setShowQrModal(true)} disabled={!isActive}>
@@ -290,6 +324,42 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
               className="rounded-xl border bg-white p-3"
             />
             <div className="break-all text-xs text-muted-foreground">{buildQrUrl(courseId)}</div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showSessionDialog} onOpenChange={setShowSessionDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Choose class date</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <label htmlFor="attendance-date" className="text-sm font-medium">
+                Session date
+              </label>
+              <input
+                id="attendance-date"
+                type="date"
+                value={sessionDate}
+                onChange={(e) => setSessionDate(e.target.value)}
+                className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              />
+            </div>
+
+            <p className="text-sm text-muted-foreground">
+              Select the actual class date. This is useful for makeup classes or any attendance session that is not held on today’s date.
+            </p>
+
+            <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+              <Button type="button" variant="outline" onClick={() => setShowSessionDialog(false)}>
+                Cancel
+              </Button>
+              <Button type="button" onClick={openSessionWithDate}>
+                Open session
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
