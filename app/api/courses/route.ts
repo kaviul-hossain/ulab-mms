@@ -4,13 +4,35 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import dbConnect from '@/lib/mongodb';
 import Course from '@/models/Course';
 import Exam from '@/models/Exam';
+import User from '@/models/User';
+import mongoose from 'mongoose';
+
+async function resolveUserObjectId(session: any) {
+  const sessionUserId = session?.user?.id as string | undefined;
+  const sessionUserEmail = session?.user?.email as string | undefined;
+
+  if (sessionUserId && mongoose.Types.ObjectId.isValid(sessionUserId)) {
+    return sessionUserId;
+  }
+
+  if (sessionUserEmail) {
+    const localUser = await User.findOne({ email: sessionUserEmail.toLowerCase() }).lean();
+    if (localUser?._id) {
+      return String(localUser._id);
+    }
+  }
+
+  return null;
+}
 
 // GET all courses for the authenticated user
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
 
-    if (!session?.user?.id) {
+    const userObjectId = await resolveUserObjectId(session);
+
+    if (!userObjectId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -28,7 +50,7 @@ export async function GET(request: NextRequest) {
     // Get user's own courses
     let courses = await Course.find({ 
       ...query,
-      userId: session.user.id,
+      userId: new mongoose.Types.ObjectId(userObjectId),
     }).sort({
       createdAt: -1,
     });
@@ -63,7 +85,9 @@ export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
 
-    if (!session?.user?.id) {
+    const userObjectId = await resolveUserObjectId(session);
+
+    if (!userObjectId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -100,7 +124,7 @@ export async function POST(request: NextRequest) {
       year,
       section,
       courseType,
-      userId: session.user.id,
+      userId: new mongoose.Types.ObjectId(userObjectId),
     });
 
     // Auto-initialize required exams based on course type
@@ -118,7 +142,7 @@ export async function POST(request: NextRequest) {
           isRequired: true,
           examCategory: 'MainExam',
           numberOfCOs: 3, // Default 3 COs, can be edited later
-          userId: session.user.id,
+          userId: new mongoose.Types.ObjectId(userObjectId),
         },
         {
           courseId: course._id,
@@ -129,7 +153,7 @@ export async function POST(request: NextRequest) {
           examCategory: 'MainExam',
           isRequired: true,
           numberOfCOs: 4, // Default 4 COs, can be edited later
-          userId: session.user.id,
+          userId: new mongoose.Types.ObjectId(userObjectId),
         },
       ];
     } else if (courseType === 'Lab') {
@@ -143,7 +167,7 @@ export async function POST(request: NextRequest) {
           weightage: 30,
           examCategory: 'MainExam',
           isRequired: true,
-          userId: session.user.id,
+          userId: new mongoose.Types.ObjectId(userObjectId),
         },
         {
           courseId: course._id,
@@ -153,7 +177,7 @@ export async function POST(request: NextRequest) {
           weightage: 40,
           examCategory: 'MainExam',
           isRequired: true,
-          userId: session.user.id,
+          userId: new mongoose.Types.ObjectId(userObjectId),
         },
       ];
     }

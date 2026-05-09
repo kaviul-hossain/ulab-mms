@@ -36,6 +36,7 @@ export default function AttendanceCheckInPage({ params }: { params: Promise<{ se
   const [signingIn, setSigningIn] = useState(false);
   const [currentUrl, setCurrentUrl] = useState<string>('');
   const [attendanceSubmitted, setAttendanceSubmitted] = useState(false);
+  const [attendanceCompleted, setAttendanceCompleted] = useState(false);
   const [pendingCandidate, setPendingCandidate] = useState<ConfirmationCandidate | null>(null);
   const [confirmingAttendance, setConfirmingAttendance] = useState(false);
 
@@ -93,6 +94,7 @@ export default function AttendanceCheckInPage({ params }: { params: Promise<{ se
             return;
           }
 
+          setAttendanceCompleted(true);
           setMessage(data.message || 'Attendance recorded successfully.');
         } else {
           setMessage(data.error || 'Unable to record attendance');
@@ -128,6 +130,7 @@ export default function AttendanceCheckInPage({ params }: { params: Promise<{ se
       if (res.ok) {
         setPendingCandidate(null);
         setAttendanceSubmitted(true);
+        setAttendanceCompleted(true);
         setMessage(data.message || 'Attendance recorded successfully.');
       } else {
         setMessage(data.error || 'Unable to record attendance');
@@ -179,23 +182,30 @@ export default function AttendanceCheckInPage({ params }: { params: Promise<{ se
 
               <Separator />
 
-              <div className="rounded-2xl border bg-background p-4 sm:p-5">
-                <p className="text-sm text-muted-foreground">Sign in with your ULAB Google account to continue. After Google sign-in, this page will come back here and complete attendance automatically.</p>
+              {!attendanceCompleted ? (
+                <div className="rounded-2xl border bg-background p-4 sm:p-5">
+                  <p className="text-sm text-muted-foreground">Sign in with your ULAB Google account to continue. After Google sign-in, this page will come back here and complete attendance automatically.</p>
 
-                <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
-                  <Button
-                    type="button"
-                    onClick={handleGoogleSignIn}
-                    disabled={signingIn || !course?.hasActiveSession}
-                    className="w-full bg-green-600 text-white hover:bg-green-700 sm:w-auto"
-                  >
-                    {signingIn ? 'Redirecting to Google...' : 'Sign in with Google'}
-                  </Button>
-                  <div className="text-xs text-muted-foreground">
-                    {course?.hasActiveSession ? 'Attendance is open now.' : 'Attendance is closed right now.'}
+                  <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
+                    <Button
+                      type="button"
+                      onClick={handleGoogleSignIn}
+                      disabled={signingIn || !course?.hasActiveSession}
+                      className="w-full bg-green-600 text-white hover:bg-green-700 sm:w-auto"
+                    >
+                      {signingIn ? 'Redirecting to Google...' : 'Sign in with Google'}
+                    </Button>
+                    <div className="text-xs text-muted-foreground">
+                      {course?.hasActiveSession ? 'Attendance is open now.' : 'Attendance is closed right now.'}
+                    </div>
                   </div>
                 </div>
-              </div>
+              ) : (
+                <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-900/40 dark:bg-emerald-950/20">
+                  <div className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">Thank you</div>
+                  <div className="mt-2 text-sm text-foreground">Your attendance has been recorded successfully.</div>
+                </div>
+              )}
 
               {pendingCandidate && (
                 <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-900/40 dark:bg-emerald-950/20">
