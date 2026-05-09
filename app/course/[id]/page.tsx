@@ -12,6 +12,7 @@ import OverviewView from './components/OverviewView';
 import ExamsView from './components/ExamsView';
 import StudentsView from './components/StudentsView';
 import MarksView from './components/MarksView';
+import AttendanceView from './components/AttendanceView';
 import BulkMarkEntryModal from './components/BulkMarkEntryModal';
 import { 
   GradeThreshold, 
@@ -134,7 +135,7 @@ export default function CoursePage() {
   const [importingCourse, setImportingCourse] = useState(false);
   const [courseSettingsTab, setCourseSettingsTab] = useState<'aggregation' | 'grading'>('aggregation');
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [activeView, setActiveView] = useState<'overview' | 'exams' | 'students' | 'marks'>('overview');
+  const [activeView, setActiveView] = useState<'overview' | 'exams' | 'students' | 'marks' | 'attendance'>('overview');
   const [searchStudentId, setSearchStudentId] = useState('');
   const [showStudentStatsModal, setShowStudentStatsModal] = useState(false);
   const [selectedStudentForStats, setSelectedStudentForStats] = useState<Student | null>(null);
@@ -1173,6 +1174,16 @@ export default function CoursePage() {
               {sidebarOpen && <span className="ml-2 font-medium">Marks</span>}
             </Button>
 
+            <Button
+              variant={activeView === 'attendance' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setActiveView('attendance')}
+              className="w-full justify-start"
+            >
+              <span className="text-lg">📍</span>
+              {sidebarOpen && <span className="ml-2 font-medium">Attendance</span>}
+            </Button>
+
             {sidebarOpen && <div className="pt-4 mt-4 border-t"></div>}
 
             <Button
@@ -1353,6 +1364,11 @@ export default function CoursePage() {
                   setShowResetMarksModal(true);
                 }}
               />
+            )}
+
+            {/* Attendance View */}
+            {activeView === 'attendance' && (
+              <AttendanceView courseId={courseId} />
             )}
 
             {/* Empty States */}

@@ -1,5 +1,6 @@
 import NextAuth, { NextAuthOptions } from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
+import GoogleProvider from 'next-auth/providers/google';
 import bcrypt from 'bcryptjs';
 import dbConnect from '@/lib/mongodb';
 import User from '@/models/User';
@@ -42,6 +43,16 @@ export const authOptions: NextAuthOptions = {
         };
       },
     }),
+    // Add Google provider when configured in environment. This keeps Google auth modular and
+    // only enabled when the admin sets GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.
+    ...(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
+      ? [
+          GoogleProvider({
+            clientId: process.env.GOOGLE_CLIENT_ID!,
+            clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+          }),
+        ]
+      : []),
   ],
   callbacks: {
     async jwt({ token, user }) {
