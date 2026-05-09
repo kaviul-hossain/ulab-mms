@@ -911,6 +911,16 @@ export default function CoursePage() {
     }
   };
 
+  const selectedExamForSettings = showExamSettings
+    ? exams.find(exam => exam._id === showExamSettings)
+    : null;
+
+  const canEditCOs =
+    course?.courseType === 'Theory' ||
+    (course?.courseType === 'Lab' &&
+      (selectedExamForSettings?.examType === 'labFinal' ||
+        selectedExamForSettings?.examType === 'oel'));
+
   // Check if we should show aggregated columns
   const hasQuizzes = exams.some(exam => exam.examCategory === 'Quiz');
   const hasAssignments = exams.some(exam => exam.examCategory === 'Assignment');
@@ -1836,7 +1846,7 @@ export default function CoursePage() {
               </p>
             </div>
 
-            {course?.courseType === 'Theory' && (
+            {canEditCOs && (
               <div>
                 <Label>Number of COs</Label>
                 <Input

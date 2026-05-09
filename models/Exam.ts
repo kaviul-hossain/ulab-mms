@@ -10,7 +10,7 @@ export interface IExam extends Document {
   isRequired: boolean; // True for Mid/Final (Theory) or Lab Final/OEL (Lab)
   examType: 'midterm' | 'final' | 'labFinal' | 'oel' | 'custom'; // Type of exam
   examCategory?: 'Quiz' | 'Assignment' | 'Project' | 'Attendance' | 'MainExam' | 'ClassPerformance' | 'Others'; // Category for grouping
-  numberOfCOs?: number; // For Theory Mid/Final only
+  numberOfCOs?: number; // For theory exams and Lab Final/OEL when needed
   numberOfQuestions?: number; // For question-wise marking
   courseId: mongoose.Types.ObjectId;
   userId: mongoose.Types.ObjectId;
