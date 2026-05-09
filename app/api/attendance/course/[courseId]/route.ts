@@ -33,6 +33,9 @@ export async function GET(_req: NextRequest, { params }: { params: any }) {
         year: course.year,
         hasActiveSession: Boolean(activeSession),
         open: Boolean(activeSession),
+        // canonical ISO date for consistent client-side formatting
+        dateISO: activeSession ? new Date(activeSession.date).toISOString() : new Date().toISOString(),
+        // legacy label (kept for backward compatibility)
         dateLabel: activeSession ? new Date(activeSession.date).toLocaleDateString() : new Date().toLocaleDateString(),
       },
     });

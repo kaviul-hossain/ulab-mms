@@ -17,6 +17,7 @@ interface CourseInfo {
   year: number;
   open: boolean;
   dateLabel: string;
+  dateISO?: string;
   hasActiveSession: boolean;
 }
 
@@ -176,7 +177,7 @@ export default function AttendanceCheckInPage({ params }: { params: Promise<{ se
                 </div>
                 <div className="rounded-xl border bg-muted/40 p-3">
                   <div className="text-xs uppercase tracking-wide text-muted-foreground">Date</div>
-                  <div className="mt-1 font-semibold">{course?.dateLabel || new Date().toLocaleDateString()}</div>
+                  <div className="mt-1 font-semibold">{course?.dateISO ? new Date(course.dateISO).toLocaleDateString() : (course?.dateLabel || '—')}</div>
                 </div>
               </div>
 
