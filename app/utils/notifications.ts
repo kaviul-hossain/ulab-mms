@@ -67,6 +67,12 @@ export class NotificationService {
     deleteError: (error?: string) => {
       toast.error(error || 'Failed to delete student');
     },
+    bulkDeleted: (count: number) => {
+      toast.success(`Successfully deleted ${count} student${count !== 1 ? 's' : ''}!`);
+    },
+    bulkDeleteError: (error?: string) => {
+      toast.error(error || 'Failed to delete students');
+    },
     bulkImported: (count: number) => {
       toast.success(`Successfully imported ${count} student${count !== 1 ? 's' : ''}!`);
     },

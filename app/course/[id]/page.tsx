@@ -371,6 +371,26 @@ export default function CoursePage() {
     }
   };
 
+  const handleDeleteAllStudents = async () => {
+    try {
+      const response = await fetch(`/api/courses/${courseId}/students`, {
+        method: 'DELETE',
+      });
+
+      const data = await response.json().catch(() => ({}));
+
+      if (response.ok) {
+        await fetchCourseData();
+        notify.student.bulkDeleted(data.deletedStudents || 0);
+      } else {
+        notify.student.bulkDeleteError(data.error);
+      }
+    } catch (err) {
+      console.error('Error deleting all students:', err);
+      notify.student.bulkDeleteError();
+    }
+  };
+
   const handleAddExam = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -1337,6 +1357,7 @@ export default function CoursePage() {
                   setDeleteConfirmationStep(0);
                   setShowDeleteStudentModal(true);
                 }}
+                onDeleteAllStudents={handleDeleteAllStudents}
               />
             )}
 

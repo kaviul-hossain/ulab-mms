@@ -1,9 +1,12 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 import { Plus, Upload, Trash2 } from 'lucide-react';
 
 interface Student {
@@ -76,6 +79,7 @@ interface StudentsViewProps {
   onShowStudentDetail: (student: Student) => void;
   onShowGradeBreakdown: (student: Student) => void;
   onDeleteStudent: (student: Student) => void;
+  onDeleteAllStudents: () => Promise<void> | void;
 }
 
 export default function StudentsView({
@@ -98,8 +102,13 @@ export default function StudentsView({
   onShowStudentDetail,
   onShowGradeBreakdown,
   onDeleteStudent,
+  onDeleteAllStudents,
 }: StudentsViewProps) {
   const [showFloatingButtons, setShowFloatingButtons] = useState(false);
+  const [showDeleteAllModal, setShowDeleteAllModal] = useState(false);
+  const [deleteAllConfirmationStep, setDeleteAllConfirmationStep] = useState(0);
+  const [deleteAllConfirmationText, setDeleteAllConfirmationText] = useState('');
+  const [deletingAllStudents, setDeletingAllStudents] = useState(false);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -114,6 +123,23 @@ export default function StudentsView({
   if (students.length === 0) {
     return null;
   }
+
+  const resetDeleteAllModal = () => {
+    setShowDeleteAllModal(false);
+    setDeleteAllConfirmationStep(0);
+    setDeleteAllConfirmationText('');
+    setDeletingAllStudents(false);
+  };
+
+  const handleDeleteAllStudents = async () => {
+    setDeletingAllStudents(true);
+    try {
+      await onDeleteAllStudents();
+      resetDeleteAllModal();
+    } finally {
+      setDeletingAllStudents(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -140,6 +166,14 @@ export default function StudentsView({
           >
             <Upload className="w-4 h-4" />
             Bulk Import (CSV)
+          </Button>
+          <Button
+            onClick={() => setShowDeleteAllModal(true)}
+            variant="destructive"
+            className="gap-2"
+          >
+            <Trash2 className="w-4 h-4" />
+            Delete All Students
           </Button>
         </div>
       </div>
@@ -401,8 +435,100 @@ export default function StudentsView({
             <Upload className="w-5 h-5" />
             Bulk Import
           </Button>
+          <Button
+            onClick={() => setShowDeleteAllModal(true)}
+            variant="destructive"
+            className="gap-2 shadow-lg hover:shadow-xl transition-shadow"
+            size="lg"
+          >
+            <Trash2 className="w-5 h-5" />
+            Delete All
+          </Button>
         </div>
       )}
+
+      <Dialog open={showDeleteAllModal} onOpenChange={(open) => {
+        if (!open) resetDeleteAllModal();
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <Trash2 className="w-5 h-5" />
+              Delete All Students
+            </DialogTitle>
+            <DialogDescription>
+              {deleteAllConfirmationStep === 0
+                ? 'Are you sure you want to delete every student in this course?'
+                : 'FINAL CONFIRMATION: This will permanently remove all students and their marks.'}
+            </DialogDescription>
+          </DialogHeader>
+
+          {deleteAllConfirmationStep === 0 && (
+            <Alert variant="destructive">
+              <AlertDescription>
+                <div className="space-y-2">
+                  <p className="font-semibold">You are about to delete {students.length} student{students.length !== 1 ? 's' : ''}.</p>
+                  <p>This will also delete all marks associated with those students.</p>
+                </div>
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {deleteAllConfirmationStep === 1 && (
+            <Alert variant="destructive">
+              <AlertDescription>
+                <div className="space-y-3">
+                  <p className="font-bold text-lg">⚠️ FINAL CONFIRMATION</p>
+                  <p>Type <strong>DELETE</strong> below to remove all students from this course.</p>
+                  <Input
+                    value={deleteAllConfirmationText}
+                    onChange={(e) => setDeleteAllConfirmationText(e.target.value)}
+                    placeholder="Type DELETE"
+                    className="mt-2 border-red-500"
+                  />
+                </div>
+              </AlertDescription>
+            </Alert>
+          )}
+
+          <DialogFooter className="flex gap-2">
+            {deleteAllConfirmationStep > 0 && (
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setDeleteAllConfirmationStep(0);
+                  setDeleteAllConfirmationText('');
+                }}
+              >
+                Back
+              </Button>
+            )}
+            <Button
+              variant="ghost"
+              onClick={resetDeleteAllModal}
+              disabled={deletingAllStudents}
+            >
+              Cancel
+            </Button>
+            {deleteAllConfirmationStep === 0 ? (
+              <Button
+                variant="destructive"
+                onClick={() => setDeleteAllConfirmationStep(1)}
+              >
+                Next
+              </Button>
+            ) : (
+              <Button
+                variant="destructive"
+                onClick={handleDeleteAllStudents}
+                disabled={deletingAllStudents || deleteAllConfirmationText !== 'DELETE'}
+              >
+                {deletingAllStudents ? 'Deleting...' : 'Delete All Students'}
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
