@@ -6,6 +6,10 @@ export interface ICourse extends Document {
   semester: string;
   year: number;
   section: string;
+  classTime?: string;
+  classRoom?: string;
+  numberOfStudents?: number;
+  classRepresentativeId?: mongoose.Types.ObjectId | null;
   courseType: 'Theory' | 'Lab';
   showFinalGrade: boolean;
   quizAggregation: 'average' | 'best'; // How to aggregate quiz marks
@@ -48,6 +52,26 @@ const CourseSchema: Schema = new Schema(
       required: [true, 'Please provide a section'],
       trim: true,
       default: 'A',
+    },
+    classTime: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    classRoom: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    numberOfStudents: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    classRepresentativeId: {
+      type: Schema.Types.ObjectId,
+      ref: 'Student',
+      default: null,
     },
     courseType: {
       type: String,

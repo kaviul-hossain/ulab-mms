@@ -3,6 +3,7 @@ import mongoose, { Schema, Document, Model } from 'mongoose';
 export interface IStudent extends Document {
   studentId: string;
   name: string;
+  probation: boolean;
   courseId: mongoose.Types.ObjectId;
   userId: mongoose.Types.ObjectId;
   createdAt: Date;
@@ -20,6 +21,10 @@ const StudentSchema: Schema = new Schema(
       type: String,
       required: [true, 'Please provide a student name'],
       trim: true,
+    },
+    probation: {
+      type: Boolean,
+      default: false,
     },
     courseId: {
       type: Schema.Types.ObjectId,

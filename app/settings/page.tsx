@@ -135,7 +135,7 @@ export default function SettingsPage() {
                 />
               </Link>
               <div>
-                <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">
+                <h1 className="text-2xl font-bold bg-linear-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">
                   ⚙️ Settings
                 </h1>
                 <p className="text-xs text-muted-foreground">
@@ -225,6 +225,18 @@ export default function SettingsPage() {
               <Save className="h-4 w-4 mr-2" />
               Save Weightages
             </Button>
+          </CardContent>
+        </Card>
+
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle>Attendance & Class Settings</CardTitle>
+            <CardDescription>
+              Attendance class settings are saved per course from the Attendance page, not here.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="text-sm text-muted-foreground">
+            Open a course, switch to the Attendance tab, then use <span className="font-medium text-foreground">Class Settings</span> to set the room, class time, representative, and student probation flag.
           </CardContent>
         </Card>
 

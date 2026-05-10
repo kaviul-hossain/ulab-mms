@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
@@ -65,9 +66,7 @@ export async function GET(
         numberOfQuestions: exam.numberOfQuestions,
       })),
       marks: marks.map(mark => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const student = students.find((s: any) => s._id.toString() === mark.studentId.toString());
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const exam = exams.find((e: any) => e._id.toString() === mark.examId.toString());
 
         return {
@@ -82,14 +81,10 @@ export async function GET(
     };
 
     if (format === 'csv') {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const getAggregatedMark = (studentId: any, category: 'Quiz' | 'Assignment', aggregationMode?: 'average' | 'best'): any => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const categoryExams = exams.filter((e: any) => e.examCategory === category);
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const categoryMarks = marks.filter((m: any) =>
           m.studentId.toString() === studentId.toString() &&
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           categoryExams.some((e: any) => e._id.toString() === m.examId.toString())
         );
 
@@ -119,11 +114,9 @@ export async function GET(
         };
       };
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const calculateFinalGrade = (studentId: any): number => {
         let totalContribution = 0;
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         exams.forEach((exam: any) => {
           if (exam.examCategory === 'Quiz' || exam.examCategory === 'Assignment') {
             return;
@@ -321,6 +314,8 @@ export async function GET(
         },
       });
     }
+
+    // attendance_pdf handled by separate endpoint /api/courses/[id]/attendance-pdf
 
     return new NextResponse(Buffer.from(JSON.stringify(exportData, null, 2)), {
       status: 200,

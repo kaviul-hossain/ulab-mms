@@ -4,6 +4,7 @@ import { Fragment, useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ChevronDown, ChevronRight, QrCode, Trash2 } from 'lucide-react';
 
@@ -13,6 +14,129 @@ interface AttendanceRecord {
   recordedAt: string;
   markedBy?: 'qr' | 'manual';
   studentIdString?: string;
+}
+
+type CourseSettings = {
+  classTime: string;
+  classRoom: string;
+  numberOfStudents: string;
+  classRepresentativeId: string;
+};
+
+function SettingsForm({
+  students,
+  courseId,
+  initialValues,
+  onSaved,
+  onClose,
+}: {
+  students: Student[];
+  courseId: string;
+  initialValues: CourseSettings;
+  onSaved: (savedCourse: CourseInfo) => Promise<void> | void;
+  onClose: () => void;
+}) {
+  const [classTime, setClassTime] = useState(initialValues.classTime);
+  const [classRoom, setClassRoom] = useState(initialValues.classRoom);
+  const [numberOfStudents, setNumberOfStudents] = useState(initialValues.numberOfStudents);
+  const [repSearch, setRepSearch] = useState('');
+  const [classRepresentativeId, setClassRepresentativeId] = useState(initialValues.classRepresentativeId);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
+
+  useEffect(() => {
+    setClassTime(initialValues.classTime);
+    setClassRoom(initialValues.classRoom);
+    setNumberOfStudents(initialValues.numberOfStudents);
+    setClassRepresentativeId(initialValues.classRepresentativeId);
+    const selectedRep = students.find((st) => st._id === initialValues.classRepresentativeId);
+    setRepSearch(selectedRep ? selectedRep.name : '');
+  }, [initialValues.classRoom, initialValues.classRepresentativeId, initialValues.classTime, initialValues.numberOfStudents, students]);
+
+  const filtered = students.filter((st) => {
+    if (!repSearch) return true;
+    return st.name.toLowerCase().includes(repSearch.toLowerCase()) || st.studentId.toLowerCase().includes(repSearch.toLowerCase());
+  });
+
+  const save = async () => {
+    setSaving(true);
+    setSaveError('');
+    try {
+      const payload: any = {
+        classTime: classTime || '',
+        classRoom: classRoom || '',
+      };
+
+      if (numberOfStudents !== '' && numberOfStudents !== undefined && numberOfStudents !== null) {
+        const asNumber = Number(numberOfStudents);
+        if (!Number.isNaN(asNumber)) payload.numberOfStudents = asNumber;
+      }
+
+      // If empty string, treat as explicit clear -> send null; otherwise send id
+      payload.classRepresentativeId = classRepresentativeId === '' ? null : classRepresentativeId || null;
+
+      const response = await fetch(`/api/courses/${courseId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (response.ok) {
+        const data = await response.json().catch(() => ({}));
+        await onSaved(data.course || {});
+        onClose();
+      } else {
+        const data = await response.json().catch(() => ({}));
+        setSaveError(data.error || 'Failed to save class settings');
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      {saveError && <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">{saveError}</div>}
+
+      <div>
+        <label className="text-sm font-medium">Class Time</label>
+        <input value={classTime} onChange={(e) => setClassTime(e.target.value)} placeholder="e.g. 10:00 AM - 12:00 PM" className="w-full rounded-md border px-2 py-2 mt-1" />
+      </div>
+
+      <div>
+        <label className="text-sm font-medium">Class Room</label>
+        <input value={classRoom} onChange={(e) => setClassRoom(e.target.value)} placeholder="e.g. Lab 101" className="w-full rounded-md border px-2 py-2 mt-1" />
+      </div>
+
+      <div>
+        <label className="text-sm font-medium">Number of Students</label>
+        <input value={numberOfStudents} onChange={(e) => setNumberOfStudents(e.target.value)} type="number" min={1} className="w-40 rounded-md border px-2 py-2 mt-1" />
+      </div>
+
+      <div>
+        <label className="text-sm font-medium">Class Representative</label>
+        <input value={repSearch} onChange={(e) => setRepSearch(e.target.value)} placeholder="Search student name or id" className="w-full rounded-md border px-2 py-2 mt-1" />
+        <div className="max-h-40 overflow-y-auto mt-2 rounded-md border bg-background">
+          {filtered.map((st) => (
+            <button
+              key={st._id}
+              type="button"
+              className={`w-full border-b px-3 py-2 text-left transition-colors last:border-b-0 ${classRepresentativeId === st._id ? 'bg-primary/10 text-foreground' : 'hover:bg-accent hover:text-accent-foreground'}`}
+              onClick={() => setClassRepresentativeId(st._id)}
+            >
+              <div className="font-medium text-foreground">{st.name}</div>
+              <div className="text-xs text-muted-foreground">{st.studentId}</div>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex justify-end gap-2">
+        <Button variant="outline" onClick={onClose} disabled={saving}>Cancel</Button>
+        <Button onClick={save} disabled={saving}>{saving ? 'Saving...' : 'Save'}</Button>
+      </div>
+    </div>
+  );
 }
 
 interface Session {
@@ -26,6 +150,14 @@ interface Student {
   _id: string;
   studentId: string;
   name: string;
+  probation?: boolean;
+}
+
+interface CourseInfo {
+  classTime?: string;
+  classRoom?: string;
+  numberOfStudents?: number;
+  classRepresentativeId?: string | null;
 }
 
 type SessionStatus = 'present' | 'absent' | 'none';
@@ -45,11 +177,14 @@ function getLocalDateInputValue(date = new Date()) {
 export default function AttendanceView({ courseId }: { courseId: string }) {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
+  const [course, setCourse] = useState<CourseInfo | null>(null);
   const [activeSession, setActiveSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [expandedStudentId, setExpandedStudentId] = useState<string | null>(null);
   const [showQrModal, setShowQrModal] = useState(false);
   const [showManageModal, setShowManageModal] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [exportLoading, setExportLoading] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [showSessionDialog, setShowSessionDialog] = useState(false);
   const [sessionDate, setSessionDate] = useState(getLocalDateInputValue());
@@ -72,6 +207,7 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
 
       if (courseRes.ok) {
         setStudents(courseData.students || []);
+        setCourse(courseData.course || null);
       }
     } catch (err) {
       console.error('Error fetching attendance data', err);
@@ -80,6 +216,7 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
     }
   };
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (courseId) fetchAll();
   }, [courseId]);
@@ -110,6 +247,11 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
     } catch (err) {
       console.error('Error toggling attendance', err);
     }
+  };
+
+  const openSettingsModal = async () => {
+    await fetchAll();
+    setShowSettingsModal(true);
   };
 
   const openSessionWithDate = async () => {
@@ -159,6 +301,68 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
     }
   };
 
+  const toggleProbation = async (studentId: string, probation: boolean) => {
+    // Optimistically update UI
+    setStudents((prev) => prev.map((s) => (s._id === studentId ? { ...s, probation } : s)));
+    try {
+      const res = await fetch(`/api/students/${studentId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ probation }),
+      });
+
+      if (!res.ok) {
+        // revert on failure and refetch
+        await fetchAll();
+      }
+    } catch (err) {
+      console.error('Error updating student probation', err);
+      await fetchAll();
+    }
+  };
+
+  const exportAttendance = async () => {
+    try {
+      setExportLoading(true);
+      const sessionParam = activeSession ? `sessionId=${encodeURIComponent(activeSession._id)}` : '';
+
+      const settingsParams = new URLSearchParams();
+      if (course?.classTime) settingsParams.set('classTime', course.classTime);
+      if (course?.classRoom) settingsParams.set('classRoom', course.classRoom);
+      if (course?.numberOfStudents != null) settingsParams.set('numberOfStudents', String(course.numberOfStudents));
+      if (course?.classRepresentativeId) settingsParams.set('classRepresentativeId', String(course.classRepresentativeId));
+      if (sessionParam) settingsParams.set('sessionId', activeSession?._id || '');
+
+      const qs = settingsParams.toString();
+      const url = `/api/courses/${courseId}/attendance-pdf${qs ? `?${qs}` : ''}`;
+      const res = await fetch(url, { method: 'GET' });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        console.error('Export failed', err);
+        return;
+      }
+
+      const blob = await res.blob();
+      const contentDisp = res.headers.get('Content-Disposition') || '';
+      let filename = `${courseId}_attendance.pdf`;
+      const match = /filename="?([^";]+)"?/.exec(contentDisp);
+      if (match && match[1]) filename = match[1];
+
+      const link = document.createElement('a');
+      const blobUrl = window.URL.createObjectURL(blob);
+      link.href = blobUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (err) {
+      console.error('Error exporting attendance PDF', err);
+    } finally {
+      setExportLoading(false);
+    }
+  };
+
   const getStatus = (session: Session, student: Student): SessionStatus => {
     const record = session.records?.find((item) => String(item.studentId) === String(student._id));
     return record?.status || 'none';
@@ -171,6 +375,10 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
   };
 
   const isActive = Boolean(activeSession?.open);
+
+  // show guide if settings missing
+  const settingsMissing = !course?.classTime && !course?.classRoom && !course?.classRepresentativeId;
+  const settingsSummary = [course?.classTime, course?.classRoom, course?.numberOfStudents ? String(course.numberOfStudents) : '', course?.classRepresentativeId ? 'Representative set' : ''].filter(Boolean);
 
   return (
     <div className="space-y-4">
@@ -189,6 +397,15 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
             {isActive ? 'Close Session' : 'Open Session'}
           </Button>
 
+          <Button
+            type="button"
+            variant="outline"
+            onClick={exportAttendance}
+            disabled={exportLoading}
+          >
+            {exportLoading ? 'Exporting...' : 'Export Attendance'}
+          </Button>
+
           <Button type="button" variant="outline" onClick={() => setShowQrModal(true)} disabled={!isActive}>
             <QrCode className="mr-2 h-4 w-4" />
             QR Code
@@ -197,10 +414,20 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
           <Button type="button" variant="outline" onClick={() => setShowManageModal(true)}>
             Manage class session
           </Button>
-        </div>
-      </div>
 
-      {loading ? (
+          <Button type="button" variant="outline" onClick={openSettingsModal}>
+            Class Settings
+          </Button>
+        </div>
+        </div>
+
+      {settingsMissing && (
+        <div className="rounded-md border border-border bg-muted/60 p-3 text-sm text-foreground dark:bg-muted/20">
+          <strong>Note:</strong> Class settings (Class Time, Class Room, Number of Students, Representative) are not set. Open <em>Class Settings</em> before exporting to include them in the PDF.
+        </div>
+      )}
+
+        {loading ? (
         <p className="text-sm text-muted-foreground">Loading...</p>
       ) : (
         <div className="overflow-x-auto rounded-lg border">
@@ -237,8 +464,9 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
                           className="flex items-center gap-2 text-left font-medium hover:underline"
                         >
                           {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                          <span>{student.name}</span>
+                          <span>{student.probation ? <strong>{student.name}</strong> : student.name}</span>
                           <span className="text-muted-foreground">({student.studentId})</span>
+                          {student.probation && <Badge variant="secondary">Probation</Badge>}
                         </button>
                       </TableCell>
                       <TableCell>
@@ -299,6 +527,20 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
                                   );
                                 })
                               )}
+                              <div className="rounded-md border bg-background px-3 py-2">
+                                <div className="flex items-start gap-3">
+                                  <Checkbox
+                                    checked={Boolean(student.probation)}
+                                    onCheckedChange={(checked) => toggleProbation(student._id, checked === true)}
+                                  />
+                                  <div className="space-y-1">
+                                    <div className="font-medium">In probation</div>
+                                    <div className="text-xs text-muted-foreground">
+                                      Students in probation are shown bold in the PDF export.
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
                             </div>
                           </div>
                         </TableCell>
@@ -415,6 +657,32 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
               </TableBody>
             </Table>
           </div>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={showSettingsModal} onOpenChange={setShowSettingsModal}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Class Settings</DialogTitle>
+          </DialogHeader>
+          <SettingsForm
+            key={`${course?.classTime || ''}|${course?.classRoom || ''}|${course?.numberOfStudents || ''}|${course?.classRepresentativeId || ''}|${students.length}`}
+            students={students}
+            courseId={courseId}
+            initialValues={{
+              classTime: course?.classTime || '',
+              classRoom: course?.classRoom || '',
+              numberOfStudents: course?.numberOfStudents ? String(course.numberOfStudents) : String(students.length || ''),
+              classRepresentativeId: course?.classRepresentativeId ? String(course.classRepresentativeId) : '',
+            }}
+            onSaved={(savedCourse) => {
+              setCourse((current) => ({
+                ...current,
+                ...savedCourse,
+              }));
+              return fetchAll();
+            }}
+            onClose={() => setShowSettingsModal(false)}
+          />
         </DialogContent>
       </Dialog>
     </div>
