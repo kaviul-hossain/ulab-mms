@@ -26,17 +26,13 @@ import {
   getGradeBgColor 
 } from '@/app/utils/grading';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Progress } from '@/components/ui/progress';
 import { 
   Settings, 
   LogOut, 
@@ -132,6 +128,7 @@ export default function CoursePage() {
   const [importCourseFile, setImportCourseFile] = useState<File | null>(null);
   const [exportingJSON, setExportingJSON] = useState(false);
   const [exportingCSV, setExportingCSV] = useState(false);
+  const [exportingCourseFile, setExportingCourseFile] = useState(false);
   const [importingCourse, setImportingCourse] = useState(false);
   const [courseSettingsTab, setCourseSettingsTab] = useState<'aggregation' | 'grading'>('aggregation');
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -708,6 +705,57 @@ export default function CoursePage() {
       notify.exportImport.exportError();
     } finally {
       setExportingCSV(false);
+    }
+  };
+
+  const handleExportCourseFile = async () => {
+    setExportingCourseFile(true);
+    try {
+      // Map student names to V10:V51 and student IDs to W10:W51
+      // Also map course info to header cells
+      const mapping = {
+        rows: {
+          startRow: 10,
+          columns: {
+            V: 'student.name',
+            W: 'student.studentId',
+          },
+        },
+        cells: {
+          H2: 'course.code',
+          H3: 'course.name',
+          H4: 'credit',
+          H5: 'instructor',
+          L2: 'course.section',
+          L3: 'semesterYear',
+        },
+      };
+      const response = await fetch(`/api/courses/${courseId}/export-file`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mapping }),
+      });
+
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${course?.code}_${course?.name}_course_file_${new Date().toISOString().split('T')[0]}.xlsx`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        notify.exportImport.exportSuccess('Excel', `${course?.code}_${course?.name}`);
+      } else {
+        const data = await response.json().catch(() => ({}));
+        notify.exportImport.exportError(data.error);
+      }
+    } catch (err) {
+      console.error('Export error:', err);
+      notify.exportImport.exportError();
+    } finally {
+      setExportingCourseFile(false);
     }
   };
 
@@ -1307,6 +1355,8 @@ export default function CoursePage() {
                 onImportCourse={() => setShowImportCourseModal(true)}
                 onExportCSV={handleExportCSV}
                 exportingCSV={exportingCSV}
+                onExportCourseFile={handleExportCourseFile}
+                exportingCourseFile={exportingCourseFile}
               />
             )}
 

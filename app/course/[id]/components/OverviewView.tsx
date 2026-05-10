@@ -26,6 +26,8 @@ interface OverviewViewProps {
   onImportCourse: () => void;
   onExportCSV: () => void;
   exportingCSV: boolean;
+  onExportCourseFile?: () => void;
+  exportingCourseFile?: boolean;
 }
 
 export default function OverviewView({
@@ -38,6 +40,8 @@ export default function OverviewView({
   onImportCourse,
   onExportCSV,
   exportingCSV,
+  onExportCourseFile,
+  exportingCourseFile,
 }: OverviewViewProps) {
   const totalWeightage = exams.reduce((sum, exam) => sum + exam.weightage, 0);
   const studentsWithMarks = students.filter(student => 
@@ -169,6 +173,16 @@ export default function OverviewView({
                 >
                   <Download className="w-4 h-4 mr-2" />
                   {exportingCSV ? 'Exporting...' : 'Export CSV'}
+                </Button>
+                <Button
+                  onClick={onExportCourseFile}
+                  disabled={exportingCourseFile}
+                  variant="outline"
+                  className="w-full justify-start"
+                >
+                  <Download className="w-4 h-4 mr-2" />
+                  {exportingCourseFile ? 'Exporting...' : 'Export course file'}
+                  <span className="ml-2 text-xs text-muted-foreground">Beta</span>
                 </Button>
               </div>
             </div>

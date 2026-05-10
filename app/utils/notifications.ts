@@ -276,7 +276,7 @@ export class NotificationService {
   // ============================================
 
   exportImport = {
-    exportSuccess: (format: 'JSON' | 'CSV', fileName?: string) => {
+    exportSuccess: (format: 'JSON' | 'CSV' | 'Excel', fileName?: string) => {
       const message = fileName 
         ? `${fileName} exported as ${format} successfully!`
         : `Course exported as ${format} successfully!`;
