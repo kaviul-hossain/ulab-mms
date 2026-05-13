@@ -1,13 +1,14 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useSession, signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Loader2, LogOut, Settings, ChevronRight, Download, Folder, File, FlaskConical, FileStack } from 'lucide-react';
+import { Loader2, LogOut, Settings, ChevronRight, Download, Folder, File, FlaskConical } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { notify } from '@/app/utils/notifications';
 import {
@@ -36,14 +37,33 @@ interface IStoredFile {
   createdAt: string;
 }
 
-export default function ResourcesPage() {
+export default function ResourcesPage({ params }: { params: Promise<{ folderPath?: string[] }> }) {
   const { data: session, status } = useSession();
   const router = useRouter();
+  const [folderPath, setFolderPath] = useState<string[]>([]);
   const [folders, setFolders] = useState<IResourceFolder[]>([]);
   const [files, setFiles] = useState<IStoredFile[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [breadcrumb, setBreadcrumb] = useState<IResourceFolder[]>([]);
+  const [breadcrumbDisplayNames, setBreadcrumbDisplayNames] = useState<Map<string, string>>(new Map());
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  // Initialize folderPath from params
+  useEffect(() => {
+    const initPath = async () => {
+      const resolvedParams = await params;
+      const path = resolvedParams.folderPath || [];
+      setFolderPath(path);
+      
+      if (path.length > 0) {
+        // Resolve folder IDs from the folder names path
+        await resolveFolderPath(path);
+      }
+    };
+    initPath();
+  }, [params]);
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -54,6 +74,81 @@ export default function ResourcesPage() {
   useEffect(() => {
     loadFolders();
   }, [currentFolderId]);
+
+  // debounce search input
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(searchQuery.trim()), 300);
+    return () => clearTimeout(t);
+  }, [searchQuery]);
+
+  // Resolve folder path by looking up folder names and getting their IDs
+  const resolveFolderPath = async (path: string[]) => {
+    try {
+      let parentId: string | null = null;
+      let lastFolderId: string | null = null;
+      const breadcrumbItems: IResourceFolder[] = [];
+      const displayNames = new Map<string, string>();
+
+      for (const folderName of path) {
+        // Decode the folder name from URL
+        const decodedName = decodeURIComponent(folderName);
+        
+        // Fetch folders at this level
+        const url: string = parentId
+          ? `/api/resources/folders?parentId=${parentId}`
+          : '/api/resources/folders';
+        
+        const response = await fetch(url);
+        const data = await response.json();
+
+        if (!data.success || !data.folders) break;
+
+        // Find the folder with this name (handling numbered duplicates)
+        let baseName = decodedName;
+        let occurrence = 1;
+        
+        // Check if this has a [number] suffix
+        const match = decodedName.match(/^(.+?)\s*\[(\d+)\]$/);
+        if (match) {
+          baseName = match[1];
+          occurrence = parseInt(match[2], 10);
+        }
+
+        // Count occurrences and find the right one
+        let occurrenceCount = 0;
+        let foundFolder: IResourceFolder | null = null;
+
+        for (const folder of data.folders) {
+          if (folder.name === baseName) {
+            occurrenceCount++;
+            if (occurrenceCount === occurrence) {
+              foundFolder = folder;
+              break;
+            }
+          }
+        }
+
+        if (!foundFolder) break;
+
+        parentId = foundFolder._id;
+        lastFolderId = foundFolder._id;
+        breadcrumbItems.push(foundFolder);
+        
+        // Store display name
+        const totalCount = data.folders.filter((f: IResourceFolder) => f.name === baseName).length;
+        const displayName = totalCount > 1 ? `${baseName} [${occurrenceCount}]` : baseName;
+        displayNames.set(foundFolder._id, displayName);
+      }
+
+      if (lastFolderId) {
+        setCurrentFolderId(lastFolderId);
+        setBreadcrumb(breadcrumbItems);
+        setBreadcrumbDisplayNames(displayNames);
+      }
+    } catch (err) {
+      toast.error('Failed to load folder path');
+    }
+  };
 
   const loadFolders = async () => {
     setLoading(true);
@@ -70,7 +165,6 @@ export default function ResourcesPage() {
         if (currentFolderId) {
           loadFiles(currentFolderId);
         } else {
-          // Clear files when viewing root folder
           setFiles([]);
         }
       } else {
@@ -92,7 +186,6 @@ export default function ResourcesPage() {
       const response = await fetch(`/api/resources/files?folderId=${folderId}`);
       const data = await response.json();
 
-      // If a newer request started, discard this result
       if (reqId !== latestFilesRequestRef.current) return;
 
       if (data.success) {
@@ -107,22 +200,71 @@ export default function ResourcesPage() {
     }
   };
 
+  const searchLower = debouncedSearch.toLowerCase();
+  const displayedFolders = useMemo(() => {
+    if (!debouncedSearch) return folders;
+    return folders.filter((f) => f.name.toLowerCase().includes(searchLower));
+  }, [folders, debouncedSearch]);
+
+  const displayedFiles = useMemo(() => {
+    if (!debouncedSearch) return files;
+    return files.filter((fl) => fl.originalName.toLowerCase().includes(searchLower));
+  }, [files, debouncedSearch]);
+
+  const folderDisplayNames = useMemo(() => {
+    const nameCounts = new Map<string, number>();
+    const displayNames = new Map<string, string>();
+
+    folders.forEach((folder) => {
+      const count = nameCounts.get(folder.name) || 0;
+      nameCounts.set(folder.name, count + 1);
+    });
+
+    const seen = new Map<string, number>();
+    folders.forEach((folder) => {
+      const total = nameCounts.get(folder.name) || 0;
+      const occurrence = (seen.get(folder.name) || 0) + 1;
+      seen.set(folder.name, occurrence);
+      displayNames.set(folder._id, total > 1 ? `${folder.name} [${occurrence}]` : folder.name);
+    });
+
+    return displayNames;
+  }, [folders]);
+
   const navigateToFolder = (folderId: string, folderName: string) => {
-    // Clear files immediately to avoid briefly showing previous folder's files
     setFiles([]);
+    const displayName = folderDisplayNames.get(folderId) || folderName;
+    
+    // Build new path
+    const newPath = [...folderPath, encodeURIComponent(displayName)];
+    router.push(`/resources/${newPath.join('/')}`);
+    
     setCurrentFolderId(folderId);
-    setBreadcrumb([...breadcrumb, { _id: folderId, name: folderName } as IResourceFolder]);
+    setBreadcrumb((b) => [...b, { _id: folderId, name: folderName } as IResourceFolder]);
+    setBreadcrumbDisplayNames((m) => new Map(m).set(folderId, displayName));
   };
 
   const navigateTo = (index: number) => {
-    // Clear files immediately when navigating
     setFiles([]);
     if (index === -1) {
+      // Navigate to root
+      router.push('/resources');
       setCurrentFolderId(null);
       setBreadcrumb([]);
+      setBreadcrumbDisplayNames(new Map());
+      setFolderPath([]);
     } else {
+      const newBreadcrumb = breadcrumb.slice(0, index + 1);
+      const newPath = newBreadcrumb.map((f) => encodeURIComponent(breadcrumbDisplayNames.get(f._id) || f.name));
+      router.push(`/resources/${newPath.join('/')}`);
+      
       setCurrentFolderId(breadcrumb[index]._id);
-      setBreadcrumb(breadcrumb.slice(0, index + 1));
+      setBreadcrumb(newBreadcrumb);
+      
+      const newDisplayNames = new Map(breadcrumbDisplayNames);
+      breadcrumb.slice(index + 1).forEach((f) => newDisplayNames.delete(f._id));
+      setBreadcrumbDisplayNames(newDisplayNames);
+      setFolderPath(newPath);
     }
   };
 
@@ -238,21 +380,37 @@ export default function ResourcesPage() {
                   onClick={() => navigateTo(index)}
                   className="text-blue-600 hover:underline dark:text-blue-400 font-medium"
                 >
-                  {folder.name}
+                  {breadcrumbDisplayNames.get(folder._id) || folder.name}
                 </button>
               </div>
             ))}
           </div>
         </div>
 
+        {/* Search */}
+        <div className="mb-4">
+          <div className="flex items-center gap-2">
+            <Input
+              placeholder="Search folders or files"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+            {searchQuery && (
+              <Button variant="ghost" onClick={() => setSearchQuery('')}>
+                Clear
+              </Button>
+            )}
+          </div>
+        </div>
+
         {/* Content Area */}
         <div className="space-y-6">
           {/* Folders Section */}
-          {folders.length > 0 && (
+          {displayedFolders.length > 0 && (
             <div>
               <h2 className="text-lg font-semibold mb-4">Folders</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {folders.map((folder) => (
+                {displayedFolders.map((folder) => (
                   <button
                     key={folder._id}
                     onClick={() => navigateToFolder(folder._id, folder.name)}
@@ -260,7 +418,7 @@ export default function ResourcesPage() {
                   >
                     <div className="flex items-center gap-3 mb-2">
                       <Folder className="w-6 h-6 text-blue-500" />
-                      <h3 className="font-medium text-lg truncate">{folder.name}</h3>
+                      <h3 className="font-medium text-lg truncate">{folderDisplayNames.get(folder._id) || folder.name}</h3>
                     </div>
                     <p className="text-xs text-gray-500 dark:text-gray-400">
                       Created: {formatDate(folder.createdAt)}
@@ -272,7 +430,7 @@ export default function ResourcesPage() {
           )}
 
           {/* Files Section */}
-          {files.length > 0 && (
+          {displayedFiles.length > 0 && (
             <div>
               <h2 className="text-lg font-semibold mb-4">Files</h2>
               <div className="border rounded-lg overflow-hidden">
@@ -295,7 +453,7 @@ export default function ResourcesPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y">
-                      {files.map((file) => (
+                      {displayedFiles.map((file) => (
                         <tr key={file._id} className="hover:bg-gray-50 dark:hover:bg-gray-800 transition">
                           <td className="px-6 py-4">
                             <div className="flex items-center gap-2">

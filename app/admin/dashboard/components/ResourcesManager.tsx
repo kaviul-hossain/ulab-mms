@@ -1,6 +1,7 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useRef } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Upload,
   Download,
@@ -13,11 +14,11 @@ import {
   Check,
   X,
   AlertCircle,
-} from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
@@ -25,9 +26,8 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
-import { toast } from 'sonner';
-
+} from "@/components/ui/dialog";
+import { toast } from "sonner";
 
 interface IResourceFolder {
   _id: string;
@@ -49,22 +49,45 @@ interface IStoredFile {
 }
 
 export default function ResourcesManager() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  
   const [folders, setFolders] = useState<IResourceFolder[]>([]);
   const [files, setFiles] = useState<IStoredFile[]>([]);
   const [breadcrumb, setBreadcrumb] = useState<IResourceFolder[]>([]);
+  const [breadcrumbDisplayNames, setBreadcrumbDisplayNames] = useState<Map<string, string>>(new Map());
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
 
-  // Dialog states
+  // Dialogs / editing
   const [showCreateFolder, setShowCreateFolder] = useState(false);
-  const [newFolderName, setNewFolderName] = useState('');
+  const [newFolderName, setNewFolderName] = useState("");
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState<{ type: 'folder' | 'file'; id: string; name: string } | null>(
-    null
-  );
+  const [deleteTarget, setDeleteTarget] = useState<{
+    type: "folder" | "file";
+    id: string;
+    name: string;
+  } | null>(null);
   const [editingFolderId, setEditingFolderId] = useState<string | null>(null);
-  const [editingFolderName, setEditingFolderName] = useState('');
+  const [editingFolderName, setEditingFolderName] = useState("");
+
+  // Search
+  const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  
+  // Initialize from query params
+  useEffect(() => {
+    const folderId = searchParams.get('folderId');
+    if (folderId) {
+      setCurrentFolderId(folderId);
+    }
+  }, [searchParams]);
+  
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(searchQuery.trim()), 300);
+    return () => clearTimeout(t);
+  }, [searchQuery]);
 
   useEffect(() => {
     loadFolders();
@@ -73,216 +96,195 @@ export default function ResourcesManager() {
   const loadFolders = async () => {
     setLoading(true);
     try {
-      const url = currentFolderId
-        ? `/api/resources/folders?parentId=${currentFolderId}`
-        : '/api/resources/folders';
-
-      const response = await fetch(url);
-      const data = await response.json();
-
+      const url = currentFolderId ? `/api/resources/folders?parentId=${currentFolderId}` : "/api/resources/folders";
+      const res = await fetch(url);
+      const data = await res.json();
       if (data.success) {
         setFolders(data.folders);
         if (currentFolderId) {
           loadFiles(currentFolderId);
         } else {
-          // Clear files when viewing root folder
           setFiles([]);
         }
       } else {
-        toast.error(data.error);
+        toast.error(data.error || "Failed to load folders");
       }
     } catch (err) {
-      toast.error('Failed to load folders');
+      toast.error("Failed to load folders");
     } finally {
       setLoading(false);
     }
   };
 
+  const latestFilesRequestRef = useRef(0);
   const loadFiles = async (folderId: string) => {
+    const reqId = ++latestFilesRequestRef.current;
     try {
-      const response = await fetch(`/api/resources/files?folderId=${folderId}`);
-      const data = await response.json();
-
-      if (data.success) {
-        setFiles(data.files);
-      } else {
-        toast.error(data.error);
-      }
+      const res = await fetch(`/api/resources/files?folderId=${folderId}`);
+      const data = await res.json();
+      if (reqId !== latestFilesRequestRef.current) return;
+      if (data.success) setFiles(data.files);
+      else toast.error(data.error || "Failed to load files");
     } catch (err) {
-      toast.error('Failed to load files');
+      if (reqId === latestFilesRequestRef.current) toast.error("Failed to load files");
     }
   };
 
   const handleCreateFolder = async () => {
-    if (!newFolderName.trim()) {
-      toast.error('Folder name is required');
-      return;
-    }
-
+    if (!newFolderName.trim()) return toast.error("Folder name is required");
     try {
-      const response = await fetch('/api/resources/folders', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: newFolderName.trim(),
-          parentId: currentFolderId,
-        }),
+      const res = await fetch("/api/resources/folders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newFolderName.trim(), parentId: currentFolderId }),
       });
-
-      const data = await response.json();
-
+      const data = await res.json();
       if (data.success) {
-        toast.success('Folder created successfully');
-        setNewFolderName('');
+        toast.success("Folder created");
+        setNewFolderName("");
         setShowCreateFolder(false);
-        // Wait a moment for the database to persist the folder before refreshing
-        setTimeout(() => {
-          loadFolders();
-        }, 800);
-      } else {
-        toast.error(data.error);
-      }
+        setTimeout(() => loadFolders(), 800);
+      } else toast.error(data.error);
     } catch (err) {
-      toast.error('Failed to create folder');
+      toast.error("Failed to create folder");
     }
   };
 
-  const handleUploadFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (!currentFolderId) {
-      toast.error('Please select a folder first');
-      return;
-    }
-
-    const fileList = event.target.files;
+  const handleUploadFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!currentFolderId) return toast.error("Please select a folder first");
+    const fileList = e.target.files;
     if (!fileList || fileList.length === 0) return;
-
     setUploading(true);
-    let successCount = 0;
-    let failCount = 0;
-
     try {
       for (let i = 0; i < fileList.length; i++) {
         const file = fileList[i];
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('folderId', currentFolderId);
-
-        try {
-          const response = await fetch('/api/resources/files', {
-            method: 'POST',
-            body: formData,
-          });
-
-          const data = await response.json();
-
-          if (data.success) {
-            successCount++;
-          } else {
-            failCount++;
-            console.error(`Failed to upload ${file.name}:`, data.error);
-          }
-        } catch (err) {
-          failCount++;
-          console.error(`Error uploading ${file.name}:`, err);
-        }
+        const fd = new FormData();
+        fd.append("file", file);
+        fd.append("folderId", currentFolderId);
+        await fetch("/api/resources/files", { method: "POST", body: fd });
       }
-
-      if (successCount > 0) {
-        toast.success(`${successCount} file${successCount > 1 ? 's' : ''} uploaded`);
-        // Wait a moment for the database to persist the files before fetching
-        setTimeout(() => {
-          loadFiles(currentFolderId);
-        }, 800);
-      }
-      if (failCount > 0) {
-        toast.error(`Failed to upload ${failCount} file${failCount > 1 ? 's' : ''}`);
-      }
+      toast.success("Upload complete");
+      setTimeout(() => loadFiles(currentFolderId!), 800);
+    } catch (err) {
+      toast.error("Upload failed");
     } finally {
       setUploading(false);
-      event.target.value = '';
+      e.target.value = "";
     }
   };
 
   const handleDeleteItem = async () => {
     if (!deleteTarget) return;
-
     try {
-      const url =
-        deleteTarget.type === 'folder'
-          ? `/api/resources/folders/${deleteTarget.id}`
-          : `/api/resources/files/${deleteTarget.id}`;
-
-      const response = await fetch(url, { method: 'DELETE' });
-      const data = await response.json();
-
+      const url = deleteTarget.type === "folder" ? `/api/resources/folders/${deleteTarget.id}` : `/api/resources/files/${deleteTarget.id}`;
+      const res = await fetch(url, { method: "DELETE" });
+      const data = await res.json();
       if (data.success) {
-        toast.success(`${deleteTarget.type === 'folder' ? 'Folder' : 'File'} deleted`);
-        setDeleteTarget(null);
+        toast.success("Deleted");
         setShowDeleteConfirm(false);
-        // Wait a moment for the database to persist the deletion before refreshing
-        setTimeout(() => {
-          loadFolders();
-        }, 800);
-      } else {
-        toast.error(data.error);
-      }
+        setDeleteTarget(null);
+        setTimeout(() => loadFolders(), 800);
+      } else toast.error(data.error);
     } catch (err) {
-      toast.error('Failed to delete');
+      toast.error("Delete failed");
     }
   };
 
   const handleEditFolder = async (folderId: string) => {
-    if (!editingFolderName.trim()) {
-      toast.error('Folder name is required');
-      return;
-    }
-
+    if (!editingFolderName.trim()) return toast.error("Folder name is required");
     try {
-      const response = await fetch(`/api/resources/folders/${folderId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+      const res = await fetch(`/api/resources/folders/${folderId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: editingFolderName.trim() }),
       });
-
-      const data = await response.json();
-
+      const data = await res.json();
       if (data.success) {
-        toast.success('Folder updated');
+        toast.success("Folder updated");
         setEditingFolderId(null);
-        setEditingFolderName('');
-        // Wait a moment for the database to persist the changes before refreshing
-        setTimeout(() => {
-          loadFolders();
-        }, 800);
-      } else {
-        toast.error(data.error);
-      }
+        setEditingFolderName("");
+        setTimeout(() => loadFolders(), 800);
+      } else toast.error(data.error);
     } catch (err) {
-      toast.error('Failed to update folder');
+      toast.error("Update failed");
     }
   };
 
   const navigateToFolder = (folderId: string, folderName: string) => {
+    setFiles([]);
+    const displayName = folderDisplayNames.get(folderId) || folderName;
     setCurrentFolderId(folderId);
-    setBreadcrumb([...breadcrumb, { _id: folderId, name: folderName } as IResourceFolder]);
+    setBreadcrumb((b) => [...b, { _id: folderId, name: folderName } as IResourceFolder]);
+    setBreadcrumbDisplayNames((m) => new Map(m).set(folderId, displayName));
+    
+    // Update URL with folderId query param
+    const params = new URLSearchParams(searchParams);
+    params.set('folderId', folderId);
+    router.push(`?${params.toString()}`);
   };
 
   const navigateTo = (index: number) => {
+    setFiles([]);
     if (index === -1) {
       setCurrentFolderId(null);
       setBreadcrumb([]);
+      setBreadcrumbDisplayNames(new Map());
+      // Clear folderId from URL
+      const params = new URLSearchParams(searchParams);
+      params.delete('folderId');
+      const queryString = params.toString();
+      router.push(queryString ? `?${queryString}` : '?tab=resources');
     } else {
       setCurrentFolderId(breadcrumb[index]._id);
       setBreadcrumb(breadcrumb.slice(0, index + 1));
+      const newDisplayNames = new Map(breadcrumbDisplayNames);
+      breadcrumb.slice(index + 1).forEach((f) => newDisplayNames.delete(f._id));
+      setBreadcrumbDisplayNames(newDisplayNames);
+      
+      // Update URL with the folder ID at this index
+      const params = new URLSearchParams(searchParams);
+      params.set('folderId', breadcrumb[index]._id);
+      router.push(`?${params.toString()}`);
     }
   };
 
+  const searchLower = debouncedSearch.toLowerCase();
+  const displayedFolders = useMemo(() => {
+    if (!debouncedSearch) return folders;
+    return folders.filter((f) => f.name.toLowerCase().includes(searchLower));
+  }, [folders, debouncedSearch]);
+
+  const displayedFiles = useMemo(() => {
+    if (!debouncedSearch) return files;
+    return files.filter((fl) => fl.originalName.toLowerCase().includes(searchLower));
+  }, [files, debouncedSearch]);
+
+  const folderDisplayNames = useMemo(() => {
+    const nameCounts = new Map<string, number>();
+    const displayNames = new Map<string, string>();
+
+    folders.forEach((folder) => {
+      const count = nameCounts.get(folder.name) || 0;
+      nameCounts.set(folder.name, count + 1);
+    });
+
+    const seen = new Map<string, number>();
+    folders.forEach((folder) => {
+      const total = nameCounts.get(folder.name) || 0;
+      const occurrence = (seen.get(folder.name) || 0) + 1;
+      seen.set(folder.name, occurrence);
+      displayNames.set(folder._id, total > 1 ? `${folder.name} [${occurrence}]` : folder.name);
+    });
+
+    return displayNames;
+  }, [folders]);
+
   const formatFileSize = (bytes: number) => {
-    if (bytes === 0) return '0 Bytes';
+    if (bytes === 0) return "0 Bytes";
     const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const sizes = ["Bytes", "KB", "MB", "GB"];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
+    return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i];
   };
 
   return (
@@ -293,53 +295,35 @@ export default function ResourcesManager() {
           <CardDescription>Manage hierarchical folder structure and files</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Breadcrumb Navigation */}
+          {/* Breadcrumb */}
           <div className="flex items-center gap-2 text-sm">
-            <button
-              onClick={() => navigateTo(-1)}
-              className="text-blue-600 hover:underline dark:text-blue-400"
-            >
+            <button onClick={() => navigateTo(-1)} className="text-blue-600 hover:underline dark:text-blue-400">
               Root
             </button>
             {breadcrumb.map((folder, index) => (
               <div key={folder._id} className="flex items-center gap-2">
                 <ChevronRight className="w-4 h-4 text-gray-400" />
-                <button
-                  onClick={() => navigateTo(index)}
-                  className="text-blue-600 hover:underline dark:text-blue-400"
-                >
-                  {folder.name}
+                <button onClick={() => navigateTo(index)} className="text-blue-600 hover:underline dark:text-blue-400">
+                  {breadcrumbDisplayNames.get(folder._id) || folder.name}
                 </button>
               </div>
             ))}
           </div>
 
-          {/* Action Buttons */}
+          {/* Actions + Search */}
           <div className="flex gap-2 flex-wrap">
-            <Button
-              onClick={() => setShowCreateFolder(true)}
-              disabled={loading}
-              variant="outline"
-            >
-              <FolderPlus className="w-4 h-4 mr-2" />
-              New Folder
+            <Button onClick={() => setShowCreateFolder(true)} disabled={loading} variant="outline">
+              <FolderPlus className="w-4 h-4 mr-2" /> New Folder
             </Button>
+
+            <div className="flex-1 min-w-[220px]">
+              <Input placeholder="Search folders or files" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+            </div>
+
             <div className="relative">
-              <Input
-                type="file"
-                multiple
-                onChange={handleUploadFile}
-                disabled={uploading || !currentFolderId}
-                className="hidden"
-                id="file-upload"
-              />
-              <Button
-                onClick={() => document.getElementById('file-upload')?.click()}
-                disabled={uploading || !currentFolderId}
-                variant="outline"
-              >
-                <Upload className="w-4 h-4 mr-2" />
-                {uploading ? 'Uploading...' : 'Upload Files'}
+              <Input type="file" multiple onChange={handleUploadFile} disabled={uploading || !currentFolderId} className="hidden" id="file-upload" />
+              <Button onClick={() => document.getElementById("file-upload")?.click()} disabled={uploading || !currentFolderId} variant="outline">
+                <Upload className="w-4 h-4 mr-2" /> {uploading ? "Uploading..." : "Upload Files"}
               </Button>
             </div>
           </div>
@@ -347,81 +331,34 @@ export default function ResourcesManager() {
           {!currentFolderId && (
             <div className="p-4 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-md flex gap-2">
               <AlertCircle className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
-              <p className="text-sm text-blue-800 dark:text-blue-300">
-                Create a folder to get started. You can only upload files to folders.
-              </p>
+              <p className="text-sm text-blue-800 dark:text-blue-300">Create a folder to get started. You can only upload files to folders.</p>
             </div>
           )}
 
-          {/* Folders Grid */}
-          {folders.length > 0 && (
+          {/* Folders */}
+          {displayedFolders.length > 0 ? (
             <div>
               <h3 className="font-semibold mb-2">Folders</h3>
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                {folders.map((folder) => (
-                  <div
-                    key={folder._id}
-                    className="border rounded-lg p-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition"
-                  >
+                {displayedFolders.map((folder) => (
+                  <div key={folder._id} className="border rounded-lg p-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition">
                     {editingFolderId === folder._id ? (
                       <div className="space-y-2">
-                        <Input
-                          value={editingFolderName}
-                          onChange={(e) => setEditingFolderName(e.target.value)}
-                          placeholder="Folder name"
-                        />
+                        <Input value={editingFolderName} onChange={(e) => setEditingFolderName(e.target.value)} placeholder="Folder name" />
                         <div className="flex gap-1">
-                          <Button
-                            size="sm"
-                            onClick={() => handleEditFolder(folder._id)}
-                            className="flex-1"
-                          >
-                            <Check className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => setEditingFolderId(null)}
-                            className="flex-1"
-                          >
-                            <X className="w-4 h-4" />
-                          </Button>
+                          <Button size="sm" onClick={() => handleEditFolder(folder._id)} className="flex-1"><Check className="w-4 h-4" /></Button>
+                          <Button size="sm" variant="outline" onClick={() => setEditingFolderId(null)} className="flex-1"><X className="w-4 h-4" /></Button>
                         </div>
                       </div>
                     ) : (
                       <>
-                        <button
-                          onClick={() => navigateToFolder(folder._id, folder.name)}
-                          className="w-full text-left mb-2 flex items-center gap-2 hover:text-blue-600 dark:hover:text-blue-400"
-                        >
+                        <button onClick={() => navigateToFolder(folder._id, folder.name)} className="w-full text-left mb-2 flex items-center gap-2 hover:text-blue-600 dark:hover:text-blue-400">
                           <Folder className="w-5 h-5" />
-                          <span className="font-medium truncate">{folder.name}</span>
+                          <span className="font-medium truncate">{folderDisplayNames.get(folder._id) || folder.name}</span>
                         </button>
                         <div className="flex gap-1">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => {
-                              setEditingFolderId(folder._id);
-                              setEditingFolderName(folder.name);
-                            }}
-                          >
-                            <Edit2 className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => {
-                              setDeleteTarget({
-                                type: 'folder',
-                                id: folder._id,
-                                name: folder.name,
-                              });
-                              setShowDeleteConfirm(true);
-                            }}
-                          >
-                            <Trash2 className="w-4 h-4 text-red-500" />
-                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => { setEditingFolderId(folder._id); setEditingFolderName(folder.name); }}><Edit2 className="w-4 h-4" /></Button>
+                          <Button size="sm" variant="ghost" onClick={() => { setDeleteTarget({ type: 'folder', id: folder._id, name: folder.name }); setShowDeleteConfirm(true); }}><Trash2 className="w-4 h-4 text-red-500" /></Button>
                         </div>
                       </>
                     )}
@@ -429,66 +366,36 @@ export default function ResourcesManager() {
                 ))}
               </div>
             </div>
-          )}
+          ) : debouncedSearch ? (
+            <div className="p-4 text-sm text-gray-600">No folders match "{debouncedSearch}"</div>
+          ) : null}
 
-          {/* Files List */}
-          {files.length > 0 && (
+          {/* Files */}
+          {displayedFiles.length > 0 ? (
             <div>
               <h3 className="font-semibold mb-2">Files</h3>
               <div className="border rounded-lg">
-                {files.map((file, index) => (
-                  <div
-                    key={file._id}
-                    className={`flex items-center justify-between p-3 ${
-                      index !== files.length - 1 ? 'border-b' : ''
-                    }`}
-                  >
+                {displayedFiles.map((file, index) => (
+                  <div key={file._id} className={`flex items-center justify-between p-3 ${index !== displayedFiles.length - 1 ? 'border-b' : ''}`}>
                     <div className="flex items-center gap-3 flex-1 min-w-0">
                       <File className="w-5 h-5 flex-shrink-0 text-blue-500" />
                       <div className="flex-1 min-w-0">
                         <p className="font-medium truncate">{file.originalName}</p>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">
-                          {formatFileSize(file.fileSize)}
-                        </p>
+                        <p className="text-sm text-gray-600">{formatFileSize(file.fileSize)}</p>
                       </div>
                     </div>
                     <div className="flex gap-1 flex-shrink-0">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => {
-                          window.location.href = `/api/resources/files/${file._id}`;
-                        }}
-                      >
-                        <Download className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => {
-                          setDeleteTarget({
-                            type: 'file',
-                            id: file._id,
-                            name: file.originalName,
-                          });
-                          setShowDeleteConfirm(true);
-                        }}
-                      >
-                        <Trash2 className="w-4 h-4 text-red-500" />
-                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => (window.location.href = `/api/resources/files/${file._id}`)}><Download className="w-4 h-4 mr-2" />Download</Button>
+                      <Button size="sm" variant="destructive" onClick={() => { setDeleteTarget({ type: 'file', id: file._id, name: file.originalName }); setShowDeleteConfirm(true); }}><Trash2 className="w-4 h-4" /></Button>
                     </div>
                   </div>
                 ))}
               </div>
             </div>
-          )}
+          ) : debouncedSearch ? (
+            <div className="p-4 text-sm text-gray-600">No files match "{debouncedSearch}"</div>
+          ) : null}
 
-          {!loading && folders.length === 0 && files.length === 0 && currentFolderId && (
-            <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-              <Folder className="w-12 h-12 mx-auto mb-2 opacity-50" />
-              <p>This folder is empty</p>
-            </div>
-          )}
         </CardContent>
       </Card>
 
@@ -496,56 +403,30 @@ export default function ResourcesManager() {
       <Dialog open={showCreateFolder} onOpenChange={setShowCreateFolder}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Create New Folder</DialogTitle>
-            <DialogDescription>
-              Create a new folder in {currentFolderId ? 'this folder' : 'the root directory'}
-            </DialogDescription>
+            <DialogTitle>Create Folder</DialogTitle>
+            <DialogDescription>Enter a name for the new folder</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="folder-name">Folder Name</Label>
-              <Input
-                id="folder-name"
-                value={newFolderName}
-                onChange={(e) => setNewFolderName(e.target.value)}
-                placeholder="Enter folder name"
-                onKeyDown={(e) => e.key === 'Enter' && handleCreateFolder()}
-              />
-            </div>
+          <div className="space-y-2 mt-2">
+            <Label>Name</Label>
+            <Input value={newFolderName} onChange={(e) => setNewFolderName(e.target.value)} placeholder="Folder name" />
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCreateFolder(false)}>
-              Cancel
-            </Button>
+          <DialogFooter className="mt-4">
+            <Button variant="outline" onClick={() => setShowCreateFolder(false)}>Cancel</Button>
             <Button onClick={handleCreateFolder}>Create</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirmation Dialog */}
+      {/* Delete Confirm Dialog */}
       <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete {deleteTarget?.type === 'folder' ? 'Folder' : 'File'}?</DialogTitle>
-            <DialogDescription>
-              {deleteTarget?.type === 'folder'
-                ? 'This will permanently delete this folder and all its contents (subfolders and files). This action cannot be undone.'
-                : `This will permanently delete "${deleteTarget?.name}". This action cannot be undone.`}
-            </DialogDescription>
+            <DialogTitle>Confirm Delete</DialogTitle>
+            <DialogDescription>Are you sure you want to delete {deleteTarget?.type} "{deleteTarget?.name}"?</DialogDescription>
           </DialogHeader>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setShowDeleteConfirm(false);
-                setDeleteTarget(null);
-              }}
-            >
-              Cancel
-            </Button>
-            <Button variant="destructive" onClick={handleDeleteItem}>
-              Delete
-            </Button>
+          <DialogFooter className="mt-4">
+            <Button variant="outline" onClick={() => setShowDeleteConfirm(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={handleDeleteItem}>Delete</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
