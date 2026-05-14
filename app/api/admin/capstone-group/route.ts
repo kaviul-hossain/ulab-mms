@@ -121,6 +121,7 @@ export async function POST(request: NextRequest) {
       groupNumber,
       description,
       studentIds,
+      semester,
       supervisorId,
     } = body;
 
@@ -161,6 +162,7 @@ export async function POST(request: NextRequest) {
     const newGroup = new CapstoneGroup({
       courseId,
       groupName,
+      semester: semester || '',
       description: description || '',
       studentIds: finalStudentIds,
       supervisorId,

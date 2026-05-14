@@ -1,15 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import dbConnect from '@/lib/mongodb';
 import { StoredFile } from '@/models/StoredFile';
 import { ResourceFolder } from '@/models/ResourceFolder';
 import mongoose from 'mongoose';
+import { getResourceAccess } from '@/lib/resourceAuth';
 
 export async function GET(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session) {
+    const access = await getResourceAccess(req);
+    if (!access.authorized) {
       return NextResponse.json(
         { error: 'Unauthorized - please sign in' },
         { status: 401 }
@@ -58,8 +57,8 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session) {
+    const access = await getResourceAccess(req);
+    if (!access.authorized || !access.actorId) {
       return NextResponse.json(
         { error: 'Unauthorized - please sign in' },
         { status: 401 }
@@ -101,7 +100,7 @@ export async function POST(req: NextRequest) {
       filename,
       originalName: file.name,
       folderId,
-      uploadedBy: session.user.id,
+      uploadedBy: access.actorId,
       fileSize: file.size,
       mimeType: file.type,
       fileData: Buffer.from(fileBuffer),

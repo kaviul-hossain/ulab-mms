@@ -102,6 +102,11 @@ export default function CapstoneManagement() {
   const [supervisorSearchOpen, setSupervisorSearchOpen] = useState(false);
   const [supervisorSearchQuery, setSupervisorSearchQuery] = useState<string>('');
 
+  const [marksFiles, setMarksFiles] = useState<any[]>([]);
+  const [loadingMarksFiles, setLoadingMarksFiles] = useState(false);
+  const [peerMarksFiles, setPeerMarksFiles] = useState<any[]>([]);
+  const [loadingPeerMarksFiles, setLoadingPeerMarksFiles] = useState(false);
+
   const [formData, setFormData] = useState<FormData>({
     title: '',
     courseId: '',
@@ -114,6 +119,8 @@ export default function CapstoneManagement() {
   // Load initial data
   useEffect(() => {
     loadInitialData();
+    loadMarksFiles();
+    loadPeerMarksFiles();
   }, []);
 
   const loadInitialData = async () => {
@@ -1054,6 +1061,154 @@ export default function CapstoneManagement() {
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* Submitted Marks Card */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Submitted Marks</CardTitle>
+          <CardDescription>
+            View and download marks submitted by supervisors in Excel format
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {loadingMarksFiles ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : marksFiles.length === 0 ? (
+            <p className="text-muted-foreground text-center py-8">
+              No marks submitted yet
+            </p>
+          ) : (
+            <div className="space-y-3">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="border-b">
+                    <tr>
+                      <th className="text-left py-2 px-3">File Name</th>
+                      <th className="text-left py-2 px-3">Uploaded By</th>
+                      <th className="text-left py-2 px-3">Date</th>
+                      <th className="text-right py-2 px-3">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {marksFiles.map((file) => (
+                      <tr key={file._id} className="border-b hover:bg-muted">
+                        <td className="py-2 px-3 font-medium">{file.originalName}</td>
+                        <td className="py-2 px-3 text-muted-foreground">
+                          {file.uploadedBy?.name || 'Unknown'}
+                        </td>
+                        <td className="py-2 px-3 text-muted-foreground text-xs">
+                          {new Date(file.createdAt).toLocaleDateString()}
+                        </td>
+                        <td className="py-2 px-3 text-right">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => window.location.href = `/api/resources/files/${file._id}`}
+                          >
+                            Download
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Submitted Peer Marks Card */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Submitted Peer Evaluation Marks</CardTitle>
+          <CardDescription>
+            View and download peer evaluation marks submitted by supervisors in Excel format
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {loadingPeerMarksFiles ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : peerMarksFiles.length === 0 ? (
+            <p className="text-muted-foreground text-center py-8">
+              No peer marks submitted yet
+            </p>
+          ) : (
+            <div className="space-y-3">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="border-b">
+                    <tr>
+                      <th className="text-left py-2 px-3">File Name</th>
+                      <th className="text-left py-2 px-3">Uploaded By</th>
+                      <th className="text-left py-2 px-3">Date</th>
+                      <th className="text-right py-2 px-3">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {peerMarksFiles.map((file) => (
+                      <tr key={file._id} className="border-b hover:bg-muted">
+                        <td className="py-2 px-3 font-medium">{file.originalName}</td>
+                        <td className="py-2 px-3 text-muted-foreground">
+                          {file.uploadedBy?.name || 'Unknown'}
+                        </td>
+                        <td className="py-2 px-3 text-muted-foreground text-xs">
+                          {new Date(file.createdAt).toLocaleDateString()}
+                        </td>
+                        <td className="py-2 px-3 text-right">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => window.location.href = `/api/resources/files/${file._id}`}
+                          >
+                            Download
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
+
+  async function loadMarksFiles() {
+    setLoadingMarksFiles(true);
+    try {
+      const res = await fetch('/api/capstone/marks-files');
+      if (res.ok) {
+        const data = await res.json();
+        setMarksFiles(data.files || []);
+      }
+    } catch (error) {
+      console.error('Error loading marks files:', error);
+      toast.error('Failed to load marks files');
+    } finally {
+      setLoadingMarksFiles(false);
+    }
+  }
+
+  async function loadPeerMarksFiles() {
+    setLoadingPeerMarksFiles(true);
+    try {
+      const res = await fetch('/api/capstone/peer-marks-files');
+      if (res.ok) {
+        const data = await res.json();
+        setPeerMarksFiles(data.files || []);
+      }
+    } catch (error) {
+      console.error('Error loading peer marks files:', error);
+      toast.error('Failed to load peer marks files');
+    } finally {
+      setLoadingPeerMarksFiles(false);
+    }
+  }
 }

@@ -270,9 +270,18 @@ export default function PeerPage() {
                               {group.semester && ` • Semester: ${group.semester}`}
                             </p>
                           </div>
-                          <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
-                            {group.studentIds?.length || 0} members
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                              {group.studentIds?.length || 0} members
+                            </span>
+                            <Button
+                              size="sm"
+                              onClick={() => router.push(`/capstone/supervisor/${semester}/${category}/peer/group/${group._id}`)}
+                              className="ml-2"
+                            >
+                              Submit Marks
+                            </Button>
+                          </div>
                         </div>
                         <p className="text-xs text-muted-foreground mb-2">
                           Supervisor: <span className="font-medium">{group.supervisorId?.name}</span>
