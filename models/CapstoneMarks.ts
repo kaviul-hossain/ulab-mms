@@ -11,9 +11,15 @@ export interface ICapstoneMarks extends Document {
   supervisorComments?: string;
   evaluatorMarks?: number;
   evaluatorComments?: string;
+  peerMarks?: number;
+  peerComments?: string;
+  posterMarks?: number;
+  posterComments?: string;
+  weeklyJournalMarks?: number;
+  weeklyJournalComments?: string;
   finalMarks?: number;
   submittedBy: mongoose.Types.ObjectId; // User who submitted the marks
-  submissionType: 'supervisor' | 'evaluator';
+  submissionType: 'supervisor' | 'evaluator' | 'peer' | 'poster' | 'weeklyJournal';
   assignedBy?: mongoose.Types.ObjectId; // Admin who assigned the student
   createdAt: Date;
   updatedAt: Date;
@@ -71,6 +77,36 @@ const CapstoneMarsSchema: Schema = new Schema(
       type: String,
       default: '',
     },
+    peerMarks: {
+      type: Number,
+      min: [0, 'Marks cannot be negative'],
+      max: [100, 'Marks cannot exceed 100'],
+      default: null,
+    },
+    peerComments: {
+      type: String,
+      default: '',
+    },
+    posterMarks: {
+      type: Number,
+      min: [0, 'Marks cannot be negative'],
+      max: [100, 'Marks cannot exceed 100'],
+      default: null,
+    },
+    posterComments: {
+      type: String,
+      default: '',
+    },
+    weeklyJournalMarks: {
+      type: Number,
+      min: [0, 'Marks cannot be negative'],
+      max: [100, 'Marks cannot exceed 100'],
+      default: null,
+    },
+    weeklyJournalComments: {
+      type: String,
+      default: '',
+    },
     finalMarks: {
       type: Number,
       default: null,
@@ -82,7 +118,7 @@ const CapstoneMarsSchema: Schema = new Schema(
     },
     submissionType: {
       type: String,
-      enum: ['supervisor', 'evaluator'],
+      enum: ['supervisor', 'evaluator', 'peer', 'poster', 'weeklyJournal'],
       required: true,
     },
     assignedBy: {

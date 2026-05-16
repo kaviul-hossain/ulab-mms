@@ -45,6 +45,8 @@ interface CapstoneGroup {
   studentIds: Student[];
 }
 
+const normalizeSemester = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, '');
+
 export default function WeeklyJournalPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
@@ -99,7 +101,7 @@ export default function WeeklyJournalPage() {
 
   const fetchCapstoneGroups = async () => {
     try {
-      const response = await fetch('/api/capstone-groups?all=true');
+      const response = await fetch(`/api/capstone-groups?semester=${encodeURIComponent(semester)}`);
       if (!response.ok) throw new Error('Failed to fetch groups');
       const data: CapstoneGroup[] = await response.json();
       setCapstoneGroups(data);
@@ -181,6 +183,13 @@ export default function WeeklyJournalPage() {
             s.studentId?.toLowerCase().includes(query)
         )
     );
+  };
+
+  const getSemesterGroupLabel = (groupSemester?: string) => {
+    if (!groupSemester) return 'N/A';
+    return normalizeSemester(groupSemester) === normalizeSemester(semester)
+      ? groupSemester
+      : groupSemester;
   };
 
   if (status === 'loading' || loading) {
@@ -267,7 +276,7 @@ export default function WeeklyJournalPage() {
                             <p className="font-semibold text-sm">{group.groupName}</p>
                             <p className="text-xs text-muted-foreground">
                               {group.courseId?.code} • Course: {group.courseId?.name}
-                              {group.semester && ` • Semester: ${group.semester}`}
+                              {group.semester && ` • Semester: ${getSemesterGroupLabel(group.semester)}`}
                             </p>
                           </div>
                           <div className="flex items-center gap-2">

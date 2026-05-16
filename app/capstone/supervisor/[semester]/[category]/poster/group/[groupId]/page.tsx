@@ -14,7 +14,7 @@ interface Student {
   studentId?: string;
 }
 
-export default function PeerGroupMarksPage() {
+export default function PosterGroupMarksPage() {
   const router = useRouter();
   const params = useParams();
   const semester = params?.semester as string;
@@ -53,7 +53,7 @@ export default function PeerGroupMarksPage() {
   const handleChange = (studentId: string, value: string) => {
     const num = parseFloat(value);
     if (isNaN(num)) return;
-    setMarks((m) => ({ ...m, [studentId]: Math.max(0, Math.min(5, num)) }));
+    setMarks((m) => ({ ...m, [studentId]: Math.max(0, Math.min(12, num)) }));
   };
 
   const handleSubmit = async () => {
@@ -64,7 +64,7 @@ export default function PeerGroupMarksPage() {
         marks: students.map((s) => ({ _id: s._id, name: s.name, studentId: s.studentId, marks: marks[s._id] })),
       };
 
-      const res = await fetch('/api/capstone/submit-peer-marks', {
+      const res = await fetch('/api/capstone/submit-poster-marks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -75,10 +75,10 @@ export default function PeerGroupMarksPage() {
         throw new Error(err?.error || 'Failed to submit marks');
       }
 
-      toast.success('Peer marks submitted');
+      toast.success('Poster marks submitted');
       const semester = params?.semester as string;
       const category = params?.category as string;
-      router.push(`/capstone/supervisor/${semester}/${category}/peer`);
+      router.push(`/capstone/supervisor/${semester}/${category}/poster`);
     } catch (err) {
       console.error(err);
       toast.error(err instanceof Error ? err.message : 'Failed to submit marks');
@@ -93,8 +93,8 @@ export default function PeerGroupMarksPage() {
     <div className="max-w-4xl mx-auto p-4">
       <Card>
         <CardHeader>
-          <CardTitle>Submit Peer Evaluation Marks - {groupName}</CardTitle>
-          <CardDescription>Enter marks for each member (0-5)</CardDescription>
+          <CardTitle>Submit Poster Marks - {groupName}</CardTitle>
+          <CardDescription>Enter marks for each member (0-12)</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
@@ -105,7 +105,7 @@ export default function PeerGroupMarksPage() {
                   <div className="text-sm text-muted-foreground">{s.studentId}</div>
                 </div>
                 <div className="w-36">
-                  <Input type="number" min={0} max={5} step={0.5} value={marks[s._id]} onChange={(e) => handleChange(s._id, e.target.value)} />
+                  <Input type="number" min={0} max={12} step={0.5} value={marks[s._id]} onChange={(e) => handleChange(s._id, e.target.value)} />
                 </div>
               </div>
             ))}

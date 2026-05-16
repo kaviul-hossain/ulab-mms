@@ -17,6 +17,8 @@ interface Student {
 export default function GroupMarksPage() {
   const router = useRouter();
   const params = useParams();
+  const semester = params?.semester as string;
+  const category = params?.category as string;
   const groupId = params?.groupId as string;
   const [loading, setLoading] = useState(true);
   const [groupName, setGroupName] = useState('');
@@ -34,6 +36,7 @@ export default function GroupMarksPage() {
       const res = await fetch(`/api/capstone-groups/${groupId}`);
       if (!res.ok) throw new Error('Failed to fetch group');
       const data = await res.json();
+
       setGroupName(data.groupName || data.groupName === undefined ? data.groupName : data.groupName);
       setStudents(data.studentIds || []);
       const initialMarks: Record<string, number> = {};
@@ -69,7 +72,7 @@ export default function GroupMarksPage() {
 
       if (!res.ok) throw new Error('Failed to submit marks');
       toast.success('Marks submitted');
-      router.push('/capstone/supervisor');
+      router.push(`/capstone/supervisor/${semester}/${category}/weekly-journal`);
     } catch (err) {
       console.error(err);
       toast.error('Failed to submit marks');

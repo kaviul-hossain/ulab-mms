@@ -105,30 +105,41 @@ export default function SemesterPage() {
                 
                 {/* Buttons for Weekly Journal, Peer, and Report */}
                 <div className="space-y-2">
+                {/* Buttons for Weekly Journal, Peer, and Report */}
+                <Button 
+                  asChild 
+                  className={`w-full ${category.buttonColor}`}
+                >
+                  <Link href={`/capstone/supervisor/${semester}/${category.code}/weekly-journal`}>
+                    Weekly Journal
+                  </Link>
+                </Button>
+                <Button 
+                  asChild 
+                  className={`w-full ${category.buttonColor}`}
+                >
+                  <Link href={`/capstone/supervisor/${semester}/${category.code}/peer`}>
+                    Peer
+                  </Link>
+                </Button>
+                {(category.code === 'CSE4098C' || category.code === 'CSE499') && (
                   <Button 
                     asChild 
                     className={`w-full ${category.buttonColor}`}
                   >
-                    <Link href={`/capstone/supervisor/${semester}/${category.code}/weekly-journal`}>
-                      Weekly Journal
+                    <Link href={`/capstone/supervisor/${semester}/${category.code}/poster`}>
+                      Poster Marks
                     </Link>
                   </Button>
-                  <Button 
-                    asChild 
-                    className={`w-full ${category.buttonColor}`}
-                  >
-                    <Link href={`/capstone/supervisor/${semester}/${category.code}/peer`}>
-                      Peer
-                    </Link>
-                  </Button>
-                  <Button 
-                    asChild 
-                    className={`w-full ${category.buttonColor}`}
-                  >
-                    <Link href={`/capstone/supervisor/${semester}/${category.code}/report`}>
-                      Report
-                    </Link>
-                  </Button>
+                )}
+                <Button 
+                  asChild 
+                  className={`w-full ${category.buttonColor}`}
+                >
+                  <Link href={`/capstone/supervisor/${semester}/${category.code}/report`}>
+                    Report
+                  </Link>
+                </Button>
                 </div>
               </CardContent>
             </Card>

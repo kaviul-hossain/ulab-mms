@@ -8,6 +8,9 @@ import Semester from '@/models/Semester';
 
 const ALLOWED_COURSES = ['CSE4098A', 'CSE4098B', 'CSE4098C', 'CSE499'];
 
+const normalizeSemester = (value: string) =>
+  value.toLowerCase().replace(/[^a-z0-9]/g, '');
+
 // GET capstone groups (supervisor only, or all groups if requested)
 export async function GET(request: NextRequest) {
   try {
@@ -22,6 +25,7 @@ export async function GET(request: NextRequest) {
     // Check if requesting all groups
     const url = new URL(request.url);
     const getAll = url.searchParams.get('all') === 'true';
+    const semesterParam = url.searchParams.get('semester');
 
     let query: any = {};
 
@@ -66,19 +70,26 @@ export async function GET(request: NextRequest) {
       return copy;
     });
 
+    const semesterFiltered = semesterParam
+      ? normalized.filter((group: any) => {
+          if (!group.semester) return false;
+          return normalizeSemester(String(group.semester)) === normalizeSemester(semesterParam);
+        })
+      : normalized;
+
     if (getAll) {
-      console.log('Fetched all capstone groups:', normalized.length);
+      console.log('Fetched all capstone groups:', semesterFiltered.length);
     } else {
       const user = await User.findById(session.user.id);
       console.log(
         'Fetched groups for supervisor:',
         user?.email,
         '- Count:',
-        normalized.length
+        semesterFiltered.length
       );
     }
 
-    return NextResponse.json(normalized, { status: 200 });
+    return NextResponse.json(semesterFiltered, { status: 200 });
   } catch (error: any) {
     console.error('Get capstone groups error:', error);
     return NextResponse.json(
