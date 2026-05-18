@@ -34,7 +34,7 @@ export async function GET(
 
     // Get students, exams, and marks for this course
     const [students, exams, marks] = await Promise.all([
-      Student.find({ courseId: id }),
+      Student.find({ courseId: id }).sort({ studentId: 1, _id: 1 }).collation({ locale: 'en', numericOrdering: true }),
       Exam.find({ courseId: id }),
       Mark.find({ courseId: id }),
     ]);

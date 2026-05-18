@@ -10,7 +10,8 @@ export async function GET(request: NextRequest) {
     // Fetch all students with basic info
     const students = await Student.find({})
       .select('_id name studentId courseId')
-      .sort({ name: 1 });
+      .sort({ studentId: 1, _id: 1 })
+      .collation({ locale: 'en', numericOrdering: true });
 
     return NextResponse.json(students, { status: 200 });
   } catch (error: any) {

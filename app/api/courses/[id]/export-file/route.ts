@@ -76,7 +76,9 @@ export async function POST(
       return NextResponse.json({ error: 'Course not found' }, { status: 404 });
     }
 
-    const students = await Student.find({ courseId });
+    const students = await Student.find({ courseId })
+      .sort({ studentId: 1, _id: 1 })
+      .collation({ locale: 'en', numericOrdering: true });
     const exams = await Exam.find({ courseId });
     const marks = await Mark.find({ courseId });
 
