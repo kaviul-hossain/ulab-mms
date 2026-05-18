@@ -7,24 +7,6 @@ import Student from '@/models/Student';
 import Exam from '@/models/Exam';
 import Mark from '@/models/Mark';
 
-type CourseUpdateData = Partial<{
-  name: string;
-  code: string;
-  semester: string;
-  year: number;
-  section: string;
-  classTime: string;
-  classRoom: string;
-  numberOfStudents: number;
-  classRepresentativeId: string | null;
-  courseType: 'Theory' | 'Lab';
-  showFinalGrade: boolean;
-  quizAggregation: 'average' | 'best';
-  assignmentAggregation: 'average' | 'best';
-  quizWeightage: number;
-  assignmentWeightage: number;
-}>;
-
 // GET a specific course
 export async function GET(
   request: NextRequest,
@@ -66,10 +48,10 @@ export async function GET(
       },
       { status: 200 }
     );
-  } catch (error: unknown) {
+  } catch (error: any) {
     console.error('Get course error:', error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Internal server error' },
+      { error: error.message || 'Internal server error' },
       { status: 500 }
     );
   }
@@ -95,10 +77,6 @@ export async function PUT(
       semester, 
       year, 
       section, 
-      classTime,
-      classRoom,
-      numberOfStudents,
-      classRepresentativeId,
       courseType, 
       showFinalGrade,
       quizAggregation,
@@ -109,7 +87,7 @@ export async function PUT(
 
     await dbConnect();
 
-    const updateData: CourseUpdateData = {};
+    const updateData: any = {};
     
     // Update basic fields if provided
     if (name !== undefined) updateData.name = name;
@@ -117,10 +95,6 @@ export async function PUT(
     if (semester !== undefined) updateData.semester = semester;
     if (year !== undefined) updateData.year = year;
     if (section !== undefined) updateData.section = section;
-    if (classTime !== undefined) updateData.classTime = classTime;
-    if (classRoom !== undefined) updateData.classRoom = classRoom;
-    if (numberOfStudents !== undefined) updateData.numberOfStudents = numberOfStudents;
-    if (classRepresentativeId !== undefined) updateData.classRepresentativeId = classRepresentativeId || null;
     
     // Only update courseType if provided (prevent accidental changes)
     if (courseType !== undefined) {
@@ -167,20 +141,21 @@ export async function PUT(
       updateData.assignmentWeightage = assignmentWeightage;
     }
 
-    const course = await Course.findOne({ _id: id, userId: session.user.id });
+    const course = await Course.findOneAndUpdate(
+      { _id: id, userId: session.user.id },
+      updateData,
+      { new: true, runValidators: true }
+    );
 
     if (!course) {
       return NextResponse.json({ error: 'Course not found' }, { status: 404 });
     }
 
-    course.set(updateData);
-    await course.save();
-
     return NextResponse.json({ course }, { status: 200 });
-  } catch (error: unknown) {
+  } catch (error: any) {
     console.error('Update course error:', error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Internal server error' },
+      { error: error.message || 'Internal server error' },
       { status: 500 }
     );
   }
@@ -222,10 +197,10 @@ export async function DELETE(
       { message: 'Course and all related data deleted successfully' },
       { status: 200 }
     );
-  } catch (error: unknown) {
+  } catch (error: any) {
     console.error('Delete course error:', error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Internal server error' },
+      { error: error.message || 'Internal server error' },
       { status: 500 }
     );
   }

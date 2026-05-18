@@ -71,7 +71,7 @@ export default function ExamsView({
                 Configure and manage {exams.length} exam(s)
               </CardDescription>
             </div>
-            <Button onClick={onShowExamModal} className="sm:self-start">
+            <Button onClick={() => onShowExamModal()} className="sm:self-start">
               <Plus className="w-4 h-4 mr-2" />
               Add New Exam
             </Button>
@@ -259,7 +259,7 @@ export default function ExamsView({
             <CardDescription className="mb-6">
               Create your first exam to start tracking student performance.
             </CardDescription>
-            <Button onClick={onShowExamModal}>
+            <Button onClick={() => onShowExamModal()}>
               <Plus className="w-4 h-4 mr-2" />
               Create First Exam
             </Button>

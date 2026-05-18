@@ -6,7 +6,6 @@ import Course from '@/models/Course';
 import Exam from '@/models/Exam';
 import User from '@/models/User';
 import mongoose from 'mongoose';
-import { getDefaultExamSeeds } from './lib/defaultExams';
 
 async function resolveUserObjectId(session: any) {
   const sessionUserId = session?.user?.id as string | undefined;
@@ -129,11 +128,59 @@ export async function POST(request: NextRequest) {
     });
 
     // Auto-initialize required exams based on course type
-    const examsToCreate = getDefaultExamSeeds(courseType).map((exam) => ({
-      courseId: course._id,
-      userId: new mongoose.Types.ObjectId(userObjectId),
-      ...exam,
-    }));
+    let examsToCreate: any[] = [];
+
+    if (courseType === 'Theory') {
+      // Theory courses: Midterm and Final with CO breakdown
+      examsToCreate = [
+        {
+          courseId: course._id,
+          displayName: 'Midterm',
+          examType: 'midterm',
+          totalMarks: 25,
+          weightage: 25,
+          isRequired: true,
+          examCategory: 'MainExam',
+          numberOfCOs: 3, // Default 3 COs, can be edited later
+          userId: new mongoose.Types.ObjectId(userObjectId),
+        },
+        {
+          courseId: course._id,
+          displayName: 'Final',
+          examType: 'final',
+          totalMarks: 40,
+          weightage: 40,
+          examCategory: 'MainExam',
+          isRequired: true,
+          numberOfCOs: 4, // Default 4 COs, can be edited later
+          userId: new mongoose.Types.ObjectId(userObjectId),
+        },
+      ];
+    } else if (courseType === 'Lab') {
+      // Lab courses: Lab Final and OEL/CE Project
+      examsToCreate = [
+        {
+          courseId: course._id,
+          displayName: 'Lab Final',
+          examType: 'labFinal',
+          totalMarks: 30,
+          weightage: 30,
+          examCategory: 'MainExam',
+          isRequired: true,
+          userId: new mongoose.Types.ObjectId(userObjectId),
+        },
+        {
+          courseId: course._id,
+          displayName: 'OEL/CE Project',
+          examType: 'oel',
+          totalMarks: 40,
+          weightage: 40,
+          examCategory: 'MainExam',
+          isRequired: true,
+          userId: new mongoose.Types.ObjectId(userObjectId),
+        },
+      ];
+    }
 
     // Create the required exams
     if (examsToCreate.length > 0) {
