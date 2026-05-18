@@ -83,6 +83,15 @@ export async function GET(
     };
 
     if (format === 'csv') {
+      const getExamPercentage = (rawMark: number, totalMarks: number) => {
+        if (!totalMarks || totalMarks <= 0) return 0;
+        return (rawMark / totalMarks) * 100;
+      };
+
+      const getWeightedContribution = (rawMark: number, totalMarks: number, weightage: number) => {
+        return (getExamPercentage(rawMark, totalMarks) * weightage) / 100;
+      };
+
       const getAggregatedMark = (studentId: any, category: 'Quiz' | 'Assignment', aggregationMode?: 'average' | 'best'): any => {
         const categoryExams = exams.filter((e: any) => e.examCategory === category);
         const categoryMarks = marks.filter((m: any) =>
@@ -92,26 +101,44 @@ export async function GET(
 
         if (categoryMarks.length === 0) return null;
 
+        const categoryWeightage = category === 'Quiz' ? Number(course.quizWeightage || 0) : Number(course.assignmentWeightage || 0);
+
         if (aggregationMode === 'best') {
           let bestMark = categoryMarks[0];
-          let bestValue = -Infinity;
+          let bestValue = -1;
 
           categoryMarks.forEach((mark: any) => {
             const exam = categoryExams.find((e: any) => e._id.toString() === mark.examId.toString());
-            if (exam && mark.rawMark > bestValue) {
-              bestValue = mark.rawMark;
-              bestMark = mark;
+            if (exam) {
+              const percentage = getExamPercentage(mark.rawMark, exam.totalMarks);
+              if (percentage > bestValue) {
+                bestValue = percentage;
+                bestMark = mark;
+              }
             }
           });
 
-          return bestMark;
+          const bestExam = categoryExams.find((e: any) => e._id.toString() === bestMark.examId.toString());
+          const weightedMark = bestExam ? getWeightedContribution(bestMark.rawMark, bestExam.totalMarks, categoryWeightage) : 0;
+
+          return {
+            rawMark: weightedMark,
+            totalMarks: categoryWeightage,
+            isAggregated: true,
+          };
         }
 
-        const totalMarks = categoryMarks.reduce((sum: number, mark: any) => sum + mark.rawMark, 0);
-        const avgMark = totalMarks / categoryMarks.length;
+        const averagePercentage = categoryMarks.reduce((sum: number, mark: any) => {
+          const exam = categoryExams.find((e: any) => e._id.toString() === mark.examId.toString());
+          if (!exam) return sum;
+          return sum + getExamPercentage(mark.rawMark, exam.totalMarks);
+        }, 0) / categoryMarks.length;
+
+        const weightedAverage = (averagePercentage * categoryWeightage) / 100;
 
         return {
-          rawMark: avgMark,
+          rawMark: weightedAverage,
+          totalMarks: categoryWeightage,
           isAggregated: true,
         };
       };
@@ -141,10 +168,7 @@ export async function GET(
         if (hasQuizzes && course.quizWeightage) {
           const aggMark = getAggregatedMark(studentId, 'Quiz', course.quizAggregation);
           if (aggMark) {
-            const quizExams = exams.filter((e: any) => e.examCategory === 'Quiz');
-            const totalMarks = quizExams.length > 0 ? Math.max(...quizExams.map((e: any) => e.totalMarks)) : 100;
-            const percentage = (aggMark.rawMark / totalMarks) * 100;
-            totalContribution += (percentage * course.quizWeightage) / 100;
+            totalContribution += aggMark.rawMark;
           }
         }
 
@@ -152,10 +176,7 @@ export async function GET(
         if (hasAssignments && course.assignmentWeightage) {
           const aggMark = getAggregatedMark(studentId, 'Assignment', course.assignmentAggregation);
           if (aggMark) {
-            const assignmentExams = exams.filter((e: any) => e.examCategory === 'Assignment');
-            const totalMarks = assignmentExams.length > 0 ? Math.max(...assignmentExams.map((e: any) => e.totalMarks)) : 100;
-            const percentage = (aggMark.rawMark / totalMarks) * 100;
-            totalContribution += (percentage * course.assignmentWeightage) / 100;
+            totalContribution += aggMark.rawMark;
           }
         }
 

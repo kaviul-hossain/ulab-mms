@@ -819,6 +819,15 @@ export default function CoursePage() {
     return marks.find(m => m.studentId === studentId && m.examId === examId);
   };
 
+  const getExamPercentage = (rawMark: number, totalMarks: number) => {
+    if (!totalMarks || totalMarks <= 0) return 0;
+    return (rawMark / totalMarks) * 100;
+  };
+
+  const getWeightedContribution = (rawMark: number, totalMarks: number, weightage: number) => {
+    return (getExamPercentage(rawMark, totalMarks) * weightage) / 100;
+  };
+
   // Calculate aggregated mark for a student based on exam category
   const getAggregatedMark = (studentId: string, category: 'Quiz' | 'Assignment'): Mark | { rawMark: number; isAggregated: boolean; examId?: string } | null => {
     // Get all exams of this category
@@ -838,38 +847,47 @@ export default function CoursePage() {
       ? course?.quizAggregation || 'average'
       : course?.assignmentAggregation || 'average';
 
+    const categoryWeightage = category === 'Quiz'
+      ? Number(course?.quizWeightage || 0)
+      : Number(course?.assignmentWeightage || 0);
+
     if (aggregationMethod === 'best') {
-      // Find the best mark (highest actual mark)
+      // Find the best normalized score (highest percentage), not the highest raw mark
       let bestMark = categoryMarks[0];
-      let bestValue = 0;
+      let bestValue = -1;
 
       categoryMarks.forEach(mark => {
         const exam = categoryExams.find(e => e._id === mark.examId);
         if (exam) {
-          if (mark.rawMark > bestValue) {
-            bestValue = mark.rawMark;
+          const percentage = getExamPercentage(mark.rawMark, exam.totalMarks);
+          if (percentage > bestValue) {
+            bestValue = percentage;
             bestMark = mark;
           }
         }
       });
 
-      return bestMark;
-    } else {
-      // Calculate average of actual marks (not percentages)
-      let totalMarks = 0;
-      
-      categoryMarks.forEach(mark => {
-        const exam = categoryExams.find(e => e._id === mark.examId);
-        if (exam) {
-          totalMarks += mark.rawMark;
-        }
-      });
+      const bestExam = categoryExams.find(e => e._id === bestMark.examId);
+      const weightedMark = bestExam ? getWeightedContribution(bestMark.rawMark, bestExam.totalMarks, categoryWeightage) : 0;
 
-      const avgMark = totalMarks / categoryMarks.length;
+      return {
+        rawMark: weightedMark,
+        isAggregated: true,
+        examId: bestMark.examId,
+      };
+    } else {
+      // Calculate average of normalized percentages and convert to weighted contribution
+      const averagePercentage = categoryMarks.reduce((sum, mark) => {
+        const exam = categoryExams.find(e => e._id === mark.examId);
+        if (!exam) return sum;
+        return sum + getExamPercentage(mark.rawMark, exam.totalMarks);
+      }, 0) / categoryMarks.length;
+
+      const weightedAverage = (averagePercentage * categoryWeightage) / 100;
       
       // Return a synthetic mark object for display
       return {
-        rawMark: avgMark,
+        rawMark: weightedAverage,
         isAggregated: true,
       };
     }
@@ -922,38 +940,14 @@ export default function CoursePage() {
     if (hasQuizzes && course?.quizWeightage) {
       const aggMark = getAggregatedMark(studentId, 'Quiz');
       if (aggMark) {
-        let markToUse = 0;
-        let totalMarks = 100; // Aggregated marks are already percentages or actual marks
-        
-        if ('isAggregated' in aggMark && aggMark.isAggregated) {
-          // Average mode: rawMark is the average value
-          markToUse = aggMark.rawMark;
-          // For aggregated average, find the maximum scalingTarget or totalMarks
-          // This handles cases where different quizzes have different scaling targets
-          const quizExams = exams.filter(e => e.examCategory === 'Quiz');
-          if (quizExams.length > 0) {
-            totalMarks = Math.max(...quizExams.map(e => e.totalMarks));
-          }
-        } else {
-          // Best mode: get the actual mark
-          const exam = exams.find(e => e._id === aggMark.examId);
-          if (exam) {
-            markToUse = aggMark.rawMark;
-            totalMarks = exam.totalMarks;
-          }
-        }
-        
-        // Calculate percentage
-        const percentage = (markToUse / totalMarks) * 100;
-        
-        // Calculate contribution
-        const contribution = (percentage * course.quizWeightage) / 100;
+        const totalMarks = Number(course.quizWeightage);
+        const contribution = aggMark.rawMark;
         
         breakdown.push({
           name: 'Quiz (Aggregated)',
-          mark: markToUse,
+          mark: contribution,
           totalMarks: totalMarks,
-          weightage: course.quizWeightage,
+          weightage: totalMarks,
           contribution: contribution,
           isAggregated: true,
         });
@@ -966,38 +960,14 @@ export default function CoursePage() {
     if (hasAssignments && course?.assignmentWeightage) {
       const aggMark = getAggregatedMark(studentId, 'Assignment');
       if (aggMark) {
-        let markToUse = 0;
-        let totalMarks = 100;
-        
-        if ('isAggregated' in aggMark && aggMark.isAggregated) {
-          // Average mode
-          markToUse = aggMark.rawMark;
-          // For aggregated average, find the maximum scalingTarget or totalMarks
-          // This handles cases where different assignments have different scaling targets
-          const assignmentExams = exams.filter(e => e.examCategory === 'Assignment');
-          if (assignmentExams.length > 0) {
-            totalMarks = Math.max(...assignmentExams.map(e => e.totalMarks));
-          }
-        } else {
-          // Best mode
-          const exam = exams.find(e => e._id === aggMark.examId);
-          if (exam) {
-            markToUse = aggMark.rawMark;
-            totalMarks = exam.totalMarks;
-          }
-        }
-        
-        // Calculate percentage
-        const percentage = (markToUse / totalMarks) * 100;
-        
-        // Calculate contribution
-        const contribution = (percentage * course.assignmentWeightage) / 100;
+        const totalMarks = Number(course.assignmentWeightage);
+        const contribution = aggMark.rawMark;
         
         breakdown.push({
           name: 'Assignment (Aggregated)',
-          mark: markToUse,
+          mark: contribution,
           totalMarks: totalMarks,
-          weightage: course.assignmentWeightage,
+          weightage: totalMarks,
           contribution: contribution,
           isAggregated: true,
         });

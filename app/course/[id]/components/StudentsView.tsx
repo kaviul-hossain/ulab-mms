@@ -281,7 +281,7 @@ export default function StudentsView({
                           return (
                             <div className="flex flex-col gap-1">
                               <span className="px-2 py-1 rounded font-medium text-xs bg-amber-900/40 text-amber-200">
-                                Avg: {aggMark.rawMark.toFixed(2)}
+                                Weighted: {aggMark.rawMark.toFixed(2)}
                               </span>
                             </div>
                           );
@@ -292,10 +292,10 @@ export default function StudentsView({
                           return (
                             <div className="flex flex-col gap-1">
                               <span className="px-2 py-1 rounded font-medium text-xs bg-amber-900/40 text-amber-200">
-                                Best: {aggMark.rawMark}
+                                Best weighted: {aggMark.rawMark.toFixed(2)}
                               </span>
                               <span className="text-xs italic text-gray-500">
-                                (Raw: {aggMark.rawMark}/{exam.totalMarks})
+                                (Based on {exam.totalMarks} max)
                               </span>
                             </div>
                           );
@@ -313,7 +313,7 @@ export default function StudentsView({
                           return (
                             <div className="flex flex-col gap-1">
                               <span className="px-2 py-1 rounded font-medium text-xs bg-blue-900/40 text-blue-200">
-                                Avg: {aggMark.rawMark.toFixed(2)}
+                                Weighted: {aggMark.rawMark.toFixed(2)}
                               </span>
                             </div>
                           );
@@ -324,10 +324,10 @@ export default function StudentsView({
                           return (
                             <div className="flex flex-col gap-1">
                               <span className="px-2 py-1 rounded font-medium text-xs bg-blue-900/40 text-blue-200">
-                                Best: {aggMark.rawMark}
+                                Best weighted: {aggMark.rawMark.toFixed(2)}
                               </span>
                               <span className="text-xs italic text-gray-500">
-                                (Raw: {aggMark.rawMark}/{exam.totalMarks})
+                                (Based on {exam.totalMarks} max)
                               </span>
                             </div>
                           );
