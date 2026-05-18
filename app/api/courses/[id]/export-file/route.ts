@@ -10,28 +10,49 @@ import Mark from '@/models/Mark';
 import fs from 'fs';
 import path from 'path';
 import XlsxPopulate from 'xlsx-populate';
+import {
+  DEFAULT_EXCEL_EXPORT_MAPPING,
+  type ExcelExportField,
+  type ExcelExportMapping,
+} from '@/app/course/[id]/lib/excelExportMapping';
 
-function resolvePath(ctx: any, expr: string) {
-  if (!expr) return '';
-  // simple dot path resolution, supports marks.<examId>
-  const parts = expr.split('.');
-  let cur: any = ctx;
+function normalizeMapping(mapping: any): ExcelExportMapping {
+  if (!mapping) return DEFAULT_EXCEL_EXPORT_MAPPING;
 
-  for (const part of parts) {
-    if (part.startsWith('marks[') && part.endsWith(']')) {
-      // marks[examId]
-      const examId = part.slice(6, -1);
-      cur = (ctx.marks || []).find((m: any) => m.examId.toString() === examId.toString());
-    } else if (part === 'marks') {
-      cur = ctx.marks;
-    } else if (cur && Object.prototype.hasOwnProperty.call(cur, part)) {
-      cur = cur[part];
-    } else {
-      cur = undefined;
-    }
+  return {
+    sheetName: mapping.sheetName || 'GradeSheet',
+    singleCells: Array.isArray(mapping.singleCells) ? mapping.singleCells : DEFAULT_EXCEL_EXPORT_MAPPING.singleCells || [],
+    rangeMappings: Array.isArray(mapping.rangeMappings) ? mapping.rangeMappings : DEFAULT_EXCEL_EXPORT_MAPPING.rangeMappings || [],
+  };
+}
+
+function parseCellAddress(cell: string) {
+  const match = /^([A-Z]+)(\d+)$/i.exec(cell.trim());
+  if (!match) return null;
+  return { column: match[1].toUpperCase(), row: Number(match[2]) };
+}
+
+function resolveFieldValue(field: ExcelExportField, course: any, student: any, instructorName: string) {
+  switch (field) {
+    case 'course.code':
+      return course.code || '';
+    case 'course.name':
+      return course.name || '';
+    case 'course.section':
+      return course.section || '';
+    case 'course.semesterYear':
+      return `${course.semester} ${course.year}`.trim();
+    case 'course.credit':
+      return course.courseType === 'Theory' ? 3 : 1;
+    case 'instructor':
+      return instructorName || '';
+    case 'student.name':
+      return student?.name || '';
+    case 'student.studentId':
+      return student?.studentId || '';
+    default:
+      return '';
   }
-
-  return cur === undefined || cur === null ? '' : cur;
 }
 
 export async function POST(
@@ -60,7 +81,7 @@ export async function POST(
     const marks = await Mark.find({ courseId });
 
     const body = await request.json().catch(() => ({}));
-    const mapping = body.mapping || {};
+    const mapping = normalizeMapping(body.mapping || course.excelExportMapping);
 
     // Use public/templates so the file persists across builds
     const templatePath = path.join(process.cwd(), 'public', 'templates', 'Sample CO PO.xlsx');
@@ -71,77 +92,30 @@ export async function POST(
     // Load workbook using xlsx-populate to preserve styles/formatting
     const workbook = await XlsxPopulate.fromFileAsync(templatePath);
 
-    // If mapping is empty, just return the template file unchanged
-    const hasMapping = mapping && (Object.keys(mapping.cells || {}).length > 0 || mapping.rows);
+    const sheet = workbook.sheet(mapping.sheetName || 'GradeSheet');
+    const instructorName = session.user?.name || '';
 
-    if (hasMapping) {
-      // Get sheet by name if provided in mapping, otherwise use "GradeSheet"
-      const sheet = workbook.sheet(mapping.sheet || 'GradeSheet');
+    for (const singleCell of mapping.singleCells || []) {
+      const value = resolveFieldValue(singleCell.field, course, null, instructorName);
+      sheet.cell(singleCell.cell).value(value === undefined || value === null ? '' : value);
+    }
 
-      // Build context with special computed fields for cell mapping
-      const context: any = {
-        course,
-        students,
-        exams,
-        marks,
-        instructor: session.user?.name || '',
-        credit: course.courseType === 'Theory' ? 3 : 1,
-        semesterYear: `${course.semester} ${course.year}`,
-      };
+    for (const rangeMapping of mapping.rangeMappings || []) {
+      const fromCell = parseCellAddress(rangeMapping.from);
+      const toCell = parseCellAddress(rangeMapping.to);
 
-      // Apply single cell mappings
-      if (mapping.cells) {
-        for (const cellAddr of Object.keys(mapping.cells)) {
-          const expr = mapping.cells[cellAddr];
-          let value: any = '';
-
-          if (expr.startsWith('course.')) {
-            const field = expr.split('.')[1];
-            value = (course as any)[field] ?? '';
-          } else if (expr === 'instructor') {
-            value = session.user?.name || '';
-          } else if (expr === 'credit') {
-            value = course.courseType === 'Theory' ? 3 : 1;
-          } else if (expr === 'semesterYear') {
-            value = `${course.semester} ${course.year}`;
-          } else {
-            value = resolvePath(context, expr);
-          }
-
-          sheet.cell(cellAddr).value(value === undefined || value === null ? '' : value);
-        }
+      if (!fromCell || !toCell || fromCell.column !== toCell.column) {
+        continue;
       }
 
-      // Apply row mappings
-      if (mapping.rows) {
-        const startRow = mapping.rows.startRow || 2;
-        const columns = mapping.rows.columns || {};
+      const maxRows = Math.max(0, toCell.row - fromCell.row + 1);
+      const targetStudents = students.slice(0, maxRows);
 
-        let rowIndex = startRow;
-        for (const student of students) {
-          for (const col of Object.keys(columns)) {
-            const expr = columns[col];
-            let val: any = '';
-
-            if (expr.startsWith('marks.')) {
-              const examId = expr.split('.')[1];
-              const m = marks.find((mk: any) => mk.examId.toString() === examId.toString() && mk.studentId.toString() === student._id.toString());
-              val = m ? (m.rawMark ?? '') : '';
-            } else if (expr.startsWith('student.')) {
-              const field = expr.split('.')[1];
-              val = (student as any)[field] ?? '';
-            } else if (expr.startsWith('course.')) {
-              const field = expr.split('.')[1];
-              val = (course as any)[field] ?? '';
-            }
-
-            const cellAddr = `${col}${rowIndex}`;
-            sheet.cell(cellAddr).value(val === undefined || val === null ? '' : val);
-          }
-
-          rowIndex++;
-        }
-      }
+      targetStudents.forEach((student, index) => {
+        const row = fromCell.row + index;
+        const value = resolveFieldValue(rangeMapping.field, course, student, instructorName);
+        sheet.cell(`${fromCell.column}${row}`).value(value === undefined || value === null ? '' : value);
+      });
     }
 
     const outBuf = await workbook.outputAsync();

@@ -14,6 +14,7 @@ import StudentsView from './components/StudentsView';
 import MarksView from './components/MarksView';
 import AttendanceView from './components/AttendanceView';
 import BulkMarkEntryModal from './components/BulkMarkEntryModal';
+import ExcelExportMappingEditor from './components/ExcelExportMappingEditor';
 import { 
   GradeThreshold, 
   DEFAULT_GRADING_SCALE, 
@@ -130,7 +131,7 @@ export default function CoursePage() {
   const [exportingCSV, setExportingCSV] = useState(false);
   const [exportingCourseFile, setExportingCourseFile] = useState(false);
   const [importingCourse, setImportingCourse] = useState(false);
-  const [courseSettingsTab, setCourseSettingsTab] = useState<'aggregation' | 'grading'>('aggregation');
+  const [courseSettingsTab, setCourseSettingsTab] = useState<'aggregation' | 'grading' | 'excelExport'>('aggregation');
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [activeView, setActiveView] = useState<'overview' | 'exams' | 'students' | 'marks' | 'attendance'>('overview');
   const [searchStudentId, setSearchStudentId] = useState('');
@@ -160,6 +161,18 @@ export default function CoursePage() {
     numberOfQuestions: '',
     examCategory: '',
   });
+
+  const getInheritedExamWeightage = (examCategory: string) => {
+    if (examCategory === 'Quiz') {
+      return course?.quizWeightage ?? 0;
+    }
+
+    if (examCategory === 'Assignment') {
+      return course?.assignmentWeightage ?? 0;
+    }
+
+    return null;
+  };
   const [examSettings, setExamSettings] = useState({
     displayName: '',
     weightage: '',
@@ -404,11 +417,12 @@ export default function CoursePage() {
         examData.examCategory = examFormData.examCategory;
       }
 
-      // Only add weightage for non-Quiz and non-Assignment exams
-      if (examFormData.examCategory !== 'Quiz' && examFormData.examCategory !== 'Assignment') {
-        examData.weightage = parseFloat(examFormData.weightage);
+      const inheritedWeightage = getInheritedExamWeightage(examFormData.examCategory);
+
+      if (inheritedWeightage !== null) {
+        examData.weightage = inheritedWeightage;
       } else {
-        examData.weightage = 0; // Set to 0 for Quiz/Assignment
+        examData.weightage = parseFloat(examFormData.weightage);
       }
 
       // Add numberOfCOs if provided (for theory courses)
@@ -441,6 +455,33 @@ export default function CoursePage() {
     } catch (err) {
       setError('Error creating exam');
     }
+  };
+
+  const openExamModal = (presetCategory?: Exam['examCategory']) => {
+    if (presetCategory === 'Quiz' || presetCategory === 'Assignment') {
+      const nextIndex = exams.filter((exam) => exam.examCategory === presetCategory).length + 1;
+      const inheritedWeightage = getInheritedExamWeightage(presetCategory);
+      setExamFormData({
+        displayName: `${presetCategory} ${nextIndex}`,
+        totalMarks: '',
+        weightage: inheritedWeightage !== null ? inheritedWeightage.toString() : '',
+        numberOfCOs: '',
+        numberOfQuestions: '',
+        examCategory: presetCategory,
+      });
+    } else {
+      setExamFormData({
+        displayName: '',
+        totalMarks: '',
+        weightage: '',
+        numberOfCOs: '',
+        numberOfQuestions: '',
+        examCategory: presetCategory || '',
+      });
+    }
+
+    setError('');
+    setShowExamModal(true);
   };
 
   const handleApplyScaling = async (examId: string, method: string) => {
@@ -711,29 +752,10 @@ export default function CoursePage() {
   const handleExportCourseFile = async () => {
     setExportingCourseFile(true);
     try {
-      // Map student names to V10:V51 and student IDs to W10:W51
-      // Also map course info to header cells
-      const mapping = {
-        rows: {
-          startRow: 10,
-          columns: {
-            V: 'student.name',
-            W: 'student.studentId',
-          },
-        },
-        cells: {
-          H2: 'course.code',
-          H3: 'course.name',
-          H4: 'credit',
-          H5: 'instructor',
-          L2: 'course.section',
-          L3: 'semesterYear',
-        },
-      };
       const response = await fetch(`/api/courses/${courseId}/export-file`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mapping }),
+        body: JSON.stringify({}),
       });
 
       if (response.ok) {
@@ -1272,7 +1294,7 @@ export default function CoursePage() {
               className="w-full justify-start"
             >
               <Settings className="w-5 h-5" />
-              {sidebarOpen && <span className="ml-2 font-medium">Settings</span>}
+              {sidebarOpen && <span className="ml-2 font-medium">Course Settings</span>}
             </Button>
           </nav>
 
@@ -1364,7 +1386,8 @@ export default function CoursePage() {
             {activeView === 'exams' && (
               <ExamsView
                 exams={exams}
-                onShowExamModal={() => setShowExamModal(true)}
+                course={course!}
+                onShowExamModal={openExamModal}
                 onShowExamSettings={(examId) => setShowExamSettings(examId)}
                 onSetExamSettings={setExamSettings}
                 onDeleteExam={handleDeleteExam}
@@ -1539,7 +1562,16 @@ export default function CoursePage() {
               <select
                 required
                 value={examFormData.examCategory}
-                onChange={(e) => setExamFormData({ ...examFormData, examCategory: e.target.value })}
+                onChange={(e) => {
+                  const nextCategory = e.target.value;
+                  const inheritedWeightage = getInheritedExamWeightage(nextCategory);
+
+                  setExamFormData({
+                    ...examFormData,
+                    examCategory: nextCategory,
+                    weightage: inheritedWeightage !== null ? inheritedWeightage.toString() : examFormData.weightage,
+                  });
+                }}
                 className="w-full px-4 py-2 bg-background border rounded-lg focus:ring-2 focus:ring-ring text-foreground mt-2"
               >
                 <option value="">Select category...</option>
@@ -1572,24 +1604,29 @@ export default function CoursePage() {
               <Label>
                 Weightage (%)
                 {(examFormData.examCategory === 'Quiz' || examFormData.examCategory === 'Assignment') && (
-                  <span className="ml-2 text-xs text-amber-500">(Not used for Quiz/Assignment)</span>
+                  <span className="ml-2 text-xs text-amber-500">(Inherited from Course Settings)</span>
                 )}
               </Label>
-              <Input
-                type="number"
-                required={examFormData.examCategory !== 'Quiz' && examFormData.examCategory !== 'Assignment'}
-                min="0"
-                max="100"
-                step="0.01"
-                value={examFormData.weightage}
-                onChange={(e) => setExamFormData({ ...examFormData, weightage: e.target.value })}
-                placeholder="e.g., 20"
-                disabled={examFormData.examCategory === 'Quiz' || examFormData.examCategory === 'Assignment'}
-                className="mt-2"
-              />
+              {(examFormData.examCategory === 'Quiz' || examFormData.examCategory === 'Assignment') ? (
+                <div className="mt-2 rounded-lg border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
+                  {(getInheritedExamWeightage(examFormData.examCategory) ?? 0).toFixed(2)}% from course settings
+                </div>
+              ) : (
+                <Input
+                  type="number"
+                  required
+                  min="0"
+                  max="100"
+                  step="0.01"
+                  value={examFormData.weightage}
+                  onChange={(e) => setExamFormData({ ...examFormData, weightage: e.target.value })}
+                  placeholder="e.g., 20"
+                  className="mt-2"
+                />
+              )}
               <p className="text-xs text-muted-foreground mt-1">
                 {(examFormData.examCategory === 'Quiz' || examFormData.examCategory === 'Assignment') 
-                  ? 'Weightage is set at course level for aggregated Quiz/Assignment columns'
+                  ? 'Each item contributes using this shared group weight'
                   : 'Percentage contribution to final grade'}
               </p>
             </div>
@@ -1809,50 +1846,78 @@ export default function CoursePage() {
 
       {/* Course Settings Modal */}
       <Dialog open={showCourseSettings} onOpenChange={setShowCourseSettings}>
-        <DialogContent className="max-w-7xl h-[90vh] flex flex-col p-0">
-          <div className="flex-1 flex flex-col overflow-hidden">
-            {/* Header with Tabs */}
-            <div className="border-b bg-muted/50">
-              <div className="px-6 py-4">
-                <DialogHeader>
-                  <DialogTitle className="flex items-center gap-3 text-2xl">
-                    <span className="text-3xl">⚙️</span>
-                    <span>Course Settings</span>
-                  </DialogTitle>
-                </DialogHeader>
-              </div>
-              
-              {/* Tabs */}
-              <div className="px-6">
-                <div className="flex gap-2 -mb-px">
-                  <button
-                    type="button"
-                    onClick={() => setCourseSettingsTab('aggregation')}
-                    className={`px-6 py-3 font-medium text-sm transition-all border-b-2 ${
-                      courseSettingsTab === 'aggregation'
-                        ? 'border-primary text-primary bg-muted/50'
-                        : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/30'
-                    }`}
-                  >
-                    📊 Quiz & Assignment Settings
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setCourseSettingsTab('grading')}
-                    className={`px-6 py-3 font-medium text-sm transition-all border-b-2 ${
-                      courseSettingsTab === 'grading'
-                        ? 'border-primary text-primary bg-muted/50'
-                        : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/30'
-                    }`}
-                  >
-                    🏆 Grading Scale
-                  </button>
-                </div>
-              </div>
+        <DialogContent className="max-w-7xl w-[96vw] h-[92vh] overflow-hidden p-0">
+          <div className="flex h-full flex-col overflow-hidden">
+            <div className="border-b bg-muted/40 px-6 py-4">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-3 text-2xl">
+                  <span className="text-3xl">⚙️</span>
+                  <span>Course Settings</span>
+                </DialogTitle>
+                <DialogDescription className="mt-1 text-sm text-muted-foreground">
+                  Configure grading, aggregation, and Excel export mapping.
+                </DialogDescription>
+              </DialogHeader>
             </div>
 
-            {/* Content */}
-            <div className="flex-1 overflow-y-auto px-6 py-8">
+            <div className="flex flex-1 min-h-0 overflow-hidden">
+              <aside className="hidden w-72 shrink-0 flex-col gap-2 border-r bg-muted/20 p-4 md:flex">
+                <Button
+                  type="button"
+                  variant={courseSettingsTab === 'aggregation' ? 'default' : 'ghost'}
+                  className="justify-start"
+                  onClick={() => setCourseSettingsTab('aggregation')}
+                >
+                  📊 Quiz & Assignment
+                </Button>
+                <Button
+                  type="button"
+                  variant={courseSettingsTab === 'grading' ? 'default' : 'ghost'}
+                  className="justify-start"
+                  onClick={() => setCourseSettingsTab('grading')}
+                >
+                  🏆 Grading Scale
+                </Button>
+                <Button
+                  type="button"
+                  variant={courseSettingsTab === 'excelExport' ? 'default' : 'ghost'}
+                  className="justify-start"
+                  onClick={() => setCourseSettingsTab('excelExport')}
+                >
+                  📄 Excel Export
+                </Button>
+              </aside>
+
+              <div className="flex-1 min-h-0 overflow-y-auto px-6 py-6 pb-32">
+                <div className="mb-6 grid gap-2 md:hidden">
+                  <Button
+                    type="button"
+                    variant={courseSettingsTab === 'aggregation' ? 'default' : 'outline'}
+                    className="justify-start"
+                    onClick={() => setCourseSettingsTab('aggregation')}
+                  >
+                    📊 Quiz & Assignment
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={courseSettingsTab === 'grading' ? 'default' : 'outline'}
+                    className="justify-start"
+                    onClick={() => setCourseSettingsTab('grading')}
+                  >
+                    🏆 Grading Scale
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={courseSettingsTab === 'excelExport' ? 'default' : 'outline'}
+                    className="justify-start"
+                    onClick={() => setCourseSettingsTab('excelExport')}
+                  >
+                    📄 Excel Export
+                  </Button>
+                </div>
+
+                {/* Content */}
+                <div className="min-h-0">
               {error && (
                 <Alert variant="destructive" className="mb-6">
                   <AlertDescription>{error}</AlertDescription>
@@ -2075,8 +2140,12 @@ export default function CoursePage() {
                   </div>
                 )}
 
-                {/* Action Buttons - Fixed at bottom */}
-                <div className="sticky bottom-0 bg-background/95 backdrop-blur-md border-t px-6 py-4 -mx-6 -mb-8 mt-8">
+                {courseSettingsTab === 'excelExport' && (
+                  <ExcelExportMappingEditor courseId={courseId} onSaved={fetchCourseData} />
+                )}
+
+                {/* Action Buttons */}
+                <div className="mt-8 border-t bg-background/95 px-0 py-4 backdrop-blur-md">
                   <div className="flex gap-4 max-w-7xl mx-auto">
                     <Button
                       type="button"
@@ -2099,6 +2168,8 @@ export default function CoursePage() {
                   </div>
                 </div>
               </form>
+                </div>
+              </div>
             </div>
           </div>
         </DialogContent>

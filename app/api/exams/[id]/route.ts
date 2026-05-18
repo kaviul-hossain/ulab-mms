@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import dbConnect from '@/lib/mongodb';
 import Exam from '@/models/Exam';
+import Course from '@/models/Course';
 
 // PUT - Update exam settings
 export async function PUT(
@@ -39,17 +40,6 @@ export async function PUT(
         );
       }
       updateData.examCategory = examCategory;
-    }
-
-    // Update weightage if provided (0-100)
-    if (weightage !== undefined) {
-      if (weightage < 0 || weightage > 100) {
-        return NextResponse.json(
-          { error: 'Weightage must be between 0 and 100' },
-          { status: 400 }
-        );
-      }
-      updateData.weightage = weightage;
     }
 
     // Update numberOfCOs if provided
@@ -93,6 +83,29 @@ export async function PUT(
 
     if (!exam) {
       return NextResponse.json({ error: 'Exam not found' }, { status: 404 });
+    }
+
+    if (exam.examCategory === 'Quiz' || exam.examCategory === 'Assignment') {
+      const course = await Course.findOne({ _id: exam.courseId, userId: session.user.id }).lean();
+
+      const inheritedWeightage =
+        exam.examCategory === 'Quiz'
+          ? course?.quizWeightage ?? 0
+          : course?.assignmentWeightage ?? 0;
+
+      if (exam.weightage !== inheritedWeightage) {
+        exam.weightage = inheritedWeightage;
+        await exam.save();
+      }
+    } else if (weightage !== undefined) {
+      if (weightage < 0 || weightage > 100) {
+        return NextResponse.json(
+          { error: 'Weightage must be between 0 and 100' },
+          { status: 400 }
+        );
+      }
+      exam.weightage = weightage;
+      await exam.save();
     }
 
     return NextResponse.json({ exam }, { status: 200 });

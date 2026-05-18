@@ -25,21 +25,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Weightage is required for non-Quiz and non-Assignment exams
-    if (examCategory !== 'Quiz' && examCategory !== 'Assignment' && weightage === undefined) {
-      return NextResponse.json(
-        { error: 'Weightage is required for non-Quiz/Assignment exams' },
-        { status: 400 }
-      );
-    }
-
-    if (weightage !== undefined && (weightage < 0 || weightage > 100)) {
-      return NextResponse.json(
-        { error: 'Weightage must be between 0 and 100' },
-        { status: 400 }
-      );
-    }
-
     if (totalMarks <= 0) {
       return NextResponse.json(
         { error: 'Total marks must be greater than 0' },
@@ -64,7 +49,6 @@ export async function POST(request: NextRequest) {
       displayName,
       examType: 'custom',
       totalMarks,
-      weightage: weightage || 0, // Default to 0 for Quiz/Assignment
       isRequired: false,
       userId: session.user.id,
     };
@@ -79,6 +63,39 @@ export async function POST(request: NextRequest) {
         );
       }
       examData.examCategory = examCategory;
+    }
+
+    const inheritedWeightage =
+      examCategory === 'Quiz'
+        ? course.quizWeightage ?? 0
+        : examCategory === 'Assignment'
+          ? course.assignmentWeightage ?? 0
+          : weightage;
+
+    if (examCategory === 'Quiz' || examCategory === 'Assignment') {
+      if (inheritedWeightage < 0 || inheritedWeightage > 100) {
+        return NextResponse.json(
+          { error: 'Course group weightage must be between 0 and 100' },
+          { status: 400 }
+        );
+      }
+      examData.weightage = inheritedWeightage;
+    } else {
+      if (weightage === undefined) {
+        return NextResponse.json(
+          { error: 'Weightage is required for non-Quiz/Assignment exams' },
+          { status: 400 }
+        );
+      }
+
+      if (weightage < 0 || weightage > 100) {
+        return NextResponse.json(
+          { error: 'Weightage must be between 0 and 100' },
+          { status: 400 }
+        );
+      }
+
+      examData.weightage = weightage;
     }
 
     // Add numberOfCOs if provided (for theory courses)
