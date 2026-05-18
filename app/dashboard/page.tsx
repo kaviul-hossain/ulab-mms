@@ -13,7 +13,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Loader2, Settings, LogOut, Plus, Upload, Copy, Edit, Trash2, BookOpen, FlaskConical, MoreVertical, Archive, Info } from 'lucide-react';
+import { Loader2, Settings, LogOut, Plus, Upload, Copy, Edit, Trash2, BookOpen, FlaskConical, MoreVertical, Archive, Info, FileStack } from 'lucide-react';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { notify } from '@/app/utils/notifications';
 import { CourseCombobox } from '@/app/components/CourseCombobox';
@@ -443,6 +443,12 @@ export default function Dashboard() {
 
             <div className="flex items-center gap-3">
               <ThemeToggle />
+              <Button variant="default" asChild>
+                <Link href="/resources">
+                  <FileStack className="h-4 w-4 mr-2" />
+                  Resources
+                </Link>
+              </Button>
               <Button variant="default" asChild>
                 <Link href="/capstone">
                   <FlaskConical className="h-4 w-4 mr-2" />
