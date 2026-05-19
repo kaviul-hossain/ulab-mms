@@ -162,9 +162,10 @@ interface CourseInfo {
 
 type SessionStatus = 'present' | 'absent' | 'none';
 
-function buildQrUrl(courseId: string) {
-  if (typeof window === 'undefined') return `/attendance/checkin/${courseId}`;
-  return `${window.location.origin}/attendance/checkin/${courseId}`;
+function buildQrUrl(courseId: string, sessionDateISO?: string) {
+  const sessionDateQuery = sessionDateISO ? `?attendance=1&sessionDate=${encodeURIComponent(sessionDateISO)}` : '?attendance=1';
+  if (typeof window === 'undefined') return `/attendance/checkin/${courseId}${sessionDateQuery}`;
+  return `${window.location.origin}/attendance/checkin/${courseId}${sessionDateQuery}`;
 }
 
 function getLocalDateInputValue(date = new Date()) {
@@ -188,6 +189,7 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [showSessionDialog, setShowSessionDialog] = useState(false);
   const [sessionDate, setSessionDate] = useState(getLocalDateInputValue());
+  const [sessionDialogError, setSessionDialogError] = useState('');
 
   const fetchAll = async () => {
     setLoading(true);
@@ -232,6 +234,7 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
   const toggleAttendance = async () => {
     if (!isActive) {
       setSessionDate(getLocalDateInputValue());
+      setSessionDialogError('');
       setShowSessionDialog(true);
       return;
     }
@@ -263,13 +266,14 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
       });
       const data = await res.json();
       if (res.ok) {
+        setSessionDialogError('');
         setShowSessionDialog(false);
         await fetchAll();
       } else {
-        console.error(data.error || 'Unable to open attendance session');
+        setSessionDialogError(data.error || 'Unable to open attendance session');
       }
     } catch (err) {
-      console.error('Error opening attendance session', err);
+      setSessionDialogError('Error opening attendance session');
     }
   };
 
@@ -561,11 +565,11 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
           </DialogHeader>
           <div className="flex flex-col items-center gap-4 py-4">
             <img
-              src={`https://api.qrserver.com/v1/create-qr-code/?size=420x420&data=${encodeURIComponent(buildQrUrl(courseId))}`}
+              src={`https://api.qrserver.com/v1/create-qr-code/?size=420x420&data=${encodeURIComponent(buildQrUrl(courseId, activeSession?.date))}`}
               alt="Attendance QR"
               className="rounded-xl border bg-white p-3"
             />
-            <div className="break-all text-xs text-muted-foreground">{buildQrUrl(courseId)}</div>
+            <div className="break-all text-xs text-muted-foreground">{buildQrUrl(courseId, activeSession?.date)}</div>
           </div>
         </DialogContent>
       </Dialog>
@@ -577,6 +581,12 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
           </DialogHeader>
 
           <div className="space-y-4 py-2">
+            {sessionDialogError && (
+              <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                {sessionDialogError}
+              </div>
+            )}
+
             <div className="space-y-2">
               <label htmlFor="attendance-date" className="text-sm font-medium">
                 Session date

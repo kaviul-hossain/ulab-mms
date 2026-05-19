@@ -18,6 +18,13 @@ export async function GET(_req: NextRequest, { params }: { params: any }) {
         open: true,
       }).lean(),
     ]);
+    const latestSession = activeSession
+      ? activeSession
+      : await AttendanceSession.findOne({
+          courseId: new mongoose.Types.ObjectId(courseId),
+        })
+          .sort({ date: -1 })
+          .lean();
 
     if (!course) {
       return NextResponse.json({ error: 'Course not found' }, { status: 404 });
@@ -34,9 +41,11 @@ export async function GET(_req: NextRequest, { params }: { params: any }) {
         hasActiveSession: Boolean(activeSession),
         open: Boolean(activeSession),
         // canonical ISO date for consistent client-side formatting
-        dateISO: activeSession ? new Date(activeSession.date).toISOString() : new Date().toISOString(),
+        dateISO: latestSession ? new Date(latestSession.date).toISOString() : new Date().toISOString(),
+        activeSessionDateISO: activeSession ? new Date(activeSession.date).toISOString() : null,
+        latestSessionDateISO: latestSession ? new Date(latestSession.date).toISOString() : null,
         // legacy label (kept for backward compatibility)
-        dateLabel: activeSession ? new Date(activeSession.date).toLocaleDateString() : new Date().toLocaleDateString(),
+        dateLabel: latestSession ? new Date(latestSession.date).toLocaleDateString() : new Date().toLocaleDateString(),
       },
     });
   } catch (error) {
