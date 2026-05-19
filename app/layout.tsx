@@ -4,6 +4,7 @@ import "./globals.css";
 import AuthProvider from "./components/AuthProvider";
 import ThemeProvider from "./components/ThemeProvider";
 import { Toaster } from "@/components/ui/sonner";
+import AppFooter from "@/components/AppFooter";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -28,11 +29,14 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased transition-colors duration-200`}
+        className={`${geistSans.variable} ${geistMono.variable} min-h-screen antialiased transition-colors duration-200`}
       >
         <AuthProvider>
           <ThemeProvider>
-            {children}
+            <div className="flex min-h-screen flex-col">
+              <div className="flex-1">{children}</div>
+              <AppFooter />
+            </div>
             <Toaster richColors position="top-right" />
           </ThemeProvider>
         </AuthProvider>

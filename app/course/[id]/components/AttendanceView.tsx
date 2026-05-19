@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ChevronDown, ChevronRight, QrCode, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, Loader2, QrCode, RefreshCw, Trash2 } from 'lucide-react';
 
 interface AttendanceRecord {
   studentId: string;
@@ -257,6 +257,10 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
     setShowSettingsModal(true);
   };
 
+  const refreshAttendance = async () => {
+    await fetchAll();
+  };
+
   const openSessionWithDate = async () => {
     try {
       const res = await fetch(`/api/courses/${courseId}/attendance`, {
@@ -395,6 +399,18 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
         <div className="flex items-center gap-2">
           <Button
             type="button"
+            variant="outline"
+            size="icon"
+            onClick={refreshAttendance}
+            disabled={loading}
+            aria-label="Refresh attendance"
+            title="Refresh attendance"
+          >
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+          </Button>
+
+          <Button
+            type="button"
             onClick={toggleAttendance}
             className={isActive ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-slate-500 hover:bg-slate-600 text-white'}
           >
@@ -432,7 +448,10 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
       )}
 
         {loading ? (
-        <p className="text-sm text-muted-foreground">Loading...</p>
+        <div className="flex items-center gap-2 rounded-lg border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          <span>Loading attendance...</span>
+        </div>
       ) : (
         <div className="overflow-x-auto rounded-lg border">
           <Table>
