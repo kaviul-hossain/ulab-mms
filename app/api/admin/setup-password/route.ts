@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
       type: 'admin' 
     })
       .setProtectedHeader({ alg: 'HS256' })
-      .setExpirationTime('24h')
+      .setExpirationTime('30m')
       .setIssuedAt()
       .sign(SECRET);
 
@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: 60 * 60 * 24, // 24 hours
+      maxAge: 60 * 30, // 30 minutes
       path: '/',
     });
 
