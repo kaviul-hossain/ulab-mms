@@ -14,6 +14,8 @@ interface Course {
   year: number;
   courseType: 'Theory' | 'Lab';
   showFinalGrade: boolean;
+  quizWeightage?: number | string;
+  assignmentWeightage?: number | string;
 }
 
 interface OverviewViewProps {
@@ -43,7 +45,24 @@ export default function OverviewView({
   onExportCourseFile,
   exportingCourseFile,
 }: OverviewViewProps) {
-  const totalWeightage = exams.reduce((sum, exam) => sum + exam.weightage, 0);
+  const hasQuizzes = exams.some(exam => exam.examCategory === 'Quiz');
+  const hasAssignments = exams.some(exam => exam.examCategory === 'Assignment');
+
+  let totalWeightage = exams.reduce((sum, exam) => {
+    if (exam.examCategory === 'Quiz' || exam.examCategory === 'Assignment') {
+      return sum;
+    }
+    return sum + (Number(exam.weightage) || 0);
+  }, 0);
+
+  if (hasQuizzes && course.quizWeightage) {
+    totalWeightage += Number(course.quizWeightage);
+  }
+
+  if (hasAssignments && course.assignmentWeightage) {
+    totalWeightage += Number(course.assignmentWeightage);
+  }
+
   const studentsWithMarks = students.filter(student => 
     marks.some(mark => mark.studentId === student._id)
   ).length;
