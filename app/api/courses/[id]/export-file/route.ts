@@ -71,6 +71,27 @@ function getExamPercentage(rawMark: number, totalMarks: number) {
   return (rawMark / totalMarks) * 100;
 }
 
+function getCOMarkValueForMid(student: any, exams: any[], marks: any[], coIndex: number) {
+  const exam = exams.find(e => e.examType === 'midterm' || e.displayName?.toLowerCase().includes('mid'));
+  if (!exam) return 0;
+  const mark = getMark(student._id, exam._id, marks);
+  return mark?.coMarks?.[coIndex] !== undefined ? mark.coMarks[coIndex] : 0;
+}
+
+function getCOMarkValueForFinal(student: any, exams: any[], marks: any[], coIndex: number) {
+  const exam = exams.find(e => e.examType === 'final' || e.displayName?.toLowerCase().includes('final'));
+  if (!exam) return 0;
+  const mark = getMark(student._id, exam._id, marks);
+  return mark?.coMarks?.[coIndex] !== undefined ? mark.coMarks[coIndex] : 0;
+}
+
+function getCOMarkValueForProject(student: any, exams: any[], marks: any[], coIndex: number) {
+  const exam = exams.find(e => e.examCategory === 'Project');
+  if (!exam) return 0;
+  const mark = getMark(student._id, exam._id, marks);
+  return mark?.coMarks?.[coIndex] !== undefined ? mark.coMarks[coIndex] : 0;
+}
+
 function getWeightedContribution(rawMark: number, totalMarks: number, weightage: number) {
   return (getExamPercentage(rawMark, totalMarks) * weightage) / 100;
 }
@@ -128,6 +149,20 @@ function parseCellAddress(cell: string) {
 }
 
 function resolveFieldValue(field: ExcelExportField, course: any, student: any, instructorName: string, exams: any[] = [], marks: any[] = []) {
+  const fieldStr = field as string;
+  if (fieldStr.startsWith('co.midterm.')) {
+    const coIndex = parseInt(fieldStr.split('.')[2]) - 1;
+    return getCOMarkValueForMid(student, exams, marks, coIndex);
+  }
+  if (fieldStr.startsWith('co.final.')) {
+    const coIndex = parseInt(fieldStr.split('.')[2]) - 1;
+    return getCOMarkValueForFinal(student, exams, marks, coIndex);
+  }
+  if (fieldStr.startsWith('co.project.')) {
+    const coIndex = parseInt(fieldStr.split('.')[2]) - 1;
+    return getCOMarkValueForProject(student, exams, marks, coIndex);
+  }
+
   switch (field) {
     case 'course.code':
       return course.code || '';
@@ -217,15 +252,22 @@ export async function POST(
     // Load workbook using xlsx-populate to preserve styles/formatting
     const workbook = await XlsxPopulate.fromFileAsync(templatePath);
 
-    const sheet = workbook.sheet(mapping.sheetName || 'GradeSheet');
     const instructorName = session.user?.name || '';
 
     for (const singleCell of mapping.singleCells || []) {
+      const targetSheetName = singleCell.sheetName || mapping.sheetName || 'GradeSheet';
+      const sheet = workbook.sheet(targetSheetName);
+      if (!sheet) continue;
+      
       const value = resolveFieldValue(singleCell.field, course, null, instructorName, exams, marks);
       sheet.cell(singleCell.cell).value(value === undefined || value === null ? '' : value);
     }
 
     for (const rangeMapping of mapping.rangeMappings || []) {
+      const targetSheetName = rangeMapping.sheetName || mapping.sheetName || 'GradeSheet';
+      const sheet = workbook.sheet(targetSheetName);
+      if (!sheet) continue;
+      
       const fromCell = parseCellAddress(rangeMapping.from);
       const toCell = parseCellAddress(rangeMapping.to);
 
