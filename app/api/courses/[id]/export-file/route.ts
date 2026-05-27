@@ -32,23 +32,38 @@ function getMark(studentId: string, examId: string, marks: any[]) {
 
 function getMarkValue(student: any, exams: any[], marks: any[], category: string) {
   const exam = exams.find(e => e.examCategory === category);
-  if (!exam) return '';
+  if (!exam) return 0;
   const mark = getMark(student._id, exam._id, marks);
-  return mark ? mark.rawMark : '';
+  return mark ? mark.rawMark : 0;
 }
 
 function getMarkValueForMid(student: any, exams: any[], marks: any[]) {
   const exam = exams.find(e => e.examType === 'midterm' || e.displayName?.toLowerCase().includes('mid'));
-  if (!exam) return '';
+  if (!exam) return 0;
   const mark = getMark(student._id, exam._id, marks);
-  return mark ? mark.rawMark : '';
+  return mark ? mark.rawMark : 0;
 }
 
 function getMarkValueForFinal(student: any, exams: any[], marks: any[]) {
   const exam = exams.find(e => e.examType === 'final' || e.displayName?.toLowerCase().includes('final'));
-  if (!exam) return '';
+  if (!exam) return 0;
   const mark = getMark(student._id, exam._id, marks);
-  return mark ? mark.rawMark : '';
+  return mark ? mark.rawMark : 0;
+}
+
+function getExamWeight(exams: any[], category: string) {
+  const exam = exams.find(e => e.examCategory === category);
+  return exam ? (exam.weightage || 0) : 0;
+}
+
+function getMidtermWeight(exams: any[]) {
+  const exam = exams.find(e => e.examType === 'midterm' || e.displayName?.toLowerCase().includes('mid'));
+  return exam ? (exam.weightage || 0) : 0;
+}
+
+function getFinalWeight(exams: any[]) {
+  const exam = exams.find(e => e.examType === 'final' || e.displayName?.toLowerCase().includes('final'));
+  return exam ? (exam.weightage || 0) : 0;
 }
 
 function getExamPercentage(rawMark: number, totalMarks: number) {
@@ -62,13 +77,13 @@ function getWeightedContribution(rawMark: number, totalMarks: number, weightage:
 
 function getAggregatedMarkValue(student: any, exams: any[], marks: any[], category: 'Quiz' | 'Assignment', course: any) {
   const categoryExams = exams.filter(e => e.examCategory === category);
-  if (categoryExams.length === 0) return '';
+  if (categoryExams.length === 0) return 0;
 
   const categoryMarks = categoryExams
     .map(exam => getMark(student._id, exam._id, marks))
     .filter(mark => mark !== undefined);
 
-  if (categoryMarks.length === 0) return '';
+  if (categoryMarks.length === 0) return 0;
 
   const aggregationMethod = category === 'Quiz'
     ? course?.quizAggregation || 'average'
@@ -144,6 +159,20 @@ function resolveFieldValue(field: ExcelExportField, course: any, student: any, i
       return getMarkValueForMid(student, exams, marks);
     case 'mark.final':
       return getMarkValueForFinal(student, exams, marks);
+    case 'weight.attendance':
+      return getExamWeight(exams, 'Attendance');
+    case 'weight.classPerformance':
+      return getExamWeight(exams, 'ClassPerformance');
+    case 'weight.quiz':
+      return course.quizWeightage || 0;
+    case 'weight.assignment':
+      return course.assignmentWeightage || 0;
+    case 'weight.midterm':
+      return getMidtermWeight(exams);
+    case 'weight.project':
+      return getExamWeight(exams, 'Project');
+    case 'weight.final':
+      return getFinalWeight(exams);
     default:
       return '';
   }

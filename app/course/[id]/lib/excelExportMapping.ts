@@ -13,7 +13,14 @@ export type ExcelExportField =
   | 'mark.assignment'
   | 'mark.midterm'
   | 'mark.project'
-  | 'mark.final';
+  | 'mark.final'
+  | 'weight.attendance'
+  | 'weight.classPerformance'
+  | 'weight.quiz'
+  | 'weight.assignment'
+  | 'weight.midterm'
+  | 'weight.project'
+  | 'weight.final';
 
 export interface ExcelExportSingleCellMapping {
   field: ExcelExportField;
@@ -59,6 +66,13 @@ export const DEFAULT_EXCEL_EXPORT_MAPPING: ExcelExportMapping = {
     { field: 'instructor', cell: 'H5' },
     { field: 'course.section', cell: 'L2' },
     { field: 'course.semesterYear', cell: 'L3' },
+    { field: 'weight.attendance', cell: 'C55' },
+    { field: 'weight.classPerformance', cell: 'C56' },
+    { field: 'weight.quiz', cell: 'C57' },
+    { field: 'weight.assignment', cell: 'C58' },
+    { field: 'weight.midterm', cell: 'C59' },
+    { field: 'weight.project', cell: 'C60' },
+    { field: 'weight.final', cell: 'C61' },
   ],
   rangeMappings: [
     { field: 'student.studentId', from: 'X10', to: 'X51' },
