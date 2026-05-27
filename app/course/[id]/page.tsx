@@ -15,6 +15,7 @@ import MarksView from './components/MarksView';
 import AttendanceView from './components/AttendanceView';
 import BulkMarkEntryModal from './components/BulkMarkEntryModal';
 import ExcelExportMappingEditor from './components/ExcelExportMappingEditor';
+import CoPoView from './components/CoPoView';
 import { 
   GradeThreshold, 
   DEFAULT_GRADING_SCALE, 
@@ -135,7 +136,7 @@ export default function CoursePage() {
   const [isPopulating, setIsPopulating] = useState(false);
   const [courseSettingsTab, setCourseSettingsTab] = useState<'aggregation' | 'grading' | 'excelExport'>('aggregation');
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [activeView, setActiveView] = useState<'overview' | 'exams' | 'students' | 'marks' | 'attendance'>('overview');
+  const [activeView, setActiveView] = useState<'overview' | 'exams' | 'students' | 'marks' | 'attendance' | 'copo'>('overview');
   const [searchStudentId, setSearchStudentId] = useState('');
   const [showStudentStatsModal, setShowStudentStatsModal] = useState(false);
   const [selectedStudentForStats, setSelectedStudentForStats] = useState<Student | null>(null);
@@ -1322,6 +1323,16 @@ export default function CoursePage() {
               {sidebarOpen && <span className="ml-2 font-medium">Attendance</span>}
             </Button>
 
+            <Button
+              variant={activeView === 'copo' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setActiveView('copo')}
+              className="w-full justify-start"
+            >
+              <span className="text-lg">🔗</span>
+              {sidebarOpen && <span className="ml-2 font-medium">CO PO Mapping</span>}
+            </Button>
+
             {sidebarOpen && <div className="pt-4 mt-4 border-t"></div>}
 
             <Button
@@ -1530,6 +1541,15 @@ export default function CoursePage() {
             {/* Attendance View */}
             {activeView === 'attendance' && (
               <AttendanceView courseId={courseId} />
+            )}
+
+            {/* CO-PO Mapping View */}
+            {activeView === 'copo' && (
+              <CoPoView 
+                course={course} 
+                exams={exams} 
+                onUpdate={fetchCourseData} 
+              />
             )}
 
             {/* Empty States */}

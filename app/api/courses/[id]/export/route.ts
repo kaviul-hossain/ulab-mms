@@ -55,6 +55,7 @@ export async function GET(
         assignmentAggregation: course.assignmentAggregation,
         assignmentWeightage: course.assignmentWeightage,
         gradingScale: course.gradingScale,
+        coPoMapping: course.coPoMapping,
       },
       students: students.map(student => ({
         studentId: student.studentId,

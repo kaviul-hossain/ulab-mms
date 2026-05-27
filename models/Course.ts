@@ -19,6 +19,10 @@ export interface ICourse extends Document {
   assignmentWeightage: number; // Weightage for aggregated assignment column
   gradingScale?: string; // Encoded grading scale (e.g., "0:F:0|50:D:0|55:C:1|...")
   excelExportMapping?: ExcelExportMapping | null;
+  coPoMapping?: {
+    maxMarks: Record<string, number[]>;
+    mapping: boolean[][];
+  };
   isArchived: boolean; // Whether the course is archived
   archivedAt?: Date; // When the course was archived
   userId: mongoose.Types.ObjectId;
@@ -114,6 +118,13 @@ const CourseSchema: Schema = new Schema(
       type: Schema.Types.Mixed,
       default: null,
     },
+    coPoMapping: {
+      type: Schema.Types.Mixed,
+      default: {
+        maxMarks: {},
+        mapping: Array(6).fill(Array(12).fill(false))
+      }
+    },
     isArchived: {
       type: Boolean,
       default: false,
@@ -135,7 +146,10 @@ const CourseSchema: Schema = new Schema(
 // Create compound index for duplicate prevention: same code + semester + year + section for same user
 CourseSchema.index({ code: 1, semester: 1, year: 1, section: 1, userId: 1 }, { unique: true });
 
-const Course: Model<ICourse> =
-  mongoose.models.Course || mongoose.model<ICourse>('Course', CourseSchema);
+if (mongoose.models.Course) {
+  delete mongoose.models.Course;
+}
+
+const Course: Model<ICourse> = mongoose.model<ICourse>('Course', CourseSchema);
 
 export default Course;

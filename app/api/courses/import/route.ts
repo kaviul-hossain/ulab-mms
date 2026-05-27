@@ -41,6 +41,7 @@ export async function POST(request: NextRequest) {
       quizWeightage: importData.course.quizWeightage,
       assignmentAggregation: importData.course.assignmentAggregation,
       assignmentWeightage: importData.course.assignmentWeightage,
+      coPoMapping: importData.course.coPoMapping,
       userId: session.user.id,
     });
 
