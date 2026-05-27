@@ -70,6 +70,27 @@ export async function POST(
         // Let's generate a random integer mark
         const rawMark = Math.floor(Math.random() * (exam.totalMarks + 1));
         
+        let coMarks: number[] = [];
+        if (exam.numberOfCOs && exam.numberOfCOs > 0) {
+          let remaining = rawMark;
+          for (let i = 0; i < exam.numberOfCOs - 1; i++) {
+            // Give each CO a random portion of the remaining marks
+            // Prevent one CO from taking everything by capping at Math.ceil(remaining / remaining_COs) or similar
+            // For true random that sums up, we can just take a random number between 0 and remaining
+            const maxForThisCO = Math.min(remaining, Math.ceil(exam.totalMarks / exam.numberOfCOs));
+            const chunk = Math.floor(Math.random() * (maxForThisCO + 1));
+            coMarks.push(chunk);
+            remaining -= chunk;
+          }
+          coMarks.push(remaining);
+          
+          // Shuffle the array to avoid bias
+          for (let i = coMarks.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [coMarks[i], coMarks[j]] = [coMarks[j], coMarks[i]];
+          }
+        }
+
         await Mark.findOneAndUpdate(
           { studentId: student._id, examId: exam._id },
           {
@@ -78,6 +99,7 @@ export async function POST(
             courseId,
             userId: session.user.id,
             rawMark,
+            ...(coMarks.length > 0 ? { coMarks } : {}),
           },
           { upsert: true }
         );
