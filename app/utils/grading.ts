@@ -9,15 +9,15 @@ export interface GradeThreshold {
 // Default grading scale based on the provided image
 export const DEFAULT_GRADING_SCALE: GradeThreshold[] = [
   { threshold: 0, letter: 'F', modifier: '0' },    // Fail
-  { threshold: 50, letter: 'D', modifier: '0' },   // Plain
-  { threshold: 55, letter: 'C', modifier: '1' },   // Minus
-  { threshold: 60, letter: 'C', modifier: '2' },   // Plus
-  { threshold: 65, letter: 'B', modifier: '1' },   // Minus
-  { threshold: 70, letter: 'B', modifier: '0' },   // Plain
-  { threshold: 75, letter: 'B', modifier: '2' },   // Plus
-  { threshold: 80, letter: 'A', modifier: '1' },   // Minus
-  { threshold: 85, letter: 'A', modifier: '0' },   // Plain
-  { threshold: 95, letter: 'A', modifier: '2' },   // Plus
+  { threshold: 50, letter: 'D', modifier: '0' },   // D
+  { threshold: 60, letter: 'C', modifier: '0' },   // C
+  { threshold: 65, letter: 'C', modifier: '2' },   // C+
+  { threshold: 70, letter: 'B', modifier: '1' },   // B-
+  { threshold: 75, letter: 'B', modifier: '0' },   // B
+  { threshold: 80, letter: 'B', modifier: '2' },   // B+
+  { threshold: 85, letter: 'A', modifier: '1' },   // A-
+  { threshold: 90, letter: 'A', modifier: '0' },   // A
+  { threshold: 95, letter: 'A', modifier: '2' },   // A+
 ];
 
 /**

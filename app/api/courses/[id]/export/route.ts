@@ -8,6 +8,7 @@ import Student from '@/models/Student';
 import Exam from '@/models/Exam';
 import Mark from '@/models/Mark';
 import AttendanceSession from '@/models/AttendanceSession';
+import { calculateLetterGrade } from '@/app/utils/grading';
 
 export async function GET(
   request: NextRequest,
@@ -229,12 +230,10 @@ export async function GET(
 
       quizExams.forEach((exam: any) => {
         headers.push(`${exam.displayName} (Raw)`);
-        headers.push(`${exam.displayName} (Weighted)`);
       });
 
       assignmentExams.forEach((exam: any) => {
         headers.push(`${exam.displayName} (Raw)`);
-        headers.push(`${exam.displayName} (Weighted)`);
       });
 
       if (hasQuizzes && course.quizWeightage) {
@@ -245,9 +244,8 @@ export async function GET(
         headers.push(`Assignment (Agg) - ${course.assignmentAggregation} • ${course.assignmentWeightage}%`);
       }
 
-      if (course.showFinalGrade) {
-        headers.push('Final Grade (Est.)');
-      }
+      headers.push('Final Marks (Total)');
+      headers.push('Letter Grade');
 
       csvRows.push(headers.map(h => `"${h}"`).join(','));
 
@@ -302,13 +300,9 @@ export async function GET(
           );
 
           if (mark) {
-            const weightedValue = mark.weightedMark !== undefined && mark.weightedMark !== null
-              ? mark.weightedMark
-              : Math.round(((mark.rawMark / exam.totalMarks) * exam.weightage) * 100) / 100;
             row.push(mark.rawMark);
-            row.push(weightedValue);
           } else {
-            row.push('-', '-');
+            row.push('-');
           }
         });
 
@@ -319,13 +313,9 @@ export async function GET(
           );
 
           if (mark) {
-            const weightedValue = mark.weightedMark !== undefined && mark.weightedMark !== null
-              ? mark.weightedMark
-              : Math.round(((mark.rawMark / exam.totalMarks) * exam.weightage) * 100) / 100;
             row.push(mark.rawMark);
-            row.push(weightedValue);
           } else {
-            row.push('-', '-');
+            row.push('-');
           }
         });
 
@@ -339,8 +329,13 @@ export async function GET(
           row.push(aggMark ? aggMark.rawMark.toFixed(2) : '-');
         }
 
-        if (course.showFinalGrade) {
-          row.push(calculateFinalGrade(student._id).toFixed(2));
+        if (student.withdrawn) {
+          row.push('W', 'W');
+        } else {
+          const finalMarks = calculateFinalGrade(student._id);
+          row.push(finalMarks.toFixed(2));
+          const letterGrade = calculateLetterGrade(finalMarks, course.gradingScale);
+          row.push(letterGrade.display);
         }
 
         csvRows.push(row.map(cell => typeof cell === 'string' ? `"${cell}"` : cell).join(','));
