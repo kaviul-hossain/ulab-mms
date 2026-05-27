@@ -16,6 +16,7 @@ interface Exam {
   _id: string;
   displayName: string;
   totalMarks: number;
+  examCategory?: string;
 }
 
 interface Mark {
@@ -34,6 +35,8 @@ interface MarksViewProps {
   onShowBulkMarkModal: () => void;
   onShowSetZeroModal: () => void;
   onShowResetMarksModal: () => void;
+  onAutoAttendanceMarks: (examId: string) => void;
+  isAutoCalculatingAttendance?: boolean;
 }
 
 export default function MarksView({
@@ -45,6 +48,8 @@ export default function MarksView({
   onShowBulkMarkModal,
   onShowSetZeroModal,
   onShowResetMarksModal,
+  onAutoAttendanceMarks,
+  isAutoCalculatingAttendance = false,
 }: MarksViewProps) {
   const [showDropdown, setShowDropdown] = useState(false);
   const [showFloatingButtons, setShowFloatingButtons] = useState(false);
@@ -80,6 +85,8 @@ export default function MarksView({
   if (students.length === 0 || exams.length === 0) {
     return null;
   }
+
+  const attendanceExams = exams.filter(e => e.examCategory === 'Attendance');
 
   return (
     <div className="space-y-6">
@@ -143,6 +150,18 @@ export default function MarksView({
           <span>0️⃣</span>
           Set Empty Marks to 0
         </Button>
+        {attendanceExams.map(exam => (
+          <Button
+            key={`auto-att-${exam._id}`}
+            onClick={() => onAutoAttendanceMarks(exam._id)}
+            variant="outline"
+            className="gap-2 border-green-500/50 hover:bg-green-500/10"
+            disabled={isAutoCalculatingAttendance}
+          >
+            <span>📈</span>
+            {isAutoCalculatingAttendance ? 'Calculating...' : `Auto ${exam.displayName}`}
+          </Button>
+        ))}
         <Button
           onClick={onShowResetMarksModal}
           variant="outline"
@@ -234,6 +253,19 @@ export default function MarksView({
             <Trash2 className="w-5 h-5" />
             Reset Marks
           </Button>
+          {attendanceExams.map(exam => (
+            <Button
+              key={`float-auto-att-${exam._id}`}
+              onClick={() => onAutoAttendanceMarks(exam._id)}
+              variant="outline"
+              className="gap-2 shadow-lg hover:shadow-xl transition-shadow border-green-500/50 hover:bg-green-500/10 bg-background"
+              size="lg"
+              disabled={isAutoCalculatingAttendance}
+            >
+              <span>📈</span>
+              {isAutoCalculatingAttendance ? '...' : `Auto ${exam.displayName}`}
+            </Button>
+          ))}
         </div>
       )}
     </div>

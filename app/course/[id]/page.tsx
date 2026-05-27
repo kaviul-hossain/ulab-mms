@@ -152,6 +152,7 @@ export default function CoursePage() {
   const [deleteConfirmationStep, setDeleteConfirmationStep] = useState(0);
   const [newStudentData, setNewStudentData] = useState({ studentId: '', name: '' });
   const [showBulkMarkModal, setShowBulkMarkModal] = useState(false);
+  const [isAutoCalculatingAttendance, setIsAutoCalculatingAttendance] = useState(false);
   
   const [csvInput, setCsvInput] = useState('');
   const [examFormData, setExamFormData] = useState({
@@ -612,6 +613,35 @@ export default function CoursePage() {
     } catch (err) {
       console.error('Error resetting marks:', err);
       notify.mark.resetError();
+    }
+  };
+
+  const handleAutoAttendanceMarks = async (examId: string) => {
+    if (!confirm('This will fetch the attendance data and automatically calculate and save marks based on the attendance percentage. Any existing marks for this exam will be overwritten. Do you want to proceed?')) {
+      return;
+    }
+
+    setIsAutoCalculatingAttendance(true);
+    try {
+      const response = await fetch(`/api/courses/${courseId}/marks/auto-attendance`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ examId }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        toast.success(data.message || 'Attendance marks calculated and saved successfully');
+        await fetchCourseData();
+      } else {
+        toast.error(data.error || 'Failed to auto-calculate attendance marks');
+      }
+    } catch (err) {
+      console.error('Error auto-calculating attendance marks:', err);
+      toast.error('An error occurred while calculating attendance marks');
+    } finally {
+      setIsAutoCalculatingAttendance(false);
     }
   };
 
@@ -1491,6 +1521,8 @@ export default function CoursePage() {
                   setConfirmationStep(0);
                   setShowResetMarksModal(true);
                 }}
+                onAutoAttendanceMarks={handleAutoAttendanceMarks}
+                isAutoCalculatingAttendance={isAutoCalculatingAttendance}
               />
             )}
 
