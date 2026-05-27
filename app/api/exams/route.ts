@@ -111,9 +111,9 @@ export async function POST(request: NextRequest) {
 
     // Add numberOfCOs if provided (for theory courses)
     if (numberOfCOs !== undefined && numberOfCOs > 0) {
-      if (numberOfCOs > 10) {
+      if (numberOfCOs > 6) {
         return NextResponse.json(
-          { error: 'Number of COs must be between 1 and 10' },
+          { error: 'Number of COs must be between 1 and 6' },
           { status: 400 }
         );
       }

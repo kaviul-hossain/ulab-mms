@@ -1704,7 +1704,7 @@ export default function CoursePage() {
                 <Input
                   type="number"
                   min="0"
-                  max="10"
+                  max="6"
                   value={examFormData.numberOfCOs}
                   onChange={(e) => setExamFormData({ ...examFormData, numberOfCOs: e.target.value })}
                   placeholder="e.g., 3"
@@ -1869,7 +1869,7 @@ export default function CoursePage() {
                 <Input
                   type="number"
                   min="0"
-                  max="10"
+                  max="6"
                   value={examSettings.numberOfCOs}
                   onChange={(e) => setExamSettings({ ...examSettings, numberOfCOs: e.target.value })}
                   placeholder="e.g., 3"

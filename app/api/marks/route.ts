@@ -20,7 +20,7 @@ async function handleBulkCreate(marksArray: any[], userId: string) {
     const createdMarks = [];
     
     for (const markData of marksArray) {
-      const { studentId, examId, rawMark } = markData;
+      const { studentId, examId, rawMark, nonCoMark } = markData;
       
       if (!studentId || !examId || rawMark === undefined) {
         continue; // Skip invalid entries
@@ -52,6 +52,9 @@ async function handleBulkCreate(marksArray: any[], userId: string) {
         userId,
         rawMark,
         weightedMark,
+        nonCoMark: nonCoMark || null,
+        coMarks: markData.coMarks || null,
+        questionMarks: markData.questionMarks || null,
       });
 
       createdMarks.push(mark);
@@ -89,7 +92,7 @@ export async function POST(request: NextRequest) {
       return await handleBulkCreate(body.marks, session.user.id);
     }
 
-    const { studentId, examId, courseId, rawMark, coMarks, questionMarks } = body;
+    const { studentId, examId, courseId, rawMark, coMarks, questionMarks, nonCoMark } = body;
 
     if (!studentId || !examId || !courseId || rawMark === undefined) {
       return NextResponse.json(
@@ -132,11 +135,12 @@ export async function POST(request: NextRequest) {
           );
         }
 
-        // Validate CO marks sum equals raw mark
+        // Validate CO marks sum + nonCoMark equals rawMark
         const coMarksSum = coMarks.reduce((sum: number, cm: number) => sum + cm, 0);
-        if (Math.abs(coMarksSum - rawMark) > 0.01) {
+        const totalCoSum = coMarksSum + (nonCoMark || 0);
+        if (Math.abs(totalCoSum - rawMark) > 0.01) {
           return NextResponse.json(
-            { error: `CO marks must sum to ${rawMark}. Current sum: ${coMarksSum.toFixed(2)}` },
+            { error: `CO marks and Non-CO mark must sum to ${rawMark}. Current sum: ${totalCoSum.toFixed(2)}` },
             { status: 400 }
           );
         }
@@ -145,6 +149,13 @@ export async function POST(request: NextRequest) {
         if (coMarks.some((cm: number) => cm < 0)) {
           return NextResponse.json(
             { error: 'CO marks cannot be negative' },
+            { status: 400 }
+          );
+        }
+
+        if (nonCoMark !== undefined && nonCoMark !== null && nonCoMark < 0) {
+          return NextResponse.json(
+            { error: 'Non-CO mark cannot be negative' },
             { status: 400 }
           );
         }
@@ -199,6 +210,10 @@ export async function POST(request: NextRequest) {
 
     if (questionMarks && Array.isArray(questionMarks) && questionMarks.length > 0) {
       markData.questionMarks = questionMarks;
+    }
+
+    if (nonCoMark !== undefined) {
+      markData.nonCoMark = nonCoMark;
     }
 
     const mark = await Mark.findOneAndUpdate(
