@@ -9,6 +9,7 @@ interface Student {
   _id: string;
   studentId: string;
   name: string;
+  withdrawn?: boolean;
 }
 
 interface Exam {
@@ -172,8 +173,10 @@ export default function MarksView({
                   <td className={`px-3 py-3 text-sm font-medium text-center sticky left-0 z-10 border-r w-[50px] ${idx % 2 === 0 ? 'bg-muted' : 'bg-background'}`}>{idx + 1}</td>
                   <td className={`px-4 py-3 text-sm font-medium sticky left-0 z-10 border-r min-w-[200px] ${idx % 2 === 0 ? 'bg-muted' : 'bg-background'}`}>
                     <div className="flex flex-col">
-                      <span className="text-primary">{student.studentId}</span>
-                      <span className="text-xs text-muted-foreground">{student.name}</span>
+                      <span className="text-primary font-semibold">{student.studentId}</span>
+                      <span className={`text-xs ${student.withdrawn ? 'text-amber-700 dark:text-yellow-400 font-semibold' : 'text-muted-foreground'}`}>
+                        {student.name} {student.withdrawn && <span className="font-bold ml-1">(W)</span>}
+                      </span>
                     </div>
                   </td>
                   {exams.map(exam => {

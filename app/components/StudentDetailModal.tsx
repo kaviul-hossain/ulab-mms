@@ -11,6 +11,7 @@ interface Student {
   _id: string;
   studentId: string;
   name: string;
+  withdrawn?: boolean;
 }
 
 interface Exam {
@@ -297,7 +298,18 @@ export default function StudentDetailModal({
                   
                   {/* Big Grade Display */}
                   <div className="text-center mb-6">
-                    {letterGrade && (
+                    {student.withdrawn ? (
+                      <div>
+                        <div className="text-6xl font-bold mb-2 text-red-500">W</div>
+                        <div className="text-sm text-gray-400 mb-1">Withdrawn</div>
+                        <div className="text-3xl font-bold text-cyan-300 mb-1">
+                          {gradeData.total.toFixed(2)}%
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          Final standing score
+                        </div>
+                      </div>
+                    ) : letterGrade ? (
                       <div>
                         <div className={`text-6xl font-bold mb-2 ${getGradeColor(letterGrade.letter)}`}>
                           {letterGrade.letter}
@@ -313,7 +325,7 @@ export default function StudentDetailModal({
                           Current weighted score
                         </div>
                       </div>
-                    )}
+                    ) : null}
                   </div>
 
                   {/* Quick Stats */}

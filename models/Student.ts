@@ -4,6 +4,7 @@ export interface IStudent extends Document {
   studentId: string;
   name: string;
   probation: boolean;
+  withdrawn?: boolean;
   courseId: mongoose.Types.ObjectId;
   userId: mongoose.Types.ObjectId;
   createdAt: Date;
@@ -23,6 +24,10 @@ const StudentSchema: Schema = new Schema(
       trim: true,
     },
     probation: {
+      type: Boolean,
+      default: false,
+    },
+    withdrawn: {
       type: Boolean,
       default: false,
     },

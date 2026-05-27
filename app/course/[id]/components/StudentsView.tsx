@@ -13,6 +13,7 @@ interface Student {
   _id: string;
   studentId: string;
   name: string;
+  withdrawn?: boolean;
 }
 
 interface Exam {
@@ -80,6 +81,7 @@ interface StudentsViewProps {
   onShowGradeBreakdown: (student: Student) => void;
   onDeleteStudent: (student: Student) => void;
   onDeleteAllStudents: () => Promise<void> | void;
+  onToggleWithdrawStudent: (student: Student) => void;
 }
 
 export default function StudentsView({
@@ -103,6 +105,7 @@ export default function StudentsView({
   onShowGradeBreakdown,
   onDeleteStudent,
   onDeleteAllStudents,
+  onToggleWithdrawStudent,
 }: StudentsViewProps) {
   const [showFloatingButtons, setShowFloatingButtons] = useState(false);
   const [showDeleteAllModal, setShowDeleteAllModal] = useState(false);
@@ -238,9 +241,9 @@ export default function StudentsView({
                       <span className="text-primary font-semibold">{student.studentId}</span>
                       <button
                         onClick={() => onShowStudentDetail(student)}
-                        className="text-xs text-muted-foreground hover:text-blue-400 hover:underline transition-colors cursor-pointer text-left"
+                        className={`text-xs hover:underline transition-colors cursor-pointer text-left ${student.withdrawn ? 'text-amber-700 dark:text-yellow-400 font-semibold' : 'text-muted-foreground hover:text-blue-400'}`}
                       >
-                        {student.name}
+                        {student.name} {student.withdrawn && <span className="font-bold ml-1">(W)</span>}
                       </button>
                     </div>
                   </td>
@@ -337,6 +340,10 @@ export default function StudentsView({
                   )}
                   <td className="px-4 py-3 text-sm bg-gradient-to-r from-green-900/10 to-emerald-900/10 border-l-2 border-green-500/30">
                     {(() => {
+                      if (student.withdrawn) {
+                        return <span className="text-gray-600 font-semibold italic">Withdrawn</span>;
+                      }
+
                       const gradeData = calculateFinalGrade(student._id);
                       if (gradeData.breakdown.length === 0) {
                         return <span className="text-gray-600">0</span>;
@@ -367,6 +374,19 @@ export default function StudentsView({
                   </td>
                   <td className="px-4 py-3 text-sm bg-gradient-to-r from-purple-900/10 to-violet-900/10 border-l-2 border-purple-500/30">
                     {(() => {
+                      if (student.withdrawn) {
+                        return (
+                          <div className="flex items-center gap-2">
+                            <span className="px-3 py-1.5 rounded-lg font-bold text-sm bg-red-900/40 text-red-300 border border-red-500/30">
+                              W
+                            </span>
+                            <span className="text-xs text-gray-500">
+                              (Withdrawn)
+                            </span>
+                          </div>
+                        );
+                      }
+
                       const gradeData = calculateFinalGrade(student._id);
                       if (gradeData.breakdown.length === 0) {
                         return <span className="text-gray-600">0</span>;
@@ -392,6 +412,17 @@ export default function StudentsView({
                   </td>
                   <td className="px-4 py-3 text-sm">
                     <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => onToggleWithdrawStudent(student)}
+                        className={`px-3 py-1.5 text-xs rounded-lg transition-all font-bold ${
+                          student.withdrawn
+                            ? 'bg-red-600 hover:bg-red-700 text-white'
+                            : 'bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground border'
+                        }`}
+                        title={student.withdrawn ? "Un-withdraw Student" : "Mark as Withdrawn"}
+                      >
+                        W
+                      </button>
                       <button
                         onClick={() => onEditStudent(student)}
                         className="px-3 py-1.5 bg-sky-600 hover:bg-sky-700 text-white text-xs rounded-lg transition-all"

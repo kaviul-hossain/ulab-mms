@@ -215,6 +215,31 @@ export default function CoursePage() {
     }
   };
 
+  const handleToggleWithdrawStudent = async (student: Student) => {
+    const newStatus = !student.withdrawn;
+    const action = newStatus ? 'withdraw' : 'un-withdraw';
+    if (!confirm(`Are you sure you want to ${action} ${student.name}?`)) return;
+
+    try {
+      const response = await fetch(`/api/students/${student._id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ withdrawn: newStatus }),
+      });
+
+      if (response.ok) {
+        toast.success(`Student ${student.name} ${newStatus ? 'withdrawn' : 'un-withdrawn'} successfully`);
+        await fetchCourseData();
+      } else {
+        const data = await response.json();
+        toast.error(data.error || `Failed to ${action} student`);
+      }
+    } catch (err) {
+      console.error('Error toggling withdraw status:', err);
+      toast.error('An error occurred');
+    }
+  };
+
   const handleImportStudents = async () => {
     try {
       const parsedStudents = parseCSV(csvInput);
@@ -1439,6 +1464,7 @@ export default function CoursePage() {
                   setShowDeleteStudentModal(true);
                 }}
                 onDeleteAllStudents={handleDeleteAllStudents}
+                onToggleWithdrawStudent={handleToggleWithdrawStudent}
               />
             )}
 
@@ -2204,7 +2230,7 @@ export default function CoursePage() {
               <div>
                 <h2 className="text-2xl font-bold text-gray-100">Final Grade Breakdown</h2>
                 <p className="text-sm text-gray-400 mt-1">
-                  {selectedStudentForGrade.name} ({selectedStudentForGrade.studentId})
+                  {selectedStudentForGrade.name} ({selectedStudentForGrade.studentId}) {selectedStudentForGrade.withdrawn && <span className="text-red-400 font-bold ml-2">(Withdrawn)</span>}
                 </p>
               </div>
               <button
@@ -2219,6 +2245,20 @@ export default function CoursePage() {
             </div>
 
             {(() => {
+              if (selectedStudentForGrade.withdrawn) {
+                return (
+                  <div className="text-center py-12">
+                    <div className="w-20 h-20 rounded-full bg-red-900/30 flex items-center justify-center mx-auto mb-4 border border-red-500/30">
+                      <span className="text-4xl font-bold text-red-500">W</span>
+                    </div>
+                    <h3 className="text-xl font-medium text-gray-200 mb-2">Student is Withdrawn</h3>
+                    <p className="text-gray-400">
+                      This student's final grade is recorded as Withdrawn (W).
+                    </p>
+                  </div>
+                );
+              }
+
               const gradeData = calculateFinalGrade(selectedStudentForGrade._id);
               
               if (gradeData.breakdown.length === 0) {
