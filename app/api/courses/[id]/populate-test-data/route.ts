@@ -39,7 +39,7 @@ export async function POST(
     }
 
     // Generate random students
-    const numStudents = Math.floor(Math.random() * 11) + 15; // 15 to 25 students
+    const numStudents = Math.floor(Math.random() * 11) + 30; // 30 to 40 students
     const newStudents = [];
     
     for (let i = 0; i < numStudents; i++) {
@@ -62,6 +62,35 @@ export async function POST(
 
     // Fetch exams
     const exams = await Exam.find({ courseId });
+
+    // Populate CO PO Mapping
+    let maxMarks: Record<string, number[]> = {};
+    exams.forEach(exam => {
+      if (exam.numberOfCOs && exam.numberOfCOs > 0) {
+        let marks = [0, 0, 0, 0, 0, 0];
+        let remaining = exam.totalMarks;
+        const base = Math.floor(exam.totalMarks / exam.numberOfCOs);
+        for (let i = 0; i < exam.numberOfCOs; i++) {
+          marks[i] = i === exam.numberOfCOs - 1 ? remaining : base;
+          remaining -= base;
+        }
+        maxMarks[String(exam._id)] = marks;
+      }
+    });
+
+    let mapping = Array(6).fill(null).map(() => Array(12).fill(false));
+    for (let co = 0; co < 6; co++) {
+      const numPos = Math.floor(Math.random() * 3) + 1; // 1 to 3 POs mapped
+      for (let i = 0; i < numPos; i++) {
+        const randomPo = Math.floor(Math.random() * 12);
+        mapping[co][randomPo] = true;
+      }
+    }
+
+    await Course.findOneAndUpdate(
+      { _id: courseId, userId: session.user.id },
+      { $set: { coPoMapping: { maxMarks, mapping } } }
+    );
 
     // Generate marks for each new student
     for (const student of newStudents) {

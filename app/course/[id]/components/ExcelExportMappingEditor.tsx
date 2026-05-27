@@ -193,7 +193,7 @@ export default function ExcelExportMappingEditor({ courseId, onSaved }: ExcelExp
               <div className="space-y-2">
                 <Label>MMS Field</Label>
                 <select value={item.field} onChange={(e) => updateRangeMapping(index, { field: e.target.value as ExcelExportRangeMapping['field'] })} className="w-full rounded-md border bg-background px-3 py-2 text-sm">
-                  {EXCEL_EXPORT_FIELD_OPTIONS.filter((option) => option.value === 'student.name' || option.value === 'student.studentId').map((option) => (
+                  {EXCEL_EXPORT_FIELD_OPTIONS.map((option) => (
                     <option key={option.value} value={option.value}>{option.label}</option>
                   ))}
                 </select>

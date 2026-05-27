@@ -198,10 +198,14 @@ function resolveFieldValue(field: ExcelExportField, course: any, student: any, i
       return getExamWeight(exams, 'Attendance');
     case 'weight.classPerformance':
       return getExamWeight(exams, 'ClassPerformance');
-    case 'weight.quiz':
-      return course.quizWeightage || 0;
-    case 'weight.assignment':
-      return course.assignmentWeightage || 0;
+    case 'weight.quiz': {
+      const hasQuizzes = exams.some(e => e.examCategory === 'Quiz');
+      return hasQuizzes ? (course.quizWeightage || 0) : 0;
+    }
+    case 'weight.assignment': {
+      const hasAssignments = exams.some(e => e.examCategory === 'Assignment');
+      return hasAssignments ? (course.assignmentWeightage || 0) : 0;
+    }
     case 'weight.midterm':
       return getMidtermWeight(exams);
     case 'weight.project':
@@ -240,8 +244,8 @@ export async function POST(
     const exams = await Exam.find({ courseId });
     const marks = await Mark.find({ courseId });
 
-    const body = await request.json().catch(() => ({}));
-    const mapping = normalizeMapping(body.mapping || course.excelExportMapping);
+    // Use the strict default mapping for the beta export template
+    const mapping = DEFAULT_EXCEL_EXPORT_MAPPING;
 
     // Use public/templates so the file persists across builds
     const templatePath = path.join(process.cwd(), 'public', 'templates', 'Sample CO PO.xlsx');

@@ -216,6 +216,21 @@ export default function OverviewView({
                   <ClipboardList className="w-4 h-4 mr-2" />
                   Course File Checklist
                 </Button>
+                <Button
+                  onClick={() => {
+                    const a = document.createElement('a');
+                    a.href = '/templates/Sample CO PO.xlsx';
+                    a.download = 'Empty_CO_PO_File.xlsx';
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                  }}
+                  variant="outline"
+                  className="w-full justify-start"
+                >
+                  <Download className="w-4 h-4 mr-2" />
+                  Download empty CO PO File
+                </Button>
               </div>
             </div>
           </div>
