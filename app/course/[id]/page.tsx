@@ -131,6 +131,7 @@ export default function CoursePage() {
   const [exportingCSV, setExportingCSV] = useState(false);
   const [exportingCourseFile, setExportingCourseFile] = useState(false);
   const [importingCourse, setImportingCourse] = useState(false);
+  const [isPopulating, setIsPopulating] = useState(false);
   const [courseSettingsTab, setCourseSettingsTab] = useState<'aggregation' | 'grading' | 'excelExport'>('aggregation');
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [activeView, setActiveView] = useState<'overview' | 'exams' | 'students' | 'marks' | 'attendance'>('overview');
@@ -815,6 +816,27 @@ export default function CoursePage() {
     }
   };
 
+  const handlePopulateTestData = async () => {
+    if (!confirm('This will generate random students, marks, and attendance data. Proceed?')) return;
+    setIsPopulating(true);
+    try {
+      const response = await fetch(`/api/courses/${courseId}/populate-test-data`, {
+        method: 'POST'
+      });
+      const data = await response.json();
+      if (response.ok) {
+        toast.success(`Generated ${data.studentsAdded} students and ${data.marksAdded} marks.`);
+        await fetchCourseData();
+      } else {
+        toast.error(data.error || 'Failed to populate test data');
+      }
+    } catch (err) {
+      toast.error('Error populating test data');
+    } finally {
+      setIsPopulating(false);
+    }
+  };
+
   const getMark = (studentId: string, examId: string) => {
     return marks.find(m => m.studentId === studentId && m.examId === examId);
   };
@@ -1328,6 +1350,22 @@ export default function CoursePage() {
                 <FileUp className="w-4 h-4 mr-2" />
                 Import
               </Button>
+              {course?.code === 'TESTCODE123' && (
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={handlePopulateTestData}
+                  disabled={isPopulating}
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white mt-2"
+                >
+                  {isPopulating ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <FlaskConical className="w-4 h-4 mr-2" />
+                  )}
+                  Populate Test Data
+                </Button>
+              )}
             </div>
           )}
         </aside>
