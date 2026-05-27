@@ -285,6 +285,51 @@ export async function POST(
       });
     }
 
+    // Write CO-PO Mapping data to CO_PO_AttainmentAnalysis sheet
+    const copoSheet = workbook.sheet('CO_PO_AttainmentAnalysis');
+    if (copoSheet && course.coPoMapping) {
+      const { maxMarks: maxMarksObj, mapping: copoMatrix } = course.coPoMapping;
+      
+      const midtermExam = exams.find(e => e.examType === 'midterm' || e.displayName?.toLowerCase().includes('mid'));
+      const finalExam = exams.find(e => e.examType === 'final' || e.displayName?.toLowerCase().includes('final'));
+      const projectExam = exams.find(e => e.examCategory === 'Project');
+
+      const colLetters = ['D', 'E', 'F', 'G', 'H', 'I'];
+      
+      if (midtermExam && maxMarksObj?.[midtermExam._id]) {
+        for (let i = 0; i < 6; i++) {
+          const val = maxMarksObj[midtermExam._id][i];
+          copoSheet.cell(`${colLetters[i]}3`).value(val || '');
+        }
+      }
+      
+      if (finalExam && maxMarksObj?.[finalExam._id]) {
+        for (let i = 0; i < 6; i++) {
+          const val = maxMarksObj[finalExam._id][i];
+          copoSheet.cell(`${colLetters[i]}4`).value(val || '');
+        }
+      }
+
+      if (projectExam && maxMarksObj?.[projectExam._id]) {
+        for (let i = 0; i < 6; i++) {
+          const val = maxMarksObj[projectExam._id][i];
+          copoSheet.cell(`${colLetters[i]}5`).value(val || '');
+        }
+      }
+
+      // Matrix: AT3 to BE8 (rows 3-8, cols 46-57)
+      if (copoMatrix && copoMatrix.length === 6) {
+        for (let co = 0; co < 6; co++) {
+          const row = co + 3;
+          for (let po = 0; po < 12; po++) {
+            const col = po + 46;
+            const isTicked = copoMatrix[co][po];
+            copoSheet.cell(row, col).value(isTicked ? 1 : '');
+          }
+        }
+      }
+    }
+
     const outBuf = await workbook.outputAsync();
 
     return new NextResponse(outBuf, {
