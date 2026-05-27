@@ -26,13 +26,93 @@ function normalizeMapping(mapping: any): ExcelExportMapping {
   };
 }
 
+function getMark(studentId: string, examId: string, marks: any[]) {
+  return marks.find(m => String(m.studentId) === String(studentId) && String(m.examId) === String(examId));
+}
+
+function getMarkValue(student: any, exams: any[], marks: any[], category: string) {
+  const exam = exams.find(e => e.examCategory === category);
+  if (!exam) return '';
+  const mark = getMark(student._id, exam._id, marks);
+  return mark ? mark.rawMark : '';
+}
+
+function getMarkValueForMid(student: any, exams: any[], marks: any[]) {
+  const exam = exams.find(e => e.examType === 'midterm' || e.displayName?.toLowerCase().includes('mid'));
+  if (!exam) return '';
+  const mark = getMark(student._id, exam._id, marks);
+  return mark ? mark.rawMark : '';
+}
+
+function getMarkValueForFinal(student: any, exams: any[], marks: any[]) {
+  const exam = exams.find(e => e.examType === 'final' || e.displayName?.toLowerCase().includes('final'));
+  if (!exam) return '';
+  const mark = getMark(student._id, exam._id, marks);
+  return mark ? mark.rawMark : '';
+}
+
+function getExamPercentage(rawMark: number, totalMarks: number) {
+  if (!totalMarks || totalMarks <= 0) return 0;
+  return (rawMark / totalMarks) * 100;
+}
+
+function getWeightedContribution(rawMark: number, totalMarks: number, weightage: number) {
+  return (getExamPercentage(rawMark, totalMarks) * weightage) / 100;
+}
+
+function getAggregatedMarkValue(student: any, exams: any[], marks: any[], category: 'Quiz' | 'Assignment', course: any) {
+  const categoryExams = exams.filter(e => e.examCategory === category);
+  if (categoryExams.length === 0) return '';
+
+  const categoryMarks = categoryExams
+    .map(exam => getMark(student._id, exam._id, marks))
+    .filter(mark => mark !== undefined);
+
+  if (categoryMarks.length === 0) return '';
+
+  const aggregationMethod = category === 'Quiz'
+    ? course?.quizAggregation || 'average'
+    : course?.assignmentAggregation || 'average';
+
+  const categoryWeightage = category === 'Quiz'
+    ? Number(course?.quizWeightage || 0)
+    : Number(course?.assignmentWeightage || 0);
+
+  if (aggregationMethod === 'best') {
+    let bestMark = categoryMarks[0];
+    let bestValue = -1;
+
+    categoryMarks.forEach(mark => {
+      const exam = categoryExams.find(e => String(e._id) === String(mark.examId));
+      if (exam) {
+        const percentage = getExamPercentage(mark.rawMark, exam.totalMarks);
+        if (percentage > bestValue) {
+          bestValue = percentage;
+          bestMark = mark;
+        }
+      }
+    });
+
+    const bestExam = categoryExams.find(e => String(e._id) === String(bestMark.examId));
+    return bestExam ? getWeightedContribution(bestMark.rawMark, bestExam.totalMarks, categoryWeightage) : 0;
+  } else {
+    const averagePercentage = categoryMarks.reduce((sum, mark) => {
+      const exam = categoryExams.find(e => String(e._id) === String(mark.examId));
+      if (!exam) return sum;
+      return sum + getExamPercentage(mark.rawMark, exam.totalMarks);
+    }, 0) / categoryMarks.length;
+
+    return (averagePercentage * categoryWeightage) / 100;
+  }
+}
+
 function parseCellAddress(cell: string) {
   const match = /^([A-Z]+)(\d+)$/i.exec(cell.trim());
   if (!match) return null;
   return { column: match[1].toUpperCase(), row: Number(match[2]) };
 }
 
-function resolveFieldValue(field: ExcelExportField, course: any, student: any, instructorName: string) {
+function resolveFieldValue(field: ExcelExportField, course: any, student: any, instructorName: string, exams: any[] = [], marks: any[] = []) {
   switch (field) {
     case 'course.code':
       return course.code || '';
@@ -50,6 +130,20 @@ function resolveFieldValue(field: ExcelExportField, course: any, student: any, i
       return student?.name || '';
     case 'student.studentId':
       return student?.studentId || '';
+    case 'mark.attendance':
+      return getMarkValue(student, exams, marks, 'Attendance');
+    case 'mark.classPerformance':
+      return getMarkValue(student, exams, marks, 'ClassPerformance');
+    case 'mark.quiz':
+      return getAggregatedMarkValue(student, exams, marks, 'Quiz', course);
+    case 'mark.assignment':
+      return getAggregatedMarkValue(student, exams, marks, 'Assignment', course);
+    case 'mark.project':
+      return getMarkValue(student, exams, marks, 'Project');
+    case 'mark.midterm':
+      return getMarkValueForMid(student, exams, marks);
+    case 'mark.final':
+      return getMarkValueForFinal(student, exams, marks);
     default:
       return '';
   }
@@ -98,7 +192,7 @@ export async function POST(
     const instructorName = session.user?.name || '';
 
     for (const singleCell of mapping.singleCells || []) {
-      const value = resolveFieldValue(singleCell.field, course, null, instructorName);
+      const value = resolveFieldValue(singleCell.field, course, null, instructorName, exams, marks);
       sheet.cell(singleCell.cell).value(value === undefined || value === null ? '' : value);
     }
 
@@ -115,7 +209,7 @@ export async function POST(
 
       targetStudents.forEach((student, index) => {
         const row = fromCell.row + index;
-        const value = resolveFieldValue(rangeMapping.field, course, student, instructorName);
+        const value = resolveFieldValue(rangeMapping.field, course, student, instructorName, exams, marks);
         sheet.cell(`${fromCell.column}${row}`).value(value === undefined || value === null ? '' : value);
       });
     }

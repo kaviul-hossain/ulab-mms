@@ -62,6 +62,17 @@ export async function POST(request: NextRequest) {
           { status: 400 }
         );
       }
+
+      if (examCategory === 'Attendance') {
+        const existingAttendanceExam = await Exam.findOne({ courseId, examCategory: 'Attendance' });
+        if (existingAttendanceExam) {
+          return NextResponse.json(
+            { error: 'Only one Attendance exam is allowed per course' },
+            { status: 400 }
+          );
+        }
+      }
+
       examData.examCategory = examCategory;
     }
 

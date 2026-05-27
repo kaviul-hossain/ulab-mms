@@ -6,7 +6,14 @@ export type ExcelExportField =
   | 'course.credit'
   | 'instructor'
   | 'student.name'
-  | 'student.studentId';
+  | 'student.studentId'
+  | 'mark.attendance'
+  | 'mark.classPerformance'
+  | 'mark.quiz'
+  | 'mark.assignment'
+  | 'mark.midterm'
+  | 'mark.project'
+  | 'mark.final';
 
 export interface ExcelExportSingleCellMapping {
   field: ExcelExportField;
@@ -34,6 +41,13 @@ export const EXCEL_EXPORT_FIELD_OPTIONS: Array<{ label: string; value: ExcelExpo
   { label: 'Instructor', value: 'instructor' },
   { label: 'Student Name', value: 'student.name' },
   { label: 'Student ID', value: 'student.studentId' },
+  { label: 'Attendance Mark', value: 'mark.attendance' },
+  { label: 'Class Performance Mark', value: 'mark.classPerformance' },
+  { label: 'Quiz Mark', value: 'mark.quiz' },
+  { label: 'Assignment Mark', value: 'mark.assignment' },
+  { label: 'Mid Exam Mark', value: 'mark.midterm' },
+  { label: 'Project Mark', value: 'mark.project' },
+  { label: 'Final Exam Mark', value: 'mark.final' },
 ];
 
 export const DEFAULT_EXCEL_EXPORT_MAPPING: ExcelExportMapping = {
@@ -47,7 +61,14 @@ export const DEFAULT_EXCEL_EXPORT_MAPPING: ExcelExportMapping = {
     { field: 'course.semesterYear', cell: 'L3' },
   ],
   rangeMappings: [
-    { field: 'student.name', from: 'V10', to: 'V51' },
-    { field: 'student.studentId', from: 'W10', to: 'W51' },
+    { field: 'student.studentId', from: 'X10', to: 'X51' },
+    { field: 'student.name', from: 'W10', to: 'W51' },
+    { field: 'mark.attendance', from: 'P10', to: 'P51' },
+    { field: 'mark.classPerformance', from: 'Q10', to: 'Q51' },
+    { field: 'mark.quiz', from: 'R10', to: 'R51' },
+    { field: 'mark.assignment', from: 'S10', to: 'S51' },
+    { field: 'mark.midterm', from: 'T10', to: 'T51' },
+    { field: 'mark.project', from: 'U10', to: 'U51' },
+    { field: 'mark.final', from: 'V10', to: 'V51' },
   ],
 };
