@@ -1,0 +1,192 @@
+import { NextRequest, NextResponse } from 'next/server';
+import dbConnect from '@/lib/mongodb';
+import AdminCourse from '@/models/AdminCourse';
+
+// GET all admin courses
+export async function GET(request: NextRequest) {
+  try {
+    await dbConnect();
+
+    const courses = await AdminCourse.find({}).sort({ courseCode: 1 });
+
+    return NextResponse.json({ courses }, { status: 200 });
+  } catch (error: any) {
+    console.error('Get admin courses error:', error);
+    return NextResponse.json(
+      { error: error.message || 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}
+
+// POST create a new admin course
+export async function POST(request: NextRequest) {
+  try {
+    const { courseCode, courseTitle, creditHour, prerequisite, content } = await request.json();
+
+    // Validation
+    if (!courseCode || !courseTitle || creditHour === undefined || creditHour === null) {
+      return NextResponse.json(
+        { error: 'Course code, title, and credit hour are required' },
+        { status: 400 }
+      );
+    }
+
+    if (creditHour < 0 || creditHour > 10) {
+      return NextResponse.json(
+        { error: 'Credit hour must be between 0 and 10' },
+        { status: 400 }
+      );
+    }
+
+    await dbConnect();
+
+    // Check if course code already exists
+    const existingCourse = await AdminCourse.findOne({ courseCode: courseCode.trim() });
+    if (existingCourse) {
+      return NextResponse.json(
+        { error: 'Course code already exists', courseExists: true },
+        { status: 409 }
+      );
+    }
+
+    const course = await AdminCourse.create({
+      courseCode: courseCode.trim(),
+      courseTitle: courseTitle.trim(),
+      creditHour: Number(creditHour),
+      prerequisite: prerequisite?.trim() || 'N/A',
+      content: content?.trim() || '',
+    });
+
+    return NextResponse.json({ course }, { status: 201 });
+  } catch (error: any) {
+    console.error('Create admin course error:', error);
+    
+    // Handle duplicate key error
+    if (error.code === 11000) {
+      return NextResponse.json(
+        { error: 'Course code already exists', courseExists: true },
+        { status: 409 }
+      );
+    }
+
+    return NextResponse.json(
+      { error: error.message || 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}
+
+// PUT update an existing admin course
+export async function PUT(request: NextRequest) {
+  try {
+    const { _id, courseCode, courseTitle, creditHour, prerequisite, content } = await request.json();
+
+    if (!_id) {
+      return NextResponse.json(
+        { error: 'Course ID is required' },
+        { status: 400 }
+      );
+    }
+
+    // Validation
+    if (!courseCode || !courseTitle || creditHour === undefined || creditHour === null) {
+      return NextResponse.json(
+        { error: 'Course code, title, and credit hour are required' },
+        { status: 400 }
+      );
+    }
+
+    if (creditHour < 0 || creditHour > 10) {
+      return NextResponse.json(
+        { error: 'Credit hour must be between 0 and 10' },
+        { status: 400 }
+      );
+    }
+
+    await dbConnect();
+
+    // Check if trying to change course code to an existing one
+    const existingCourse = await AdminCourse.findOne({ 
+      courseCode: courseCode.trim(),
+      _id: { $ne: _id }
+    });
+    
+    if (existingCourse) {
+      return NextResponse.json(
+        { error: 'Course code already exists', courseExists: true },
+        { status: 409 }
+      );
+    }
+
+    const course = await AdminCourse.findByIdAndUpdate(
+      _id,
+      {
+        courseCode: courseCode.trim(),
+        courseTitle: courseTitle.trim(),
+        creditHour: Number(creditHour),
+        prerequisite: prerequisite?.trim() || 'N/A',
+        content: content?.trim() || '',
+      },
+      { new: true, runValidators: true }
+    );
+
+    if (!course) {
+      return NextResponse.json(
+        { error: 'Course not found' },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json({ course }, { status: 200 });
+  } catch (error: any) {
+    console.error('Update admin course error:', error);
+    
+    // Handle duplicate key error
+    if (error.code === 11000) {
+      return NextResponse.json(
+        { error: 'Course code already exists', courseExists: true },
+        { status: 409 }
+      );
+    }
+
+    return NextResponse.json(
+      { error: error.message || 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}
+
+// DELETE a course
+export async function DELETE(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get('id');
+
+    if (!id) {
+      return NextResponse.json(
+        { error: 'Course ID is required' },
+        { status: 400 }
+      );
+    }
+
+    await dbConnect();
+
+    const course = await AdminCourse.findByIdAndDelete(id);
+
+    if (!course) {
+      return NextResponse.json(
+        { error: 'Course not found' },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json({ message: 'Course deleted successfully' }, { status: 200 });
+  } catch (error: any) {
+    console.error('Delete admin course error:', error);
+    return NextResponse.json(
+      { error: error.message || 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}
