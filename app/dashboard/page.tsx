@@ -54,6 +54,7 @@ export default function Dashboard() {
   const [archiving, setArchiving] = useState<string | null>(null);
   const [editingCourse, setEditingCourse] = useState<Course | null>(null);
   const [duplicatingCourse, setDuplicatingCourse] = useState<Course | null>(null);
+  const [duplicateMode, setDuplicateMode] = useState<'copy' | 'duplicate'>('duplicate');
   const [formData, setFormData] = useState({
     name: '',
     code: '',
@@ -296,11 +297,12 @@ export default function Dashboard() {
     setShowEditModal(true);
   };
 
-  const openDuplicateModal = (course: Course) => {
+  const openDuplicateModal = (course: Course, mode: 'copy' | 'duplicate') => {
+    setDuplicateMode(mode);
     setDuplicatingCourse(course);
     setDuplicateFormData({
-      name: `${course.name} (Copy)`,
-      code: `${course.code}-COPY`,
+      name: `${course.name} (${mode === 'copy' ? 'Copy' : 'Duplicate'})`,
+      code: `${course.code}-${mode === 'copy' ? 'COPY' : 'DUP'}`,
       semester: course.semester,
       year: course.year,
       section: course.section,
@@ -371,6 +373,12 @@ export default function Dashboard() {
       courseData.course.semester = duplicateFormData.semester;
       courseData.course.year = duplicateFormData.year;
       courseData.course.courseType = duplicateFormData.courseType;
+
+      if (duplicateMode === 'copy') {
+        courseData.students = [];
+        courseData.marks = [];
+        courseData.attendanceSessions = [];
+      }
 
       // Import as a new course
       const importResponse = await fetch('/api/courses/import', {
@@ -563,9 +571,13 @@ export default function Dashboard() {
                           <Edit className="h-4 w-4 mr-2" />
                           Edit
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => openDuplicateModal(course)}>
+                        <DropdownMenuItem onClick={() => openDuplicateModal(course, 'copy')}>
                           <Copy className="h-4 w-4 mr-2" />
-                          Duplicate
+                          Copy (Exams Only)
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => openDuplicateModal(course, 'duplicate')}>
+                          <FileStack className="h-4 w-4 mr-2" />
+                          Duplicate (All Data)
                         </DropdownMenuItem>
                         <DropdownMenuItem 
                           onClick={() => handleArchiveCourse(course._id, course.name)}
@@ -1012,9 +1024,12 @@ export default function Dashboard() {
       <Dialog open={showDuplicateModal} onOpenChange={setShowDuplicateModal}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Duplicate Course</DialogTitle>
+            <DialogTitle>{duplicateMode === 'copy' ? 'Copy Course (Exams Only)' : 'Duplicate Course (All Data)'}</DialogTitle>
             <DialogDescription>
-              This will create a new course with all students, exams, and marks from <strong>{duplicatingCourse?.name}</strong>.
+              {duplicateMode === 'copy' 
+                ? `This will create a new course with exams from `
+                : `This will create a new course with all students, exams, marks, and attendance from `}
+              <strong>{duplicatingCourse?.name}</strong>.
             </DialogDescription>
           </DialogHeader>
 
@@ -1135,10 +1150,10 @@ export default function Dashboard() {
                 {duplicating ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Duplicating...
+                    {duplicateMode === 'copy' ? 'Copying...' : 'Duplicating...'}
                   </>
                 ) : (
-                  'Duplicate Course'
+                  duplicateMode === 'copy' ? 'Copy Course' : 'Duplicate Course'
                 )}
               </Button>
             </DialogFooter>

@@ -7,6 +7,7 @@ import Course from '@/models/Course';
 import Student from '@/models/Student';
 import Exam from '@/models/Exam';
 import Mark from '@/models/Mark';
+import AttendanceSession from '@/models/AttendanceSession';
 
 export async function GET(
   request: NextRequest,
@@ -36,6 +37,7 @@ export async function GET(
       .collation({ locale: 'en', numericOrdering: true });
     const exams = await Exam.find({ courseId });
     const marks = await Mark.find({ courseId });
+    const attendanceSessions = await AttendanceSession.find({ courseId });
 
     const exportData = {
       version: '1.0',
@@ -80,6 +82,22 @@ export async function GET(
           weightedMark: mark.weightedMark,
         };
       }),
+      attendanceSessions: attendanceSessions.map(session => ({
+        date: session.date,
+        open: session.open,
+        qrEnabled: session.qrEnabled,
+        sessionCode: session.sessionCode,
+        records: session.records.map((record: any) => {
+          const student = students.find((s: any) => s._id.toString() === record.studentId.toString());
+          return {
+            studentId: student?.studentId,
+            status: record.status,
+            recordedAt: record.recordedAt,
+            markedBy: record.markedBy,
+            studentIdString: record.studentIdString,
+          };
+        }),
+      })),
     };
 
     if (format === 'csv') {
