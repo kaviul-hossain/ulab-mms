@@ -37,6 +37,8 @@ interface MarksViewProps {
   onShowResetMarksModal: () => void;
   onAutoAttendanceMarks: (examId: string) => void;
   isAutoCalculatingAttendance?: boolean;
+  onGetProjectMarks?: (() => void) | null;
+  isGettingProjectMarks?: boolean;
 }
 
 export default function MarksView({
@@ -50,6 +52,8 @@ export default function MarksView({
   onShowResetMarksModal,
   onAutoAttendanceMarks,
   isAutoCalculatingAttendance = false,
+  onGetProjectMarks = null,
+  isGettingProjectMarks = false,
 }: MarksViewProps) {
   const [showDropdown, setShowDropdown] = useState(false);
   const [showFloatingButtons, setShowFloatingButtons] = useState(false);
@@ -87,6 +91,7 @@ export default function MarksView({
   }
 
   const attendanceExams = exams.filter(e => e.examCategory === 'Attendance');
+  const hasProjectExam = exams.some(e => e.examCategory === 'Project');
 
   return (
     <div className="space-y-6">
@@ -170,6 +175,17 @@ export default function MarksView({
           <Trash2 className="w-4 h-4" />
           Reset Marks
         </Button>
+        {hasProjectExam && onGetProjectMarks && (
+          <Button
+            onClick={onGetProjectMarks}
+            variant="outline"
+            className="gap-2 border-violet-500/50 hover:bg-violet-500/10"
+            disabled={isGettingProjectMarks}
+          >
+            <span>🎯</span>
+            {isGettingProjectMarks ? 'Pulling marks...' : 'Get marks from Project tab'}
+          </Button>
+        )}
       </div>
       <Card className="p-6">
         <div className="overflow-x-auto max-h-[calc(100vh-200px)] sticky top-0">

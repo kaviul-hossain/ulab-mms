@@ -16,6 +16,7 @@ import AttendanceView from './components/AttendanceView';
 import BulkMarkEntryModal from './components/BulkMarkEntryModal';
 import ExcelExportMappingEditor from './components/ExcelExportMappingEditor';
 import CoPoView from './components/CoPoView';
+import ProjectView from './components/ProjectView';
 import { 
   GradeThreshold, 
   DEFAULT_GRADING_SCALE, 
@@ -136,7 +137,8 @@ export default function CoursePage() {
   const [isPopulating, setIsPopulating] = useState(false);
   const [courseSettingsTab, setCourseSettingsTab] = useState<'aggregation' | 'grading' | 'excelExport'>('aggregation');
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [activeView, setActiveView] = useState<'overview' | 'exams' | 'students' | 'marks' | 'attendance' | 'copo'>('overview');
+  const [activeView, setActiveView] = useState<'overview' | 'exams' | 'students' | 'marks' | 'attendance' | 'copo' | 'project'>('overview');
+  const [isGettingProjectMarks, setIsGettingProjectMarks] = useState(false);
   const [searchStudentId, setSearchStudentId] = useState('');
   const [showStudentStatsModal, setShowStudentStatsModal] = useState(false);
   const [selectedStudentForStats, setSelectedStudentForStats] = useState<Student | null>(null);
@@ -615,6 +617,24 @@ export default function CoursePage() {
     } catch (err) {
       console.error('Error resetting marks:', err);
       notify.mark.resetError();
+    }
+  };
+
+  const handleGetProjectMarks = async () => {
+    setIsGettingProjectMarks(true);
+    try {
+      const res = await fetch(`/api/courses/${courseId}/project/marks`, { method: 'POST' });
+      const data = await res.json();
+      if (res.ok) {
+        toast.success(`Project marks applied to ${data.updated} student(s) across: ${(data.examsUpdated || []).join(', ')}`);
+        await fetchCourseData();
+      } else {
+        toast.error(data.error || 'Failed to get project marks');
+      }
+    } catch {
+      toast.error('Error fetching project marks');
+    } finally {
+      setIsGettingProjectMarks(false);
     }
   };
 
@@ -1333,6 +1353,16 @@ export default function CoursePage() {
               {sidebarOpen && <span className="ml-2 font-medium">CO PO Mapping</span>}
             </Button>
 
+            <Button
+              variant={activeView === 'project' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setActiveView('project')}
+              className="w-full justify-start"
+            >
+              <span className="text-lg">🎓</span>
+              {sidebarOpen && <span className="ml-2 font-medium">Project</span>}
+            </Button>
+
             {sidebarOpen && <div className="pt-4 mt-4 border-t"></div>}
 
             <Button
@@ -1535,6 +1565,17 @@ export default function CoursePage() {
                 }}
                 onAutoAttendanceMarks={handleAutoAttendanceMarks}
                 isAutoCalculatingAttendance={isAutoCalculatingAttendance}
+                onGetProjectMarks={handleGetProjectMarks}
+                isGettingProjectMarks={isGettingProjectMarks}
+              />
+            )}
+
+            {/* Project View */}
+            {activeView === 'project' && (
+              <ProjectView
+                courseId={courseId}
+                students={students}
+                exams={exams}
               />
             )}
 
