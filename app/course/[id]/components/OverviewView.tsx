@@ -6,7 +6,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { BookOpen, FlaskConical, Upload, Download, Plus, ClipboardList, AlertTriangle } from 'lucide-react';
+import { BookOpen, FlaskConical, Upload, Download, Plus, ClipboardList, AlertTriangle, ExternalLink } from 'lucide-react';
+import UrmsGradeSheet from './UrmsGradeSheet';
 
 interface Course {
   _id: string;
@@ -20,12 +21,12 @@ interface Course {
   assignmentWeightage?: number | string;
   projectWeightage?: number | string;
 }
-
 interface OverviewViewProps {
   course: Course;
   students: any[];
   exams: any[];
   marks: any[];
+  calculateFinalGrade: (studentId: string) => { total: number };
   onImportStudents: () => void;
   onAddExam: () => void;
   onImportCourse: () => void;
@@ -34,12 +35,12 @@ interface OverviewViewProps {
   onExportCourseFile?: () => void;
   exportingCourseFile?: boolean;
 }
-
 export default function OverviewView({
   course,
   students,
   exams,
   marks,
+  calculateFinalGrade,
   onImportStudents,
   onAddExam,
   onImportCourse,
@@ -50,6 +51,7 @@ export default function OverviewView({
 }: OverviewViewProps) {
   const [showExportDisclaimer, setShowExportDisclaimer] = useState(false);
   const [showChecklist, setShowChecklist] = useState(false);
+  const [showUrmsModal, setShowUrmsModal] = useState(false);
 
   const hasQuizzes = exams.some(exam => exam.examCategory === 'Quiz');
   const hasAssignments = exams.some(exam => exam.examCategory === 'Assignment');
@@ -77,6 +79,24 @@ export default function OverviewView({
   const studentsWithMarks = students.filter(student => 
     marks.some(mark => mark.studentId === student._id)
   ).length;
+
+  const handleSideBySideUrms = () => {
+    const screenWidth = window.screen.availWidth;
+    const screenHeight = window.screen.availHeight;
+    const halfWidth = Math.floor(screenWidth / 2);
+
+    const commonFeatures = 'popup=yes,menubar=no,toolbar=no,location=no,status=no';
+
+    // Launch URMS portal on the left in a new window
+    window.open(
+      'https://urms-awp.ulab.edu.bd/RMS_ggs_result/ResultEntryFromExcel',
+      'urmsWindow',
+      `${commonFeatures},left=0,top=0,width=${halfWidth},height=${screenHeight}`
+    );
+
+    // Open the right-sided sliding sheet inside the app
+    setShowUrmsModal(true);
+  };
 
   return (
     <div className="space-y-6">
@@ -239,6 +259,20 @@ export default function OverviewView({
                 </Button>
               </div>
             </div>
+
+            <div className="space-y-3">
+              <h3 className="text-sm font-semibold">External Systems</h3>
+              <div className="flex flex-col gap-2">
+                <Button
+                  onClick={handleSideBySideUrms}
+                  variant="default"
+                  className="w-full justify-start bg-blue-600 hover:bg-blue-700 text-white"
+                >
+                  <ExternalLink className="w-4 h-4 mr-2" />
+                  Side-by-Side URMS Entry
+                </Button>
+              </div>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -391,6 +425,14 @@ export default function OverviewView({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <UrmsGradeSheet
+        open={showUrmsModal}
+        onOpenChange={setShowUrmsModal}
+        course={course}
+        students={students}
+        calculateFinalGrade={calculateFinalGrade}
+      />
     </div>
   );
 }

@@ -97,6 +97,7 @@ interface Course {
   year: number;
   courseType: 'Theory' | 'Lab';
   showFinalGrade: boolean;
+  section: string;
   quizAggregation?: 'average' | 'best';
   assignmentAggregation?: 'average' | 'best';
   quizWeightage?: number;
@@ -1261,7 +1262,7 @@ export default function CoursePage() {
                   {course.name}
                 </h1>
                 <p className="text-xs mt-1 text-muted-foreground">
-                  {course.code} • {course.semester} {course.year} • 
+                  {course.code} • {course.semester} {course.year} • Section {course.section} • 
                   <Badge variant="secondary" className="ml-1">
                     {course.courseType}
                   </Badge>
@@ -1522,6 +1523,7 @@ export default function CoursePage() {
                 exportingCSV={exportingCSV}
                 onExportCourseFile={handleExportCourseFile}
                 exportingCourseFile={exportingCourseFile}
+                calculateFinalGrade={calculateFinalGrade}
               />
             )}
 
