@@ -14,7 +14,7 @@ import StudentsView from './components/StudentsView';
 import MarksView from './components/MarksView';
 import AttendanceView from './components/AttendanceView';
 import BulkMarkEntryModal from './components/BulkMarkEntryModal';
-import ExcelExportMappingEditor from './components/ExcelExportMappingEditor';
+import ExcelExportMappingInfo from './components/ExcelExportMappingInfo';
 import CoPoView from './components/CoPoView';
 import ProjectView from './components/ProjectView';
 import { 
@@ -2364,7 +2364,7 @@ export default function CoursePage() {
                 )}
 
                 {courseSettingsTab === 'excelExport' && (
-                  <ExcelExportMappingEditor courseId={courseId} onSaved={fetchCourseData} />
+                  <ExcelExportMappingInfo />
                 )}
 
                 {/* Action Buttons */}

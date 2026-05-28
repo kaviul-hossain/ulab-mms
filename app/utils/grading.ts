@@ -36,10 +36,27 @@ export function encodeGradingScale(grades: GradeThreshold[]): string {
  * Decode grading scale string to array
  * Handles malformed strings gracefully and returns default scale if invalid
  */
-export function decodeGradingScale(encoded: string | undefined | null): GradeThreshold[] {
+export function decodeGradingScale(encoded: string | any[] | undefined | null): GradeThreshold[] {
   if (!encoded) return DEFAULT_GRADING_SCALE;
   
+  if (Array.isArray(encoded)) {
+    return encoded.sort((a, b) => a.threshold - b.threshold);
+  }
+  
+  if (typeof encoded !== 'string') {
+    return DEFAULT_GRADING_SCALE;
+  }
+  
   try {
+    // Check if it's a JSON string first
+    if (encoded.trim().startsWith('[')) {
+      const parsed = JSON.parse(encoded);
+      if (Array.isArray(parsed)) {
+        return parsed.sort((a, b) => a.threshold - b.threshold);
+      }
+    }
+    
+    // Otherwise fallback to pipe-separated format
     const parts = encoded.split('|');
     const grades: GradeThreshold[] = [];
     
