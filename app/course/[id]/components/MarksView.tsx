@@ -39,6 +39,7 @@ interface MarksViewProps {
   isAutoCalculatingAttendance?: boolean;
   onGetProjectMarks?: (() => void) | null;
   isGettingProjectMarks?: boolean;
+  courseType?: 'Theory' | 'Lab';
 }
 
 export default function MarksView({
@@ -54,6 +55,7 @@ export default function MarksView({
   isAutoCalculatingAttendance = false,
   onGetProjectMarks = null,
   isGettingProjectMarks = false,
+  courseType = 'Theory',
 }: MarksViewProps) {
   const [showDropdown, setShowDropdown] = useState(false);
   const [showFloatingButtons, setShowFloatingButtons] = useState(false);
@@ -183,7 +185,7 @@ export default function MarksView({
             disabled={isGettingProjectMarks}
           >
             <span>🎯</span>
-            {isGettingProjectMarks ? 'Pulling marks...' : 'Get marks from Project tab'}
+            {isGettingProjectMarks ? 'Pulling marks...' : `Get marks from ${courseType === 'Lab' ? 'OEL / CE Project' : 'Project'} tab`}
           </Button>
         )}
       </div>

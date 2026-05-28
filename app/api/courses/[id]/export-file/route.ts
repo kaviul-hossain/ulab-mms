@@ -34,7 +34,9 @@ function getMarkValue(student: any, exams: any[], marks: any[], category: string
   const exam = exams.find(e => e.examCategory === category);
   if (!exam) return 0;
   const mark = getMark(student._id, exam._id, marks);
-  return mark ? mark.rawMark : 0;
+  if (!mark) return 0;
+  const weighted = getWeightedContribution(mark.rawMark, exam.totalMarks, exam.weightage || 0);
+  return Math.round(weighted * 100) / 100;
 }
 
 function getMarkValueForMid(student: any, exams: any[], marks: any[]) {
@@ -142,6 +144,24 @@ function getAggregatedMarkValue(student: any, exams: any[], marks: any[], catego
   }
 }
 
+function getProjectAggregatedMarkValue(student: any, exams: any[], marks: any[], course: any) {
+  const projectExams = exams.filter(e => e.examCategory === 'Project');
+  if (projectExams.length === 0) return 0;
+  
+  const projectMarks = projectExams
+    .map(e => ({ exam: e, mark: getMark(student._id, e._id, marks) }))
+    .filter(x => x.mark !== undefined);
+    
+  if (projectMarks.length === 0) return 0;
+  
+  const sumRaw = projectMarks.reduce((s, x) => s + Number(x.mark!.rawMark || 0), 0);
+  const sumTotal = projectExams.reduce((s, e) => s + Number(e.totalMarks || 0), 0);
+  const projectWeightage = Number(course?.projectWeightage || 0);
+  
+  const weighted = sumTotal > 0 ? (sumRaw / sumTotal) * projectWeightage : 0;
+  return Math.round(weighted * 100) / 100;
+}
+
 function parseCellAddress(cell: string) {
   const match = /^([A-Z]+)(\d+)$/i.exec(cell.trim());
   if (!match) return null;
@@ -189,7 +209,7 @@ function resolveFieldValue(field: ExcelExportField, course: any, student: any, i
     case 'mark.assignment':
       return getAggregatedMarkValue(student, exams, marks, 'Assignment', course);
     case 'mark.project':
-      return getMarkValue(student, exams, marks, 'Project');
+      return getProjectAggregatedMarkValue(student, exams, marks, course);
     case 'mark.midterm':
       return getMarkValueForMid(student, exams, marks);
     case 'mark.final':
@@ -208,8 +228,10 @@ function resolveFieldValue(field: ExcelExportField, course: any, student: any, i
     }
     case 'weight.midterm':
       return getMidtermWeight(exams);
-    case 'weight.project':
-      return getExamWeight(exams, 'Project');
+    case 'weight.project': {
+      const hasProjects = exams.some(e => e.examCategory === 'Project');
+      return hasProjects ? (course.projectWeightage || 0) : 0;
+    }
     case 'weight.final':
       return getFinalWeight(exams);
     default:

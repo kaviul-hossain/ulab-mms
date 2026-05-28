@@ -706,8 +706,16 @@ export default function CoursePage() {
   };
 
   const handleDeleteExam = async (examId: string) => {
-    if (!confirm('Are you sure you want to delete this exam? This will delete all associated marks.')) {
+    const exam = exams.find(e => e._id === examId);
+    
+    if (!confirm(`Are you sure you want to delete ${exam?.displayName || 'this exam'}? This will delete all associated marks.`)) {
       return;
+    }
+
+    if (exam?.isRequired) {
+      if (!confirm(`WARNING: ${exam.displayName} is a required core exam. Deleting it may affect standard grade calculations or course requirements. Are you absolutely sure you want to proceed?`)) {
+        return;
+      }
     }
 
     try {
@@ -921,7 +929,7 @@ export default function CoursePage() {
   };
 
   const getMark = (studentId: string, examId: string) => {
-    return marks.find(m => m.studentId === studentId && m.examId === examId);
+    return marks.find(m => m.studentId.toString() === studentId.toString() && m.examId.toString() === examId.toString());
   };
 
   const getExamPercentage = (rawMark: number, totalMarks: number) => {
@@ -1015,18 +1023,19 @@ export default function CoursePage() {
 
   // Calculate project aggregated mark: sum all raw marks, convert to weightage
   // Formula: (sumRaw / sumTotal) × projectWeightage
-  const getProjectAggregatedMark = (studentId: string): { rawMark: number; isAggregated: boolean } | null => {
+  const getProjectAggregatedMark = (studentId: string): { rawMark: number; sumRaw: number; sumTotal: number; isAggregated: boolean } | null => {
     const projectExams = exams.filter(e => e.examCategory === 'Project');
     if (projectExams.length === 0) return null;
     const projectMarks = projectExams
-      .map(e => ({ exam: e, mark: getMark(studentId, e._id) }))
+      .map(e => ({ exam: e, mark: marks.find(m => m.studentId.toString() === studentId.toString() && m.examId.toString() === e._id.toString()) }))
       .filter(x => x.mark !== undefined);
     if (projectMarks.length === 0) return null;
-    const sumRaw = projectMarks.reduce((s, x) => s + x.mark!.rawMark, 0);
-    const sumTotal = projectExams.reduce((s, e) => s + e.totalMarks, 0);
+    const sumRaw = projectMarks.reduce((s, x) => s + Number(x.mark!.rawMark ?? 0), 0);
+    // sumTotal is the total marks of only the exams that have been scored
+    const sumTotal = projectMarks.reduce((s, x) => s + Number(x.exam.totalMarks ?? 0), 0);
     const projectWeightage = Number(course?.projectWeightage || 0);
     const weighted = sumTotal > 0 ? (sumRaw / sumTotal) * projectWeightage : 0;
-    return { rawMark: Math.round(weighted * 100) / 100, isAggregated: true };
+    return { rawMark: Math.round(weighted * 100) / 100, sumRaw, sumTotal, isAggregated: true };
   };
 
   // Calculate final grade for a student
@@ -1397,8 +1406,10 @@ export default function CoursePage() {
               onClick={() => setActiveView('project')}
               className="w-full justify-start"
             >
-              <span className="text-lg">🎓</span>
-              {sidebarOpen && <span className="ml-2 font-medium">Project</span>}
+              <span className="text-lg">{course?.courseType === 'Lab' ? '🚀' : '🎓'}</span>
+              {sidebarOpen && <span className="ml-2 font-medium">
+                {course?.courseType === 'Lab' ? 'OEL / CE Project' : 'Project'}
+              </span>}
             </Button>
 
             {sidebarOpen && <div className="pt-4 mt-4 border-t"></div>}
@@ -1609,15 +1620,18 @@ export default function CoursePage() {
                 isAutoCalculatingAttendance={isAutoCalculatingAttendance}
                 onGetProjectMarks={handleGetProjectMarks}
                 isGettingProjectMarks={isGettingProjectMarks}
+                courseType={course?.courseType}
               />
             )}
 
-            {/* Project View */}
             {activeView === 'project' && (
-              <ProjectView
-                courseId={courseId}
-                students={students}
+              <ProjectView 
+                courseId={courseId} 
+                students={students} 
                 exams={exams}
+                title={course?.courseType === 'Lab' ? 'OEL / CE Project Groups' : 'Project Groups'}
+                description={course?.courseType === 'Lab' ? 'Score each group\'s OEL / CE project using the rubric. Marks are pushed to the Marks tab.' : undefined}
+                examFilter={(e) => e.examCategory === 'Project'}
               />
             )}
 
@@ -1746,8 +1760,8 @@ export default function CoursePage() {
               >
                 <option value="">Select category...</option>
                 <option value="Quiz">Quiz</option>
-                <option value="Assignment">Assignment</option>
-                <option value="Project">Project</option>
+                <option value="Assignment">{course?.courseType === 'Lab' ? 'Continuous Lab Assessment (CLA)' : 'Assignment'}</option>
+                <option value="Project">{course?.courseType === 'Lab' ? 'OEL / CE Project' : 'Project'}</option>
                 <option value="Attendance">Attendance</option>
                 <option value="MainExam">Main Exam</option>
                 <option value="ClassPerformance">Class Performance</option>
@@ -1804,7 +1818,7 @@ export default function CoursePage() {
                 {(examFormData.examCategory === 'Quiz' || examFormData.examCategory === 'Assignment')
                   ? 'Each item contributes using this shared group weight'
                   : examFormData.examCategory === 'Project'
-                  ? 'All project marks are summed and scaled to the project weightage'
+                  ? course?.courseType === 'Lab' ? 'All OEL/CE marks are summed and scaled to the OEL/CE weightage' : 'All project marks are summed and scaled to the project weightage'
                   : 'Percentage contribution to final grade'}
               </p>
             </div>
@@ -1921,8 +1935,8 @@ export default function CoursePage() {
               >
                 {!examSettings.examCategory && <option value="">Select category...</option>}
                 <option value="Quiz">Quiz</option>
-                <option value="Assignment">Assignment</option>
-                <option value="Project">Project</option>
+                <option value="Assignment">{course?.courseType === 'Lab' ? 'Continuous Lab Assessment (CLA)' : 'Assignment'}</option>
+                <option value="Project">{course?.courseType === 'Lab' ? 'OEL / CE Project' : 'Project'}</option>
                 <option value="Attendance">Attendance</option>
                 <option value="MainExam">Main Exam</option>
                 <option value="ClassPerformance">Class Performance</option>
@@ -1976,7 +1990,7 @@ export default function CoursePage() {
                 {(examSettings.examCategory === 'Quiz' || examSettings.examCategory === 'Assignment')
                   ? '💡 Use Course Settings to configure Quiz/Assignment aggregation weightage'
                   : examSettings.examCategory === 'Project'
-                  ? '💡 All project marks are summed and scaled to the project weightage in Course Settings'
+                  ? course?.courseType === 'Lab' ? '💡 All OEL/CE marks are summed and scaled to the OEL/CE weightage in Course Settings' : '💡 All project marks are summed and scaled to the project weightage in Course Settings'
                   : 'Percentage contribution to final grade'}
               </p>
             </div>
@@ -2176,7 +2190,7 @@ export default function CoursePage() {
                           </div>
 
                           <div>
-                            <Label>Assignment Weightage (%)</Label>
+                            <Label>{course?.courseType === 'Lab' ? 'Continuous Lab Assessment (CLA)' : 'Assignment'} Weightage (%)</Label>
                             <Input
                               type="number"
                               min="0"
@@ -2212,7 +2226,7 @@ export default function CoursePage() {
                             </p>
                           </div>
                           <div>
-                            <Label>Project Weightage (%)</Label>
+                            <Label>{course?.courseType === 'Lab' ? 'OEL / CE Project' : 'Project'} Weightage (%)</Label>
                             <Input
                               type="number"
                               min="0"

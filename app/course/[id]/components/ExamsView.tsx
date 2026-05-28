@@ -152,11 +152,9 @@ export default function ExamsView({
                             >
                               <Settings className="w-4 h-4" />
                             </Button>
-                            {!exam.isRequired && (
-                              <Button variant="destructive" size="sm" onClick={() => onDeleteExam(exam._id)}>
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
-                            )}
+                            <Button variant="destructive" size="sm" onClick={() => onDeleteExam(exam._id)}>
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
                           </div>
                         </div>
                       </div>
@@ -177,10 +175,10 @@ export default function ExamsView({
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <Layers3 className="w-4 h-4" />
-                      <span className="font-semibold text-foreground">Assignments</span>
+                      <span className="font-semibold text-foreground">{course.courseType === 'Lab' ? 'Continuous Lab Assessments (CLA)' : 'Assignments'}</span>
                     </div>
                     <p className="mt-1 text-sm text-muted-foreground">
-                      Aggregated using {course.assignmentAggregation || 'average'} over the assignment group.
+                      Aggregated using {course.assignmentAggregation || 'average'} over the {course.courseType === 'Lab' ? 'CLA' : 'assignment'} group.
                     </p>
                   </div>
                 </div>
@@ -193,15 +191,15 @@ export default function ExamsView({
               <div className="border-t border-border/60 px-4 py-4">
                 <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <p className="text-sm text-muted-foreground">
-                    Add multiple assignment items. Final assignment results are aggregated by the course setting.
+                    Add multiple {course.courseType === 'Lab' ? 'CLA' : 'assignment'} items. Final {course.courseType === 'Lab' ? 'CLA' : 'assignment'} results are aggregated by the course setting.
                   </p>
                   <Button type="button" variant="outline" onClick={() => onShowExamModal('Assignment')}>
                     <Plus className="w-4 h-4 mr-2" />
-                    Add Assignment
+                    Add {course.courseType === 'Lab' ? 'CLA' : 'Assignment'}
                   </Button>
                 </div>
                 {assignmentExams.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No assignment items added yet.</p>
+                  <p className="text-sm text-muted-foreground">No {course.courseType === 'Lab' ? 'CLA' : 'assignment'} items added yet.</p>
                 ) : (
                   <div className="grid gap-2">
                     {assignmentExams.map((exam) => (
@@ -209,7 +207,7 @@ export default function ExamsView({
                         <div className="min-w-0">
                           <div className="font-medium text-foreground">{exam.displayName}</div>
                           <div className="mt-1 flex flex-wrap gap-2">
-                            <Badge variant="outline" className="font-normal">{exam.examCategory || 'Assignment'}</Badge>
+                            <Badge variant="outline" className="font-normal">{course.courseType === 'Lab' ? 'CLA' : (exam.examCategory || 'Assignment')}</Badge>
                             {exam.isRequired ? <Badge variant="secondary">Required</Badge> : <Badge variant="outline">Optional</Badge>}
                           </div>
                         </div>
@@ -236,11 +234,9 @@ export default function ExamsView({
                             >
                               <Settings className="w-4 h-4" />
                             </Button>
-                            {!exam.isRequired && (
-                              <Button variant="destructive" size="sm" onClick={() => onDeleteExam(exam._id)}>
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
-                            )}
+                            <Button variant="destructive" size="sm" onClick={() => onDeleteExam(exam._id)}>
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
                           </div>
                         </div>
                       </div>
@@ -262,10 +258,10 @@ export default function ExamsView({
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <Layers3 className="w-4 h-4" />
-                      <span className="font-semibold text-foreground">Projects</span>
+                      <span className="font-semibold text-foreground">{course.courseType === 'Lab' ? 'OEL / CE Projects' : 'Projects'}</span>
                     </div>
                     <p className="mt-1 text-sm text-muted-foreground">
-                      All project marks are summed, then converted to the group weightage.
+                      All {course.courseType === 'Lab' ? 'OEL/CE' : 'project'} marks are summed, then converted to the group weightage.
                     </p>
                   </div>
                 </div>
@@ -278,15 +274,15 @@ export default function ExamsView({
               <div className="border-t border-border/60 px-4 py-4">
                 <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <p className="text-sm text-muted-foreground">
-                    Add multiple project items. Their raw marks are summed and scaled to the project weightage set in Course Settings.
+                    Add multiple {course.courseType === 'Lab' ? 'OEL/CE' : 'project'} items. Their raw marks are summed and scaled to the {course.courseType === 'Lab' ? 'OEL/CE' : 'project'} weightage set in Course Settings.
                   </p>
                   <Button type="button" variant="outline" onClick={() => onShowExamModal('Project')}>
                     <Plus className="w-4 h-4 mr-2" />
-                    Add Project
+                    Add {course.courseType === 'Lab' ? 'OEL / CE Project' : 'Project'}
                   </Button>
                 </div>
                 {projectExams.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No project items added yet.</p>
+                  <p className="text-sm text-muted-foreground">No {course.courseType === 'Lab' ? 'OEL/CE' : 'project'} items added yet.</p>
                 ) : (
                   <div className="grid gap-2">
                     {projectExams.map((exam) => (
@@ -294,7 +290,7 @@ export default function ExamsView({
                         <div className="min-w-0">
                           <div className="font-medium text-foreground">{exam.displayName}</div>
                           <div className="mt-1 flex flex-wrap gap-2">
-                            <Badge variant="outline" className="font-normal">Project</Badge>
+                            <Badge variant="outline" className="font-normal">{course.courseType === 'Lab' ? 'OEL / CE Project' : 'Project'}</Badge>
                             {exam.isRequired ? <Badge variant="secondary">Required</Badge> : <Badge variant="outline">Optional</Badge>}
                           </div>
                         </div>
@@ -321,11 +317,9 @@ export default function ExamsView({
                             >
                               <Settings className="w-4 h-4" />
                             </Button>
-                            {!exam.isRequired && (
-                              <Button variant="destructive" size="sm" onClick={() => onDeleteExam(exam._id)}>
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
-                            )}
+                            <Button variant="destructive" size="sm" onClick={() => onDeleteExam(exam._id)}>
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
                           </div>
                         </div>
                       </div>
@@ -429,7 +423,6 @@ export default function ExamsView({
                         >
                           <Settings className="w-4 h-4" />
                         </Button>
-                        {!exam.isRequired && (
                           <Button
                             variant="destructive"
                             size="sm"
@@ -437,7 +430,6 @@ export default function ExamsView({
                           >
                             <Trash2 className="w-4 h-4" />
                           </Button>
-                        )}
                       </div>
                     </TableCell>
                   </TableRow>

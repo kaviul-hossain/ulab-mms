@@ -124,6 +124,7 @@ export async function POST(request: NextRequest) {
       year,
       section,
       courseType,
+      projectWeightage: courseType === 'Lab' ? 40 : 25,
       userId: new mongoose.Types.ObjectId(userObjectId),
     });
 
@@ -173,9 +174,9 @@ export async function POST(request: NextRequest) {
           courseId: course._id,
           displayName: 'OEL/CE Project',
           examType: 'oel',
-          totalMarks: 40,
+          totalMarks: 100, // Default to 100 marks, can be distributed later
           weightage: 40,
-          examCategory: 'MainExam',
+          examCategory: 'Project',
           isRequired: true,
           userId: new mongoose.Types.ObjectId(userObjectId),
         },

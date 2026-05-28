@@ -39,12 +39,16 @@ interface ProjectExam {
   displayName: string;
   totalMarks: number;
   examCategory?: string;
+  examType?: string;
 }
 
 interface ProjectViewProps {
   courseId: string;
   students: StudentInfo[];
   exams: ProjectExam[];
+  examFilter?: (e: ProjectExam) => boolean;
+  title?: string;
+  description?: string;
 }
 
 // null means "not yet selected" — different from 0 which means deliberately scored 0
@@ -119,7 +123,7 @@ function RubricDetail({ scores }: { scores: IRubricScores }) {
 
 
 // ─── Main component ───────────────────────────────────────────────────────────
-export default function ProjectView({ courseId, students, exams }: ProjectViewProps) {
+export default function ProjectView({ courseId, students, exams, examFilter, title, description }: ProjectViewProps) {
   const [state, setState] = useState<ProjectState>({ isActive: false, maxMembersPerGroup: 4, groups: [] });
   const [loading, setLoading] = useState(true);
   const [toggling, setToggling] = useState(false);
@@ -147,7 +151,7 @@ export default function ProjectView({ courseId, students, exams }: ProjectViewPr
   // Saved marks (from Mark records): { [groupId]: { [examId]: number } }
   const [savedMarks, setSavedMarks] = useState<Record<string, Record<string, number>>>({});
 
-  const projectExams = exams.filter(e => e.examCategory === 'Project');
+  const projectExams = examFilter ? exams.filter(examFilter) : exams.filter(e => e.examCategory === 'Project');
 
   // ─── Data fetching ──────────────────────────────────────────────────────────
 
@@ -393,9 +397,9 @@ export default function ProjectView({ courseId, students, exams }: ProjectViewPr
       {/* ── Header ── */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h2 className="text-2xl font-bold">Project Groups</h2>
+          <h2 className="text-2xl font-bold">{title || 'Project Groups'}</h2>
           <p className="text-sm text-muted-foreground mt-1">
-            Score each group's project using the rubric. Marks are automatically calculated and pushed to the Marks tab.
+            {description || 'Score each group\'s project using the rubric. Marks are automatically calculated and pushed to the Marks tab.'}
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">

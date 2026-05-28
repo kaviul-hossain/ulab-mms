@@ -71,7 +71,7 @@ interface StudentsViewProps {
   hasProjects: boolean;
   getMark: (studentId: string, examId: string) => Mark | undefined;
   getAggregatedMark: (studentId: string, category: 'Quiz' | 'Assignment') => Mark | { rawMark: number; isAggregated: boolean; examId?: string } | null;
-  getProjectAggregatedMark: (studentId: string) => { rawMark: number; isAggregated: boolean } | null;
+  getProjectAggregatedMark: (studentId: string) => { rawMark: number; sumRaw: number; sumTotal: number; isAggregated: boolean } | null;
   calculateFinalGrade: (studentId: string) => GradeData;
   calculateLetterGrade: (percentage: number, gradingScale?: string) => LetterGrade | null;
   getGradeDisplay: (letter: string, modifier?: string) => string;
@@ -193,42 +193,46 @@ export default function StudentsView({
                 <th className="px-3 py-3 text-center text-xs font-semibold uppercase tracking-wider sticky left-0 z-30 bg-muted border-r w-[50px]">#</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider sticky left-0 z-30 shadow-[2px_0_5px_rgba(0,0,0,0.1)] bg-muted border-r min-w-[200px]">Student</th>
                 {exams.map(exam => (
-                  <th key={exam._id} className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider">
+                  <th key={exam._id} className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider min-w-[130px] whitespace-nowrap">
                     <div>{exam.displayName}</div>
-                    <div className="text-[10px] font-normal mt-0.5 text-muted-foreground">Raw / Weighted</div>
+                    {exam.examCategory === 'Quiz' || exam.examCategory === 'Assignment' || exam.examCategory === 'Project' ? (
+                      <div className="text-[10px] font-normal mt-0.5 text-muted-foreground">Raw Mark</div>
+                    ) : (
+                      <div className="text-[10px] font-normal mt-0.5 text-muted-foreground">Raw / Weighted</div>
+                    )}
                   </th>
                 ))}
                 {hasQuizzes && (
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider bg-amber-900/20 border-l-2 border-amber-500/50">
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider bg-amber-900/20 border-l-2 border-amber-500/50 min-w-[150px] whitespace-nowrap">
                     <div className="flex items-center gap-1">
                       <span>📝 Quiz (Agg)</span>
                     </div>
                     <div className="text-[10px] font-normal mt-0.5 text-amber-400">
-                      {course?.quizAggregation === 'best' ? 'Best' : 'Average'} • {course?.quizWeightage || 0}%
+                      {course?.quizAggregation === 'best' ? 'Best' : 'Avg'} → Score / {course?.quizWeightage || 0}%
                     </div>
                   </th>
                 )}
                 {hasAssignments && (
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider bg-blue-900/20 border-l-2 border-blue-500/50">
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider bg-blue-900/20 border-l-2 border-blue-500/50 min-w-[170px] whitespace-nowrap">
                     <div className="flex items-center gap-1">
-                      <span>📋 Assignment (Agg)</span>
+                      <span>📋 {course?.courseType === 'Lab' ? 'CLA' : 'Assignment'} (Agg)</span>
                     </div>
                     <div className="text-[10px] font-normal mt-0.5 text-blue-400">
-                      {course?.assignmentAggregation === 'best' ? 'Best' : 'Average'} • {course?.assignmentWeightage || 0}%
+                      {course?.assignmentAggregation === 'best' ? 'Best' : 'Avg'} → Score / {course?.assignmentWeightage || 0}%
                     </div>
                   </th>
                 )}
                 {hasProjects && (
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider bg-violet-900/20 border-l-2 border-violet-500/50">
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider bg-violet-900/20 border-l-2 border-violet-500/50 min-w-[190px] whitespace-nowrap">
                     <div className="flex items-center gap-1">
-                      <span>🎓 Project (Agg)</span>
+                      <span>{course?.courseType === 'Lab' ? '🚀 OEL / CE Project' : '🎓 Project'} (Agg)</span>
                     </div>
                     <div className="text-[10px] font-normal mt-0.5 text-violet-400">
-                      Sum → {course?.projectWeightage || 0}%
+                      Sum of sections → Score / {course?.projectWeightage || 0}%
                     </div>
                   </th>
                 )}
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider bg-gradient-to-r from-green-900/20 to-emerald-900/20 border-l-2 border-green-500/50">
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider bg-gradient-to-r from-green-900/20 to-emerald-900/20 border-l-2 border-green-500/50 min-w-[160px] whitespace-nowrap">
                   <div className="flex items-center gap-1">
                     <span>🎯 Final Grade (Est.)</span>
                   </div>
@@ -236,7 +240,7 @@ export default function StudentsView({
                     Weighted Total
                   </div>
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider bg-gradient-to-r from-purple-900/20 to-violet-900/20 border-l-2 border-purple-500/50">
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider bg-gradient-to-r from-purple-900/20 to-violet-900/20 border-l-2 border-purple-500/50 min-w-[140px] whitespace-nowrap">
                   <div className="flex items-center gap-1">
                     <span>🏆 Letter Grade</span>
                   </div>
@@ -244,7 +248,7 @@ export default function StudentsView({
                     Based on %
                   </div>
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider">Actions</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider min-w-[120px] whitespace-nowrap">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border/50">
@@ -264,25 +268,34 @@ export default function StudentsView({
                   </td>
                   {exams.map(exam => {
                     const mark = getMark(student._id, exam._id);
+                    const isAggregatedCategory = exam.examCategory === 'Quiz' || exam.examCategory === 'Assignment' || exam.examCategory === 'Project';
                     return (
                       <td key={exam._id} className="px-4 py-3 text-sm">
                         <div className="flex items-center gap-2">
                           <div className="flex-1">
                             {mark ? (
-                              <div className="flex flex-col gap-1">
+                              isAggregatedCategory ? (
+                                // For aggregated categories, show only raw mark
                                 <Badge variant="secondary" className="font-medium justify-start">
-                                  Raw: {mark.rawMark}
+                                  {mark.rawMark} / {exam.totalMarks}
                                 </Badge>
-                                <Badge variant="secondary" className="font-medium bg-emerald-500/20 justify-start">
-                                  Weighted:{' '}
-                                  {(mark.weightedMark !== undefined && mark.weightedMark !== null
-                                    ? mark.weightedMark
-                                    : (mark.rawMark / exam.totalMarks) * exam.weightage
-                                  ).toFixed(2)}
-                                </Badge>
-                              </div>
+                              ) : (
+                                // For regular exams, show both raw and weighted
+                                <div className="flex flex-col gap-1">
+                                  <Badge variant="secondary" className="font-medium justify-start">
+                                    Raw: {mark.rawMark}
+                                  </Badge>
+                                  <Badge variant="secondary" className="font-medium bg-emerald-500/20 justify-start">
+                                    Weighted:{' '}
+                                    {(mark.weightedMark !== undefined && mark.weightedMark !== null
+                                      ? mark.weightedMark
+                                      : (mark.rawMark / exam.totalMarks) * exam.weightage
+                                    ).toFixed(2)}
+                                  </Badge>
+                                </div>
+                              )
                             ) : (
-                              <span className="text-muted-foreground">0</span>
+                              <span className="text-muted-foreground">—</span>
                             )}
                           </div>
                         </div>
@@ -293,45 +306,11 @@ export default function StudentsView({
                     <td className="px-4 py-3 text-sm bg-amber-900/10 border-l-2 border-amber-500/30">
                       {(() => {
                         const aggMark = getAggregatedMark(student._id, 'Quiz');
-                        if (!aggMark) return <span className="text-gray-600">0</span>;
-                        
-                        if ('isAggregated' in aggMark && aggMark.isAggregated) {
-                          return (
-                            <div className="flex flex-col gap-1">
-                              <span className="px-2 py-1 rounded font-medium text-xs bg-amber-900/40 text-amber-200">
-                                Weighted: {aggMark.rawMark.toFixed(2)}
-                              </span>
-                            </div>
-                          );
-                        } else {
-                          const exam = exams.find(e => e._id === aggMark.examId);
-                          if (!exam) return <span className="text-gray-600">0</span>;
-                          
-                          return (
-                            <div className="flex flex-col gap-1">
-                              <span className="px-2 py-1 rounded font-medium text-xs bg-amber-900/40 text-amber-200">
-                                Best weighted: {aggMark.rawMark.toFixed(2)}
-                              </span>
-                              <span className="text-xs italic text-gray-500">
-                                (Based on {exam.totalMarks} max)
-                              </span>
-                            </div>
-                          );
-                        }
-                      })()}
-                    </td>
-                  )}
-                  {hasProjects && (
-                    <td className="px-4 py-3 text-sm bg-violet-900/10 border-l-2 border-violet-500/30">
-                      {(() => {
-                        const aggMark = getProjectAggregatedMark(student._id);
-                        if (!aggMark) return <span className="text-gray-600">0</span>;
+                        if (!aggMark) return <span className="text-gray-600">—</span>;
                         return (
-                          <div className="flex flex-col gap-1">
-                            <span className="px-2 py-1 rounded font-medium text-xs bg-violet-900/40 text-violet-200">
-                              Weighted: {aggMark.rawMark.toFixed(2)}
-                            </span>
-                          </div>
+                          <span className="px-2 py-1 rounded font-medium text-xs bg-amber-900/40 text-amber-200">
+                            {aggMark.rawMark.toFixed(2)} / {course?.quizWeightage || 0}
+                          </span>
                         );
                       })()}
                     </td>
@@ -340,31 +319,30 @@ export default function StudentsView({
                     <td className="px-4 py-3 text-sm bg-blue-900/10 border-l-2 border-blue-500/30">
                       {(() => {
                         const aggMark = getAggregatedMark(student._id, 'Assignment');
-                        if (!aggMark) return <span className="text-gray-600">0</span>;
-                        
-                        if ('isAggregated' in aggMark && aggMark.isAggregated) {
-                          return (
-                            <div className="flex flex-col gap-1">
-                              <span className="px-2 py-1 rounded font-medium text-xs bg-blue-900/40 text-blue-200">
-                                Weighted: {aggMark.rawMark.toFixed(2)}
-                              </span>
-                            </div>
-                          );
-                        } else {
-                          const exam = exams.find(e => e._id === aggMark.examId);
-                          if (!exam) return <span className="text-gray-600">0</span>;
-                          
-                          return (
-                            <div className="flex flex-col gap-1">
-                              <span className="px-2 py-1 rounded font-medium text-xs bg-blue-900/40 text-blue-200">
-                                Best weighted: {aggMark.rawMark.toFixed(2)}
-                              </span>
-                              <span className="text-xs italic text-gray-500">
-                                (Based on {exam.totalMarks} max)
-                              </span>
-                            </div>
-                          );
-                        }
+                        if (!aggMark) return <span className="text-gray-600">—</span>;
+                        return (
+                          <span className="px-2 py-1 rounded font-medium text-xs bg-blue-900/40 text-blue-200">
+                            {aggMark.rawMark.toFixed(2)} / {course?.assignmentWeightage || 0}
+                          </span>
+                        );
+                      })()}
+                    </td>
+                  )}
+                  {hasProjects && (
+                    <td className="px-4 py-3 text-sm bg-violet-900/10 border-l-2 border-violet-500/30">
+                      {(() => {
+                        const aggMark = getProjectAggregatedMark(student._id);
+                        if (!aggMark) return <span className="text-gray-600">—</span>;
+                        return (
+                          <div className="flex flex-col gap-1">
+                            <span className="px-2 py-1 rounded font-medium text-xs bg-violet-900/40 text-violet-200">
+                              {aggMark.sumRaw} / {aggMark.sumTotal} pts
+                            </span>
+                            <span className="px-2 py-1 rounded font-medium text-xs bg-violet-700/30 text-violet-300">
+                              → {aggMark.rawMark.toFixed(2)} / {course?.projectWeightage || 0}%
+                            </span>
+                          </div>
+                        );
                       })()}
                     </td>
                   )}

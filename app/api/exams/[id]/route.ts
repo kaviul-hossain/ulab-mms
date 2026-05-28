@@ -140,14 +140,6 @@ export async function DELETE(
       return NextResponse.json({ error: 'Exam not found' }, { status: 404 });
     }
 
-    // Only allow deletion of custom (non-required) exams
-    if (exam.isRequired) {
-      return NextResponse.json(
-        { error: 'Cannot delete required exams' },
-        { status: 400 }
-      );
-    }
-
     await Exam.findByIdAndDelete(id);
 
     return NextResponse.json(
