@@ -328,7 +328,7 @@ export default function OverviewView({
           <div className="space-y-4 py-2">
             <ul className="list-disc pl-5 space-y-2 text-sm text-foreground">
               <li><strong>This feature is in Beta.</strong> Please double-check the generated file.</li>
-              <li>It supports a maximum of <strong>42 students, 6 COs and 12 POs</strong>.</li>
+              <li>It supports a maximum of <strong>50 students, 6 COs and 12 POs</strong>.</li>
               <li>It expects a predefined strict amount of exams for theory: <em>Attendance, Performance, Quiz, Assignment, Midterm Exam, Project, Final Exam</em>.</li>
               <li>It may malfunction for <strong>Lab</strong> courses because labs often follow different structures than theory courses.</li>
             </ul>

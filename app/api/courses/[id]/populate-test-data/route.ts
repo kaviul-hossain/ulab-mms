@@ -22,6 +22,13 @@ export async function POST(
     const resolvedParams = await params;
     const courseId = resolvedParams.id;
 
+    // Parse body for repopulate flag
+    let repopulate = false;
+    try {
+      const body = await request.json();
+      repopulate = !!body?.repopulate;
+    } catch { /* no body or not JSON — treat as fresh populate */ }
+
     const course = await Course.findOne({
       _id: courseId,
       userId: session.user.id,
@@ -36,6 +43,15 @@ export async function POST(
         { error: 'Test data population is only allowed for course TESTCODE123' },
         { status: 403 }
       );
+    }
+
+    // If repopulate, delete existing students, marks, and attendance records first
+    if (repopulate) {
+      const existingStudents = await Student.find({ courseId });
+      const existingStudentIds = existingStudents.map(s => s._id);
+      await Mark.deleteMany({ courseId });
+      await Student.deleteMany({ courseId });
+      await AttendanceSession.deleteMany({ courseId });
     }
 
     // Generate random students

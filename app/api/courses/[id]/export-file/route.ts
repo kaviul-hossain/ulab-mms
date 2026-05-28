@@ -311,6 +311,18 @@ export async function POST(
       });
     }
 
+    // Write "W" for withdrawn students in column M (M10 to M59) without touching other cells
+    const gradeSheet = workbook.sheet(mapping.sheetName || 'GradeSheet');
+    if (gradeSheet) {
+      const targetStudents = students.slice(0, 50);
+      targetStudents.forEach((student, index) => {
+        if (student.withdrawn) {
+          const row = 10 + index;
+          gradeSheet.cell(`M${row}`).value('Withdrawn (W)');
+        }
+      });
+    }
+
     // Write CO-PO Mapping data to CO_PO_AttainmentAnalysis sheet
     const copoSheet = workbook.sheet('CO_PO_AttainmentAnalysis');
     if (copoSheet && course.coPoMapping) {

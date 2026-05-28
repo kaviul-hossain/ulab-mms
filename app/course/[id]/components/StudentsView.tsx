@@ -42,6 +42,7 @@ interface Course {
   assignmentWeightage?: number;
   projectWeightage?: number;
   gradingScale?: string;
+  courseType?: string;
 }
 
 interface GradeData {

@@ -17,6 +17,7 @@ import BulkMarkEntryModal from './components/BulkMarkEntryModal';
 import ExcelExportMappingInfo from './components/ExcelExportMappingInfo';
 import CoPoView from './components/CoPoView';
 import ProjectView from './components/ProjectView';
+import PopulateTestDataModal from './components/PopulateTestDataModal';
 import { 
   GradeThreshold, 
   DEFAULT_GRADING_SCALE, 
@@ -141,6 +142,7 @@ export default function CoursePage() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [activeView, setActiveView] = useState<'overview' | 'exams' | 'students' | 'marks' | 'attendance' | 'copo' | 'project'>('overview');
   const [isGettingProjectMarks, setIsGettingProjectMarks] = useState(false);
+  const [showPopulateModal, setShowPopulateModal] = useState(false);
   const [searchStudentId, setSearchStudentId] = useState('');
   const [showStudentStatsModal, setShowStudentStatsModal] = useState(false);
   const [selectedStudentForStats, setSelectedStudentForStats] = useState<Student | null>(null);
@@ -907,22 +909,26 @@ export default function CoursePage() {
     }
   };
 
-  const handlePopulateTestData = async () => {
-    if (!confirm('This will generate random students, marks, and attendance data. Proceed?')) return;
+  const handlePopulateTestData = async (): Promise<{ studentsAdded: number; marksAdded: number } | null> => {
+    const repopulate = students.length > 0;
     setIsPopulating(true);
     try {
       const response = await fetch(`/api/courses/${courseId}/populate-test-data`, {
-        method: 'POST'
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ repopulate }),
       });
       const data = await response.json();
       if (response.ok) {
-        toast.success(`Generated ${data.studentsAdded} students and ${data.marksAdded} marks.`);
         await fetchCourseData();
+        return { studentsAdded: data.studentsAdded, marksAdded: data.marksAdded };
       } else {
         toast.error(data.error || 'Failed to populate test data');
+        return null;
       }
     } catch (err) {
       toast.error('Error populating test data');
+      return null;
     } finally {
       setIsPopulating(false);
     }
@@ -1501,16 +1507,25 @@ export default function CoursePage() {
                 <Button
                   variant="default"
                   size="sm"
-                  onClick={handlePopulateTestData}
+                  onClick={() => setShowPopulateModal(true)}
                   disabled={isPopulating}
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white mt-2"
+                  className={`w-full text-white mt-2 ${
+                    students.length > 0
+                      ? 'bg-amber-600 hover:bg-amber-700'
+                      : 'bg-blue-600 hover:bg-blue-700'
+                  }`}
                 >
-                  {isPopulating ? (
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  {students.length > 0 ? (
+                    <>
+                      <FlaskConical className="w-4 h-4 mr-2" />
+                      Re-populate Test Data
+                    </>
                   ) : (
-                    <FlaskConical className="w-4 h-4 mr-2" />
+                    <>
+                      <FlaskConical className="w-4 h-4 mr-2" />
+                      Populate Test Data
+                    </>
                   )}
-                  Populate Test Data
                 </Button>
               )}
             </div>
@@ -3634,6 +3649,13 @@ export default function CoursePage() {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    <PopulateTestDataModal
+      isOpen={showPopulateModal}
+      hasStudents={students.length > 0}
+      onClose={() => setShowPopulateModal(false)}
+      onConfirm={handlePopulateTestData}
+    />
     </>
   );
 }
