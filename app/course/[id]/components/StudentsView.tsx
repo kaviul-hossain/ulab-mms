@@ -40,6 +40,7 @@ interface Course {
   assignmentAggregation?: 'average' | 'best';
   quizWeightage?: number;
   assignmentWeightage?: number;
+  projectWeightage?: number;
   gradingScale?: string;
 }
 
@@ -67,8 +68,10 @@ interface StudentsViewProps {
   course: Course;
   hasQuizzes: boolean;
   hasAssignments: boolean;
+  hasProjects: boolean;
   getMark: (studentId: string, examId: string) => Mark | undefined;
   getAggregatedMark: (studentId: string, category: 'Quiz' | 'Assignment') => Mark | { rawMark: number; isAggregated: boolean; examId?: string } | null;
+  getProjectAggregatedMark: (studentId: string) => { rawMark: number; isAggregated: boolean } | null;
   calculateFinalGrade: (studentId: string) => GradeData;
   calculateLetterGrade: (percentage: number, gradingScale?: string) => LetterGrade | null;
   getGradeDisplay: (letter: string, modifier?: string) => string;
@@ -91,8 +94,10 @@ export default function StudentsView({
   course,
   hasQuizzes,
   hasAssignments,
+  hasProjects,
   getMark,
   getAggregatedMark,
+  getProjectAggregatedMark,
   calculateFinalGrade,
   calculateLetterGrade,
   getGradeDisplay,
@@ -213,6 +218,16 @@ export default function StudentsView({
                     </div>
                   </th>
                 )}
+                {hasProjects && (
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider bg-violet-900/20 border-l-2 border-violet-500/50">
+                    <div className="flex items-center gap-1">
+                      <span>🎓 Project (Agg)</span>
+                    </div>
+                    <div className="text-[10px] font-normal mt-0.5 text-violet-400">
+                      Sum → {course?.projectWeightage || 0}%
+                    </div>
+                  </th>
+                )}
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider bg-gradient-to-r from-green-900/20 to-emerald-900/20 border-l-2 border-green-500/50">
                   <div className="flex items-center gap-1">
                     <span>🎯 Final Grade (Est.)</span>
@@ -303,6 +318,21 @@ export default function StudentsView({
                             </div>
                           );
                         }
+                      })()}
+                    </td>
+                  )}
+                  {hasProjects && (
+                    <td className="px-4 py-3 text-sm bg-violet-900/10 border-l-2 border-violet-500/30">
+                      {(() => {
+                        const aggMark = getProjectAggregatedMark(student._id);
+                        if (!aggMark) return <span className="text-gray-600">0</span>;
+                        return (
+                          <div className="flex flex-col gap-1">
+                            <span className="px-2 py-1 rounded font-medium text-xs bg-violet-900/40 text-violet-200">
+                              Weighted: {aggMark.rawMark.toFixed(2)}
+                            </span>
+                          </div>
+                        );
                       })()}
                     </td>
                   )}

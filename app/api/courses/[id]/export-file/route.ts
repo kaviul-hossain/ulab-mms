@@ -300,23 +300,23 @@ export async function POST(
 
       const colLetters = ['D', 'E', 'F', 'G', 'H', 'I'];
       
-      if (midtermExam && maxMarksObj?.[midtermExam._id]) {
+      if (midtermExam && maxMarksObj?.[midtermExam._id.toString()]) {
         for (let i = 0; i < 6; i++) {
-          const val = maxMarksObj[midtermExam._id][i];
+          const val = maxMarksObj[midtermExam._id.toString()][i];
           copoSheet.cell(`${colLetters[i]}3`).value(val || '');
         }
       }
       
-      if (finalExam && maxMarksObj?.[finalExam._id]) {
+      if (finalExam && maxMarksObj?.[finalExam._id.toString()]) {
         for (let i = 0; i < 6; i++) {
-          const val = maxMarksObj[finalExam._id][i];
+          const val = maxMarksObj[finalExam._id.toString()][i];
           copoSheet.cell(`${colLetters[i]}4`).value(val || '');
         }
       }
 
-      if (projectExam && maxMarksObj?.[projectExam._id]) {
+      if (projectExam && maxMarksObj?.[projectExam._id.toString()]) {
         for (let i = 0; i < 6; i++) {
-          const val = maxMarksObj[projectExam._id][i];
+          const val = maxMarksObj[projectExam._id.toString()][i];
           copoSheet.cell(`${colLetters[i]}5`).value(val || '');
         }
       }

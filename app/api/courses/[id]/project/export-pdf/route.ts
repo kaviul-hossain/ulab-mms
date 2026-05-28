@@ -27,10 +27,9 @@ export async function GET(
     }
 
     const projectGroup = await ProjectGroup.findOne({ courseId: id });
-    const projectExam = await Exam.findOne({ courseId: id, examCategory: 'Project' });
+    const projectExams = await Exam.find({ courseId: id, examCategory: 'Project' });
 
     const groups = projectGroup?.groups || [];
-    const totalMarks = projectExam?.totalMarks ?? 25;
 
     const allStudentIds = groups.flatMap((g: any) => g.studentIds);
     const studentDocs = await Student.find({ _id: { $in: allStudentIds } }).select('name studentId _id');
@@ -66,11 +65,14 @@ export async function GET(
 <h1>${course.code} — ${course.name}</h1>
 <div class="subtitle">
   ${course.semester} ${course.year} &nbsp;•&nbsp; Project Groups &nbsp;•&nbsp;
-  Total Marks: ${totalMarks} &nbsp;•&nbsp;
   Max per group: ${projectGroup?.maxMembersPerGroup ?? '—'} &nbsp;•&nbsp;
   Generated: ${new Date().toLocaleString()}
 </div>
 
+${projectExams.length === 0 ? '<p>No project exams created yet.</p>' : projectExams.map((exam: any) => `
+<h2 style="margin-top: 24px; margin-bottom: 8px; font-size: 14px; border-bottom: 1px solid #eee; padding-bottom: 4px;">
+  ${exam.displayName} <span style="font-weight: normal; color: #666; font-size: 11px; margin-left: 8px;">(Total Marks: ${exam.totalMarks})</span>
+</h2>
 <table>
   <thead>
     <tr>
@@ -90,8 +92,9 @@ export async function GET(
             const s = studentMap.get(sid.toString());
             return s ? `<span class="student-chip">${s.name} (${s.studentId})</span>` : '';
           }).join('');
-          const rs = group.rubricScores;
-          const calcMark = calculateProjectMark(rs, totalMarks);
+          const examEntry = group.examRubricScores?.find((e: any) => e.examId?.toString() === exam?._id?.toString());
+          const rs = examEntry?.scores || { c1: 0, c2: 0, c3: 0, c4: 0, c5: 0 };
+          const calcMark = calculateProjectMark(rs, exam.totalMarks);
           return `<tr>
             <td class="group-num">${group.groupNumber}</td>
             <td>${group.projectTitle || '<span style="color:#aaa;font-style:italic">—</span>'}</td>
@@ -104,12 +107,13 @@ export async function GET(
     }
   </tbody>
 </table>
+`).join('')}
 
 <div class="footer">
   <strong>Rubric scoring:</strong>
   ${RUBRIC_CRITERIA.map((c, i) => `C${i+1}: ${c.label}`).join(' &nbsp;|&nbsp; ')}<br/>
   <strong>Scores:</strong> 0 = No/Wrong &nbsp;|&nbsp; 1 = Poor &nbsp;|&nbsp; 2 = Developing &nbsp;|&nbsp; 3 = Accomplished &nbsp;|&nbsp;
-  <strong>Formula:</strong> Σ (score/3) × (${totalMarks}/5) per criterion &nbsp;|&nbsp; Max = ${totalMarks}
+  <strong>Formula:</strong> Σ (score/3) × (Exam Marks/5) per criterion
 </div>
 <script>window.print();</script>
 </body>

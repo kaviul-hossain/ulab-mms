@@ -54,6 +54,7 @@ export async function GET(
         quizWeightage: course.quizWeightage,
         assignmentAggregation: course.assignmentAggregation,
         assignmentWeightage: course.assignmentWeightage,
+        projectWeightage: course.projectWeightage,
         gradingScale: course.gradingScale,
         coPoMapping: course.coPoMapping,
       },
@@ -163,11 +164,27 @@ export async function GET(
         };
       };
 
+      // Project: sum all raw marks, convert to projectWeightage
+      const getProjectAggregatedMark = (studentId: any): any => {
+        const projectExams = exams.filter((e: any) => e.examCategory === 'Project');
+        if (projectExams.length === 0) return null;
+        const projectMarks = marks.filter((m: any) =>
+          m.studentId.toString() === studentId.toString() &&
+          projectExams.some((e: any) => e._id.toString() === m.examId.toString())
+        );
+        if (projectMarks.length === 0) return null;
+        const sumRaw = projectMarks.reduce((s: number, m: any) => s + m.rawMark, 0);
+        const sumTotal = projectExams.reduce((s: number, e: any) => s + e.totalMarks, 0);
+        const projectWeightage = Number(course.projectWeightage || 0);
+        const weighted = sumTotal > 0 ? (sumRaw / sumTotal) * projectWeightage : 0;
+        return { rawMark: Math.round(weighted * 100) / 100, totalMarks: projectWeightage, isAggregated: true };
+      };
+
       const calculateFinalGrade = (studentId: any): number => {
         let totalContribution = 0;
 
         exams.forEach((exam: any) => {
-          if (exam.examCategory === 'Quiz' || exam.examCategory === 'Assignment') {
+          if (exam.examCategory === 'Quiz' || exam.examCategory === 'Assignment' || exam.examCategory === 'Project') {
             return;
           }
 
@@ -187,17 +204,19 @@ export async function GET(
         const hasQuizzes = exams.some((e: any) => e.examCategory === 'Quiz');
         if (hasQuizzes && course.quizWeightage) {
           const aggMark = getAggregatedMark(studentId, 'Quiz', course.quizAggregation);
-          if (aggMark) {
-            totalContribution += aggMark.rawMark;
-          }
+          if (aggMark) totalContribution += aggMark.rawMark;
         }
 
         const hasAssignments = exams.some((e: any) => e.examCategory === 'Assignment');
         if (hasAssignments && course.assignmentWeightage) {
           const aggMark = getAggregatedMark(studentId, 'Assignment', course.assignmentAggregation);
-          if (aggMark) {
-            totalContribution += aggMark.rawMark;
-          }
+          if (aggMark) totalContribution += aggMark.rawMark;
+        }
+
+        const hasProjects = exams.some((e: any) => e.examCategory === 'Project');
+        if (hasProjects && course.projectWeightage) {
+          const aggMark = getProjectAggregatedMark(studentId);
+          if (aggMark) totalContribution += aggMark.rawMark;
         }
 
         return totalContribution;
@@ -206,11 +225,15 @@ export async function GET(
       const csvRows: string[] = [];
       const headers = ['Student ID', 'Name'];
 
-      const allIndividualExams = exams.filter((exam: any) => exam.examCategory !== 'Quiz' && exam.examCategory !== 'Assignment');
+      const allIndividualExams = exams.filter((exam: any) =>
+        exam.examCategory !== 'Quiz' && exam.examCategory !== 'Assignment' && exam.examCategory !== 'Project'
+      );
       const quizExams = exams.filter((exam: any) => exam.examCategory === 'Quiz');
       const assignmentExams = exams.filter((exam: any) => exam.examCategory === 'Assignment');
+      const projectExams = exams.filter((exam: any) => exam.examCategory === 'Project');
       const hasQuizzes = quizExams.length > 0;
       const hasAssignments = assignmentExams.length > 0;
+      const hasProjects = projectExams.length > 0;
 
       allIndividualExams.forEach((exam: any) => {
         headers.push(`${exam.displayName} (Raw)`);
@@ -237,12 +260,20 @@ export async function GET(
         headers.push(`${exam.displayName} (Raw)`);
       });
 
+      projectExams.forEach((exam: any) => {
+        headers.push(`${exam.displayName} (Raw)`);
+      });
+
       if (hasQuizzes && course.quizWeightage) {
         headers.push(`Quiz (Agg) - ${course.quizAggregation} • ${course.quizWeightage}%`);
       }
 
       if (hasAssignments && course.assignmentWeightage) {
         headers.push(`Assignment (Agg) - ${course.assignmentAggregation} • ${course.assignmentWeightage}%`);
+      }
+
+      if (hasProjects && course.projectWeightage) {
+        headers.push(`Project (Agg) - Sum • ${course.projectWeightage}%`);
       }
 
       headers.push('Final Marks (Total)');
@@ -320,6 +351,14 @@ export async function GET(
           }
         });
 
+        projectExams.forEach((exam: any) => {
+          const mark = marks.find((m: any) =>
+            m.studentId.toString() === student._id.toString() &&
+            m.examId.toString() === exam._id.toString()
+          );
+          row.push(mark ? mark.rawMark : '-');
+        });
+
         if (hasQuizzes && course.quizWeightage) {
           const aggMark = getAggregatedMark(student._id, 'Quiz', course.quizAggregation);
           row.push(aggMark ? aggMark.rawMark.toFixed(2) : '-');
@@ -327,6 +366,11 @@ export async function GET(
 
         if (hasAssignments && course.assignmentWeightage) {
           const aggMark = getAggregatedMark(student._id, 'Assignment', course.assignmentAggregation);
+          row.push(aggMark ? aggMark.rawMark.toFixed(2) : '-');
+        }
+
+        if (hasProjects && course.projectWeightage) {
+          const aggMark = getProjectAggregatedMark(student._id);
           row.push(aggMark ? aggMark.rawMark.toFixed(2) : '-');
         }
 

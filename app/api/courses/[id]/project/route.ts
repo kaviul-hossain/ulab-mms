@@ -111,7 +111,7 @@ export async function PATCH(
     }
 
     const body = await req.json();
-    const { groupId, projectTitle, rubricScores, maxMembersPerGroup } = body;
+    const { groupId, projectTitle, rubricScores, examRubricScores, maxMembersPerGroup } = body;
 
     const projectGroup = await ProjectGroup.findOne({ courseId: id });
     if (!projectGroup) {
@@ -128,9 +128,53 @@ export async function PATCH(
         return NextResponse.json({ error: 'Group not found' }, { status: 404 });
       }
       if (projectTitle !== undefined) group.projectTitle = projectTitle;
+
+      // Legacy single-rubric save
       if (rubricScores !== undefined) {
         group.rubricScores = rubricScores;
         group.markedAt = new Date();
+      }
+
+      // Per-exam rubric scores + mark mode
+      if (examRubricScores !== undefined) {
+        const { examId, scores, markMode, reasoning } = examRubricScores as {
+          examId: string;
+          scores: { c1: number; c2: number; c3: number; c4: number; c5: number };
+          markMode: 'direct' | 'rubric';
+          reasoning?: string;
+        };
+        
+        // Completely bypass Mongoose deep array tracking by extracting, mutating, and replacing.
+        const currentGroups = projectGroup.toObject().groups;
+        const groupIndex = currentGroups.findIndex((g: any) => g._id.toString() === groupId);
+        
+        if (groupIndex !== -1) {
+          const targetGroup = currentGroups[groupIndex];
+          if (!targetGroup.examRubricScores) {
+            targetGroup.examRubricScores = [];
+          }
+          
+          const existingIndex = targetGroup.examRubricScores.findIndex(
+            (e: any) => e.examId?.toString() === examId
+          );
+
+          if (existingIndex !== -1) {
+            targetGroup.examRubricScores[existingIndex].scores = scores;
+            if (markMode !== undefined) {
+              targetGroup.examRubricScores[existingIndex].markMode = markMode;
+            }
+            if (reasoning !== undefined) {
+              targetGroup.examRubricScores[existingIndex].reasoning = reasoning;
+            }
+          } else {
+            targetGroup.examRubricScores.push({ examId: examId as any, scores, markMode: markMode || 'rubric', reasoning: reasoning || '' });
+          }
+          
+          targetGroup.markedAt = new Date();
+          
+          // Completely re-assign to trigger full re-cast and save
+          projectGroup.groups = currentGroups;
+        }
       }
     }
 

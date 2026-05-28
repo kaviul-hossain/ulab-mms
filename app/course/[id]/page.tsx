@@ -101,6 +101,7 @@ interface Course {
   assignmentAggregation?: 'average' | 'best';
   quizWeightage?: number;
   assignmentWeightage?: number;
+  projectWeightage?: number;
   gradingScale?: string;
 }
 
@@ -172,11 +173,12 @@ export default function CoursePage() {
     if (examCategory === 'Quiz') {
       return course?.quizWeightage ?? 0;
     }
-
     if (examCategory === 'Assignment') {
       return course?.assignmentWeightage ?? 0;
     }
-
+    if (examCategory === 'Project') {
+      return course?.projectWeightage ?? 25; // managed at course level
+    }
     return null;
   };
   const [examSettings, setExamSettings] = useState({
@@ -192,6 +194,7 @@ export default function CoursePage() {
     assignmentAggregation: 'average' as 'average' | 'best',
     quizWeightage: '',
     assignmentWeightage: '',
+    projectWeightage: '',
     gradingScale: DEFAULT_GRADING_SCALE,
   });
   const [error, setError] = useState('');
@@ -489,13 +492,12 @@ export default function CoursePage() {
   };
 
   const openExamModal = (presetCategory?: Exam['examCategory']) => {
-    if (presetCategory === 'Quiz' || presetCategory === 'Assignment') {
+    if (presetCategory === 'Quiz' || presetCategory === 'Assignment' || presetCategory === 'Project') {
       const nextIndex = exams.filter((exam) => exam.examCategory === presetCategory).length + 1;
-      const inheritedWeightage = getInheritedExamWeightage(presetCategory);
       setExamFormData({
         displayName: `${presetCategory} ${nextIndex}`,
         totalMarks: '',
-        weightage: inheritedWeightage !== null ? inheritedWeightage.toString() : '',
+        weightage: '',
         numberOfCOs: '',
         numberOfQuestions: '',
         examCategory: presetCategory,
@@ -749,6 +751,9 @@ export default function CoursePage() {
       }
       if (courseSettingsData.assignmentWeightage) {
         updateData.assignmentWeightage = parseFloat(courseSettingsData.assignmentWeightage);
+      }
+      if (courseSettingsData.projectWeightage !== undefined) {
+        updateData.projectWeightage = parseFloat(courseSettingsData.projectWeightage) || 0;
       }
 
       const response = await fetch(`/api/courses/${courseId}`, {
@@ -1005,16 +1010,33 @@ export default function CoursePage() {
   // Check if we should show aggregated columns
   const hasQuizzes = exams.some(exam => exam.examCategory === 'Quiz');
   const hasAssignments = exams.some(exam => exam.examCategory === 'Assignment');
+  const hasProjects = exams.some(exam => exam.examCategory === 'Project');
+
+  // Calculate project aggregated mark: sum all raw marks, convert to weightage
+  // Formula: (sumRaw / sumTotal) × projectWeightage
+  const getProjectAggregatedMark = (studentId: string): { rawMark: number; isAggregated: boolean } | null => {
+    const projectExams = exams.filter(e => e.examCategory === 'Project');
+    if (projectExams.length === 0) return null;
+    const projectMarks = projectExams
+      .map(e => ({ exam: e, mark: getMark(studentId, e._id) }))
+      .filter(x => x.mark !== undefined);
+    if (projectMarks.length === 0) return null;
+    const sumRaw = projectMarks.reduce((s, x) => s + x.mark!.rawMark, 0);
+    const sumTotal = projectExams.reduce((s, e) => s + e.totalMarks, 0);
+    const projectWeightage = Number(course?.projectWeightage || 0);
+    const weighted = sumTotal > 0 ? (sumRaw / sumTotal) * projectWeightage : 0;
+    return { rawMark: Math.round(weighted * 100) / 100, isAggregated: true };
+  };
 
   // Calculate final grade for a student
   const calculateFinalGrade = (studentId: string): { total: number; breakdown: Array<{ name: string; mark: number; totalMarks: number; weightage: number; contribution: number; isAggregated?: boolean }> } => {
     const breakdown: Array<{ name: string; mark: number; totalMarks: number; weightage: number; contribution: number; isAggregated?: boolean }> = [];
     let totalContribution = 0;
 
-    // Process individual exams (non-Quiz, non-Assignment)
+    // Process individual exams (non-Quiz, non-Assignment, non-Project)
     exams.forEach(exam => {
-      if (exam.examCategory === 'Quiz' || exam.examCategory === 'Assignment') {
-        return; // Skip, will be handled by aggregated columns
+      if (exam.examCategory === 'Quiz' || exam.examCategory === 'Assignment' || exam.examCategory === 'Project') {
+        return; // handled by aggregated columns
       }
 
       const mark = getMark(studentId, exam._id);
@@ -1061,7 +1083,6 @@ export default function CoursePage() {
       if (aggMark) {
         const totalMarks = Number(course.assignmentWeightage);
         const contribution = aggMark.rawMark;
-        
         breakdown.push({
           name: 'Assignment (Aggregated)',
           mark: contribution,
@@ -1070,8 +1091,24 @@ export default function CoursePage() {
           contribution: contribution,
           isAggregated: true,
         });
-        
         totalContribution += contribution;
+      }
+    }
+
+    // Add Project aggregated column (sum-based)
+    if (hasProjects && course?.projectWeightage) {
+      const aggMark = getProjectAggregatedMark(studentId);
+      if (aggMark) {
+        const totalMarks = Number(course.projectWeightage);
+        breakdown.push({
+          name: 'Project (Aggregated)',
+          mark: aggMark.rawMark,
+          totalMarks: totalMarks,
+          weightage: totalMarks,
+          contribution: aggMark.rawMark,
+          isAggregated: true,
+        });
+        totalContribution += aggMark.rawMark;
       }
     }
 
@@ -1374,6 +1411,7 @@ export default function CoursePage() {
                   assignmentAggregation: course?.assignmentAggregation || 'average',
                   quizWeightage: course?.quizWeightage?.toString() || '',
                   assignmentWeightage: course?.assignmentWeightage?.toString() || '',
+                  projectWeightage: course?.projectWeightage?.toString() || '',
                   gradingScale: course?.gradingScale 
                     ? decodeGradingScale(course.gradingScale) 
                     : DEFAULT_GRADING_SCALE,
@@ -1508,8 +1546,10 @@ export default function CoursePage() {
                 course={course}
                 hasQuizzes={hasQuizzes}
                 hasAssignments={hasAssignments}
+                hasProjects={hasProjects}
                 getMark={getMark}
                 getAggregatedMark={getAggregatedMark}
+                getProjectAggregatedMark={getProjectAggregatedMark}
                 calculateFinalGrade={calculateFinalGrade}
                 calculateLetterGrade={calculateLetterGrade}
                 getGradeDisplay={getGradeDisplay}
@@ -1731,13 +1771,19 @@ export default function CoursePage() {
             <div>
               <Label>
                 Weightage (%)
-                {(examFormData.examCategory === 'Quiz' || examFormData.examCategory === 'Assignment') && (
-                  <span className="ml-2 text-xs text-amber-500">(Inherited from Course Settings)</span>
+                {(examFormData.examCategory === 'Quiz' || examFormData.examCategory === 'Assignment' || examFormData.examCategory === 'Project') && (
+                  <span className="ml-2 text-xs text-amber-500">(Set in Course Settings)</span>
                 )}
               </Label>
-              {(examFormData.examCategory === 'Quiz' || examFormData.examCategory === 'Assignment') ? (
-                <div className="mt-2 rounded-lg border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
-                  {(getInheritedExamWeightage(examFormData.examCategory) ?? 0).toFixed(2)}% from course settings
+              {(examFormData.examCategory === 'Quiz' || examFormData.examCategory === 'Assignment' || examFormData.examCategory === 'Project') ? (
+                <div className="mt-2 rounded-lg border bg-muted/40 px-4 py-3 text-sm text-muted-foreground flex items-center justify-between">
+                  <span>
+                    {examFormData.examCategory === 'Project'
+                      ? `${course?.projectWeightage ?? 25}% (shared across all projects)`
+                      : `${(getInheritedExamWeightage(examFormData.examCategory) ?? 0).toFixed(2)}% from course settings`
+                    }
+                  </span>
+                  <span className="text-xs text-amber-400 font-medium">Change in Course Settings →</span>
                 </div>
               ) : (
                 <Input
@@ -1753,8 +1799,10 @@ export default function CoursePage() {
                 />
               )}
               <p className="text-xs text-muted-foreground mt-1">
-                {(examFormData.examCategory === 'Quiz' || examFormData.examCategory === 'Assignment') 
+                {(examFormData.examCategory === 'Quiz' || examFormData.examCategory === 'Assignment')
                   ? 'Each item contributes using this shared group weight'
+                  : examFormData.examCategory === 'Project'
+                  ? 'All project marks are summed and scaled to the project weightage'
                   : 'Percentage contribution to final grade'}
               </p>
             </div>
@@ -1897,13 +1945,18 @@ export default function CoursePage() {
             <div>
               <Label>
                 Weightage (%)
-                {(examSettings.examCategory === 'Quiz' || examSettings.examCategory === 'Assignment') && (
+                {(examSettings.examCategory === 'Quiz' || examSettings.examCategory === 'Assignment' || examSettings.examCategory === 'Project') && (
                   <span className="ml-2 text-xs text-amber-500">(Set in Course Settings)</span>
                 )}
               </Label>
-              {(examSettings.examCategory === 'Quiz' || examSettings.examCategory === 'Assignment') ? (
-                <div className="w-full px-4 py-3 bg-muted/50 border rounded-lg text-muted-foreground cursor-not-allowed mt-2">
-                  Not applicable - weightage set at course level
+              {(examSettings.examCategory === 'Quiz' || examSettings.examCategory === 'Assignment' || examSettings.examCategory === 'Project') ? (
+                <div className="w-full px-4 py-3 bg-muted/50 border rounded-lg text-muted-foreground mt-2 flex items-center justify-between">
+                  <span>
+                    {examSettings.examCategory === 'Project'
+                      ? `${course?.projectWeightage ?? 25}% shared across all projects`
+                      : 'Not applicable — weightage set at course level'}
+                  </span>
+                  <span className="text-xs text-amber-400 font-medium">Change in Course Settings →</span>
                 </div>
               ) : (
                 <Input
@@ -1918,8 +1971,10 @@ export default function CoursePage() {
                 />
               )}
               <p className="text-xs text-muted-foreground mt-1">
-                {(examSettings.examCategory === 'Quiz' || examSettings.examCategory === 'Assignment') 
-                  ? '💡 Use Course Settings button to configure Quiz/Assignment aggregation weightage'
+                {(examSettings.examCategory === 'Quiz' || examSettings.examCategory === 'Assignment')
+                  ? '💡 Use Course Settings to configure Quiz/Assignment aggregation weightage'
+                  : examSettings.examCategory === 'Project'
+                  ? '💡 All project marks are summed and scaled to the project weightage in Course Settings'
                   : 'Percentage contribution to final grade'}
               </p>
             </div>
@@ -2136,15 +2191,53 @@ export default function CoursePage() {
                       </CardContent>
                     </Card>
 
+                    {/* Project Settings */}
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                          🎓 Project Aggregation
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="grid md:grid-cols-2 gap-6">
+                          <div>
+                            <Label>Aggregation Method</Label>
+                            <div className="w-full px-4 py-2 bg-muted/40 border rounded-lg text-foreground mt-2 text-sm text-muted-foreground">
+                              Sum of all project marks → converted to weightage
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              All Project exam marks are added up, then scaled to the weightage below. No average or best — everything counts.
+                            </p>
+                          </div>
+                          <div>
+                            <Label>Project Weightage (%)</Label>
+                            <Input
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="0.01"
+                              value={courseSettingsData.projectWeightage}
+                              onChange={(e) => setCourseSettingsData({ ...courseSettingsData, projectWeightage: e.target.value })}
+                              placeholder="e.g., 25"
+                              className="mt-2"
+                            />
+                            <p className="text-xs text-muted-foreground mt-1">Weightage for the aggregated Project column in final grade</p>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+
                     {/* Info Box */}
                     <Alert className="border-primary/50 bg-primary/10">
                       <AlertDescription className="text-sm">
                         💡 <strong>Note:</strong> Individual Quiz/Assignment exams don't need weightages. 
                         The aggregated column will use the weightage you set here.
+                        Project exams are summed (not averaged) before applying their weightage.
                       </AlertDescription>
                     </Alert>
                   </div>
                 )}
+
 
                 {/* Grading Scale Tab */}
                 {courseSettingsTab === 'grading' && (

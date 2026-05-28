@@ -83,6 +83,7 @@ export async function PUT(
       assignmentAggregation,
       quizWeightage,
       assignmentWeightage,
+      projectWeightage,
     } = body;
 
     await dbConnect();
@@ -139,6 +140,10 @@ export async function PUT(
 
     if (assignmentWeightage !== undefined) {
       updateData.assignmentWeightage = assignmentWeightage;
+    }
+
+    if (projectWeightage !== undefined) {
+      updateData.projectWeightage = projectWeightage;
     }
 
     const course = await Course.findOneAndUpdate(

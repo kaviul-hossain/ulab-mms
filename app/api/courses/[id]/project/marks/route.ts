@@ -46,7 +46,11 @@ export async function POST(
 
       for (const group of projectGroup.groups) {
         if (group.studentIds.length === 0) continue;
-        const computedMark = calculateProjectMark(group.rubricScores, totalProjectMarks);
+        
+        const examEntry = group.examRubricScores?.find((e: any) => e.examId?.toString() === exam._id.toString());
+        if (!examEntry) continue; // skip if this exam wasn't scored yet for the group
+
+        const computedMark = calculateProjectMark(examEntry.scores, totalProjectMarks);
 
         for (const studentId of group.studentIds) {
           await Mark.findOneAndUpdate(

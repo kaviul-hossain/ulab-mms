@@ -18,6 +18,7 @@ interface Course {
   showFinalGrade: boolean;
   quizWeightage?: number | string;
   assignmentWeightage?: number | string;
+  projectWeightage?: number | string;
 }
 
 interface OverviewViewProps {
@@ -52,10 +53,11 @@ export default function OverviewView({
 
   const hasQuizzes = exams.some(exam => exam.examCategory === 'Quiz');
   const hasAssignments = exams.some(exam => exam.examCategory === 'Assignment');
+  const hasProjects = exams.some(exam => exam.examCategory === 'Project');
 
   let totalWeightage = exams.reduce((sum, exam) => {
-    if (exam.examCategory === 'Quiz' || exam.examCategory === 'Assignment') {
-      return sum;
+    if (exam.examCategory === 'Quiz' || exam.examCategory === 'Assignment' || exam.examCategory === 'Project') {
+      return sum; // these are handled at course level below
     }
     return sum + (Number(exam.weightage) || 0);
   }, 0);
@@ -66,6 +68,10 @@ export default function OverviewView({
 
   if (hasAssignments && course.assignmentWeightage) {
     totalWeightage += Number(course.assignmentWeightage);
+  }
+
+  if (hasProjects && course.projectWeightage) {
+    totalWeightage += Number(course.projectWeightage);
   }
 
   const studentsWithMarks = students.filter(student => 

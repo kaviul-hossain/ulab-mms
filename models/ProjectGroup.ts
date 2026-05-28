@@ -5,12 +5,20 @@ import { IRubricScores, calculateProjectMark, RUBRIC_CRITERIA } from '@/app/util
 export type { IRubricScores };
 export { calculateProjectMark, RUBRIC_CRITERIA };
 
+export interface IExamRubricEntry {
+  examId: mongoose.Types.ObjectId;
+  scores: IRubricScores;
+  markMode: 'direct' | 'rubric';
+  reasoning?: string;
+}
+
 export interface IProjectGroupEntry {
   _id: mongoose.Types.ObjectId;
   groupNumber: number;
   projectTitle: string;
   studentIds: mongoose.Types.ObjectId[];
-  rubricScores: IRubricScores;
+  rubricScores: IRubricScores; // legacy: single rubric for group
+  examRubricScores: IExamRubricEntry[]; // per-exam rubric scores + mode
   markedAt?: Date;
 }
 
@@ -34,6 +42,19 @@ const RubricScoresSchema = new Schema(
   { _id: false }
 );
 
+const ExamRubricEntrySchema = new Schema(
+  {
+    examId: { type: Schema.Types.ObjectId, ref: 'Exam', required: true },
+    scores: {
+      type: RubricScoresSchema,
+      default: () => ({ c1: 0, c2: 0, c3: 0, c4: 0, c5: 0 }),
+    },
+    markMode: { type: String, enum: ['direct', 'rubric'], default: 'direct' },
+    reasoning: { type: String, default: '' },
+  },
+  { _id: false }
+);
+
 const ProjectGroupEntrySchema = new Schema({
   groupNumber: { type: Number, required: true },
   projectTitle: { type: String, default: '' },
@@ -42,6 +63,7 @@ const ProjectGroupEntrySchema = new Schema({
     type: RubricScoresSchema,
     default: () => ({ c1: 0, c2: 0, c3: 0, c4: 0, c5: 0 }),
   },
+  examRubricScores: { type: [ExamRubricEntrySchema], default: [] },
   markedAt: { type: Date, default: null },
 });
 

@@ -17,6 +17,7 @@ export interface ICourse extends Document {
   quizWeightage: number; // Weightage for aggregated quiz column
   assignmentAggregation: 'average' | 'best'; // How to aggregate assignment marks
   assignmentWeightage: number; // Weightage for aggregated assignment column
+  projectWeightage: number; // Weightage for aggregated project column (sum-based)
   gradingScale?: string; // Encoded grading scale (e.g., "0:F:0|50:D:0|55:C:1|...")
   excelExportMapping?: ExcelExportMapping | null;
   coPoMapping?: {
@@ -107,6 +108,12 @@ const CourseSchema: Schema = new Schema(
     assignmentWeightage: {
       type: Number,
       default: 0,
+      min: [0, 'Weightage cannot be negative'],
+      max: [100, 'Weightage cannot exceed 100'],
+    },
+    projectWeightage: {
+      type: Number,
+      default: 25,
       min: [0, 'Weightage cannot be negative'],
       max: [100, 'Weightage cannot exceed 100'],
     },
