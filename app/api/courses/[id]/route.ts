@@ -84,6 +84,10 @@ export async function PUT(
       quizWeightage,
       assignmentWeightage,
       projectWeightage,
+      classTime,
+      classRoom,
+      numberOfStudents,
+      classRepresentativeId,
     } = body;
 
     await dbConnect();
@@ -144,6 +148,22 @@ export async function PUT(
 
     if (projectWeightage !== undefined) {
       updateData.projectWeightage = projectWeightage;
+    }
+
+    if (classTime !== undefined) {
+      updateData.classTime = classTime;
+    }
+
+    if (classRoom !== undefined) {
+      updateData.classRoom = classRoom;
+    }
+
+    if (numberOfStudents !== undefined) {
+      updateData.numberOfStudents = numberOfStudents;
+    }
+
+    if (classRepresentativeId !== undefined) {
+      updateData.classRepresentativeId = classRepresentativeId;
     }
 
     const course = await Course.findOneAndUpdate(

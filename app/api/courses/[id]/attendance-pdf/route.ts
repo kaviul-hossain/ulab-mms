@@ -139,7 +139,7 @@ function buildAttendanceHtml(
     new Date(a.date).getTime() - new Date(b.date).getTime()
   );
 
-  const ROWS_PER_PAGE = 20;
+  const ROWS_PER_PAGE = 18;
   const totalPages = Math.ceil(students.length / ROWS_PER_PAGE);
 
   let pagesHtml = '';
