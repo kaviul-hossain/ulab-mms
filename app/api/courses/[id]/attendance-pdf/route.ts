@@ -5,7 +5,8 @@ import dbConnect from '@/lib/mongodb';
 import Course from '@/models/Course';
 import Student from '@/models/Student';
 import AttendanceSession from '@/models/AttendanceSession';
-import puppeteer from 'puppeteer';
+import puppeteer from 'puppeteer-core';
+import chromium from '@sparticuz/chromium';
 import path from 'path';
 import { readFile } from 'fs/promises';
 
@@ -520,7 +521,13 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       }
     );
 
-    const browser = await puppeteer.launch({ args: ['--no-sandbox', '--disable-setuid-sandbox'] });
+    const isDev = process.env.NODE_ENV === 'development';
+    const browser = await puppeteer.launch({
+      args: isDev ? [] : chromium.args,
+      defaultViewport: chromium.defaultViewport,
+      executablePath: isDev ? (process.env.LOCAL_CHROMIUM_PATH || 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe') : await chromium.executablePath(),
+      headless: isDev ? true : chromium.headless,
+    });
     try {
       const page = await browser.newPage();
       await page.setContent(html, { waitUntil: 'networkidle0' });
