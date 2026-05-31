@@ -5,12 +5,12 @@ import dbConnect from '@/lib/mongodb';
 import Course from '@/models/Course';
 import Student from '@/models/Student';
 import AttendanceSession from '@/models/AttendanceSession';
-import puppeteer from 'puppeteer-core';
-import chromium from '@sparticuz/chromium';
 import path from 'path';
 import { readFile } from 'fs/promises';
 
 export const runtime = 'nodejs';
+
+// ... (existing types and helper functions will be kept intact by targeting the bottom part, wait, I need to replace from the top to remove puppeteer imports)
 
 type StudentRow = {
   _id: unknown;
@@ -440,6 +440,13 @@ function buildAttendanceHtml(
   </head>
   <body>
     ${pagesHtml}
+    <script>
+      window.onload = function() {
+        setTimeout(function() {
+          window.print();
+        }, 500);
+      };
+    </script>
   </body>
   </html>
   `;
@@ -521,32 +528,12 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       }
     );
 
-    const isDev = process.env.NODE_ENV === 'development';
-    const browser = await puppeteer.launch({
-      args: isDev ? [] : chromium.args,
-      executablePath: isDev ? (process.env.LOCAL_CHROMIUM_PATH || 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe') : await chromium.executablePath(),
-      headless: true,
+    return new NextResponse(html, {
+      status: 200,
+      headers: {
+        'Content-Type': 'text/html; charset=utf-8',
+      },
     });
-    try {
-      const page = await browser.newPage();
-      await page.setContent(html, { waitUntil: 'networkidle0' });
-      const pdfBuffer = await page.pdf({
-        format: 'A4',
-        landscape: true,
-        printBackground: true,
-        margin: { top: '8mm', bottom: '8mm', left: '10mm', right: '10mm' },
-      });
-
-      return new NextResponse(Buffer.from(pdfBuffer), {
-        status: 200,
-        headers: {
-          'Content-Type': 'application/pdf',
-          'Content-Disposition': `attachment; filename="${course.code || 'course'}_attendance_${new Date().toISOString().split('T')[0]}.pdf"`,
-        },
-      });
-    } finally {
-      await browser.close();
-    }
   } catch (error) {
     console.error('attendance-pdf error:', error);
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Internal server error' }, { status: 500 });

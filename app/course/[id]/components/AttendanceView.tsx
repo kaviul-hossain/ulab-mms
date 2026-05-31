@@ -343,29 +343,9 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
 
       const qs = settingsParams.toString();
       const url = `/api/courses/${courseId}/attendance-pdf${qs ? `?${qs}` : ''}`;
-      const res = await fetch(url, { method: 'GET' });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        console.error('Export failed', err);
-        return;
-      }
-
-      const blob = await res.blob();
-      const contentDisp = res.headers.get('Content-Disposition') || '';
-      let filename = `${courseId}_attendance.pdf`;
-      const match = /filename="?([^";]+)"?/.exec(contentDisp);
-      if (match && match[1]) filename = match[1];
-
-      const link = document.createElement('a');
-      const blobUrl = window.URL.createObjectURL(blob);
-      link.href = blobUrl;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(blobUrl);
+      window.open(url, '_blank');
     } catch (err) {
-      console.error('Error exporting attendance PDF', err);
+      console.error('Error opening attendance view', err);
     } finally {
       setExportLoading(false);
     }
@@ -431,7 +411,7 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
             onClick={handleExportClick}
             disabled={exportLoading}
           >
-            {exportLoading ? 'Exporting...' : 'Export Attendance'}
+            {exportLoading ? 'Opening...' : 'Print Attendance'}
           </Button>
 
           <Button type="button" variant="outline" onClick={() => setShowQrModal(true)} disabled={!isActive}>
@@ -777,7 +757,7 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
               You haven't set the class settings (Class Time, Class Room, Number of Students, or Representative) yet.
             </p>
             <p>
-              If you don't set these, the options will appear empty in the generated PDF. You only need to set these once.
+              If you don't set these, the options will appear empty in the printed sheet. You only need to set these once.
             </p>
           </div>
           <div className="flex justify-end gap-2 pt-4">
@@ -789,7 +769,7 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
               }}
               disabled={exportLoading}
             >
-              Ignore & Export
+              Ignore & Print
             </Button>
             <Button
               onClick={() => {
