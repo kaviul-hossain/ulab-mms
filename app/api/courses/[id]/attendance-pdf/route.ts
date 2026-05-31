@@ -524,7 +524,6 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const isDev = process.env.NODE_ENV === 'development';
     const browser = await puppeteer.launch({
       args: isDev ? [] : chromium.args,
-      defaultViewport: chromium.defaultViewport,
       executablePath: isDev ? (process.env.LOCAL_CHROMIUM_PATH || 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe') : await chromium.executablePath(),
       headless: isDev ? true : chromium.headless,
     });
