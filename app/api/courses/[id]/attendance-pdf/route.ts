@@ -525,7 +525,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const browser = await puppeteer.launch({
       args: isDev ? [] : chromium.args,
       executablePath: isDev ? (process.env.LOCAL_CHROMIUM_PATH || 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe') : await chromium.executablePath(),
-      headless: isDev ? true : chromium.headless,
+      headless: true,
     });
     try {
       const page = await browser.newPage();
