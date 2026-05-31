@@ -5,6 +5,7 @@ import AuthProvider from "./components/AuthProvider";
 import ThemeProvider from "./components/ThemeProvider";
 import { Toaster } from "@/components/ui/sonner";
 import AppFooter from "@/components/AppFooter";
+import BugReportButton from "@/components/BugReportButton";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -38,6 +39,7 @@ export default function RootLayout({
               <AppFooter />
             </div>
             <Toaster richColors position="top-right" />
+            <BugReportButton />
           </ThemeProvider>
         </AuthProvider>
       </body>
