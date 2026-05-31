@@ -34,6 +34,9 @@ interface OverviewViewProps {
   exportingCSV: boolean;
   onExportCourseFile?: () => void;
   exportingCourseFile?: boolean;
+  /** CO-PO mapping status for export warning */
+  coPoStatus?: 'no-mapping' | 'no-max-marks' | 'ok';
+  onGoToCoPo?: () => void;
 }
 export default function OverviewView({
   course,
@@ -48,6 +51,8 @@ export default function OverviewView({
   exportingCSV,
   onExportCourseFile,
   exportingCourseFile,
+  coPoStatus = 'ok',
+  onGoToCoPo,
 }: OverviewViewProps) {
   const [showExportDisclaimer, setShowExportDisclaimer] = useState(false);
   const [showChecklist, setShowChecklist] = useState(false);
@@ -326,6 +331,35 @@ export default function OverviewView({
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
+            {/* CO-PO mapping warning */}
+            {coPoStatus !== 'ok' && (
+              <div className="rounded-lg border border-red-500/40 bg-red-500/10 p-3">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
+                  <div className="flex-1 text-sm">
+                    <p className="font-semibold text-red-300 mb-1">
+                      {coPoStatus === 'no-mapping'
+                        ? 'CO-PO Mapping Not Configured'
+                        : 'CO Maximum Marks Not Set'}
+                    </p>
+                    <p className="text-red-200/80 text-xs leading-relaxed">
+                      {coPoStatus === 'no-mapping'
+                        ? 'No CO-PO mapping has been set for this course. Without it, the exported Course File will show PO attainment as 0% for all Program Outcomes.'
+                        : 'Some CO-enabled exams are missing CO maximum marks in the CO-PO Mapping. The exported Course File may show incorrect or 0% PO attainment for those exams.'}
+                    </p>
+                    {onGoToCoPo && (
+                      <button
+                        onClick={() => { setShowExportDisclaimer(false); onGoToCoPo(); }}
+                        className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-red-300 hover:text-red-100 underline underline-offset-2 transition-colors"
+                      >
+                        → Go to CO-PO Mapping to fix this
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
             <ul className="list-disc pl-5 space-y-2 text-sm text-foreground">
               <li><strong>This feature is in Beta.</strong> Please double-check the generated file.</li>
               <li>It supports a maximum of <strong>50 students, 6 COs and 12 POs</strong>.</li>
@@ -343,8 +377,9 @@ export default function OverviewView({
                 if (onExportCourseFile) onExportCourseFile();
               }}
               disabled={exportingCourseFile}
+              variant={coPoStatus !== 'ok' ? 'destructive' : 'default'}
             >
-              {exportingCourseFile ? 'Exporting...' : 'I Understand, Export'}
+              {exportingCourseFile ? 'Exporting...' : coPoStatus !== 'ok' ? 'Export Anyway' : 'I Understand, Export'}
             </Button>
           </DialogFooter>
         </DialogContent>

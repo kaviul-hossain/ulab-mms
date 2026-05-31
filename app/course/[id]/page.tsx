@@ -973,6 +973,29 @@ export default function CoursePage() {
     setIgnoredCoWarnings(prev => new Set([...prev, ...allCoExamIds]));
   };
 
+  /**
+   * Returns the CO-PO readiness status for the export warning:
+   * - 'no-mapping': coPoMapping.mapping is entirely false (no PO connections set at all)
+   * - 'no-max-marks': mapping is set but some CO-enabled exams have no max marks
+   * - 'ok': everything looks good
+   */
+  const getCoPoStatus = (): 'no-mapping' | 'no-max-marks' | 'ok' => {
+    if (!course) return 'ok';
+    const mapping = course.coPoMapping?.mapping;
+    const maxMarks = course.coPoMapping?.maxMarks || {};
+    // Check if mapping matrix exists and has at least one true value
+    const hasAnyMapping = mapping && mapping.some(row => row.some(cell => cell === true));
+    if (!hasAnyMapping) return 'no-mapping';
+    // Check if any CO-enabled exam is missing max marks
+    const hasMissingMaxMarks = exams.some(exam => {
+      if (!exam.numberOfCOs || exam.numberOfCOs < 1) return false;
+      const examMaxMarks = maxMarks[exam._id];
+      return !examMaxMarks || !examMaxMarks.slice(0, exam.numberOfCOs).some((m: number) => m > 0);
+    });
+    if (hasMissingMaxMarks) return 'no-max-marks';
+    return 'ok';
+  };
+
   const getExamPercentage = (rawMark: number, totalMarks: number) => {
     if (!totalMarks || totalMarks <= 0) return 0;
     return (rawMark / totalMarks) * 100;
@@ -1585,6 +1608,8 @@ export default function CoursePage() {
                 onExportCourseFile={handleExportCourseFile}
                 exportingCourseFile={exportingCourseFile}
                 calculateFinalGrade={calculateFinalGrade}
+                coPoStatus={getCoPoStatus()}
+                onGoToCoPo={() => setActiveView('copo')}
               />
             )}
 
