@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, KeyboardEvent } from 'react';
 import { notify } from '@/app/utils/notifications';
+import { AlertTriangle, ArrowRight } from 'lucide-react';
 
 interface Student {
   _id: string;
@@ -38,6 +39,11 @@ interface AddMarkModalProps {
   onMarkSaved: () => void;
   initialExamId?: string;
   initialStudentId?: string;
+  // CO validation props
+  coPoMaxMarks?: Record<string, number[]>;
+  onGoToCoPo?: () => void;
+  ignoredCoWarnings?: Set<string>;
+  onIgnoreCOWarning?: (examId: string) => void;
 }
 
 export default function AddMarkModal({
@@ -50,6 +56,10 @@ export default function AddMarkModal({
   onMarkSaved,
   initialExamId,
   initialStudentId,
+  coPoMaxMarks = {},
+  onGoToCoPo,
+  ignoredCoWarnings = new Set(),
+  onIgnoreCOWarning,
 }: AddMarkModalProps) {
   const [selectedExamId, setSelectedExamId] = useState<string>(initialExamId || '');
   const [studentSearch, setStudentSearch] = useState('');
@@ -62,6 +72,7 @@ export default function AddMarkModal({
   const [success, setSuccess] = useState('');
   const [currentStep, setCurrentStep] = useState<'exam' | 'student' | 'marks'>('exam');
   const [focusedCOIndex, setFocusedCOIndex] = useState<number>(-1);
+  const [showCoWarning, setShowCoWarning] = useState(false);
 
   // Refs for input fields
   const studentSearchRef = useRef<HTMLInputElement>(null);
@@ -173,6 +184,16 @@ export default function AddMarkModal({
     setSelectedExamId(examId);
     setCurrentStep('student');
     setError('');
+    // Check if CO warning should be shown
+    const exam = exams.find(e => e._id === examId);
+    if (exam && exam.numberOfCOs && exam.numberOfCOs > 0) {
+      const maxMarks = coPoMaxMarks[examId];
+      const configured = maxMarks && maxMarks.slice(0, exam.numberOfCOs).some(m => m > 0);
+      const ignored = ignoredCoWarnings.has(examId);
+      setShowCoWarning(!configured && !ignored);
+    } else {
+      setShowCoWarning(false);
+    }
   };
 
   const handleStudentSelect = (studentId: string) => {
@@ -232,6 +253,20 @@ export default function AddMarkModal({
       if (Math.abs(totalCoSum - rawMarkNum) > 0.01) { // Allow small floating point differences
         setError(`CO + Non-CO marks must sum to ${rawMarkNum}. Current sum: ${totalCoSum.toFixed(2)}`);
         return;
+      }
+
+      // Check if CO marks exceed configured maximums
+      const examMaxMarks = coPoMaxMarks[selectedExamId];
+      const maxMarksConfigured = examMaxMarks && examMaxMarks.slice(0, numberOfCOs).some(m => m > 0);
+      if (maxMarksConfigured) {
+        for (let coIdx = 0; coIdx < numberOfCOs; coIdx++) {
+          const configuredMax = examMaxMarks[coIdx] ?? 0;
+          const studentCOMark = coMarksNum[coIdx] ?? 0;
+          if (studentCOMark > configuredMax) {
+            setError(`CO${coIdx + 1} mark (${studentCOMark}) exceeds the configured maximum of ${configuredMax}`);
+            return;
+          }
+        }
       }
 
       coMarksArray = coMarksNum;
@@ -507,6 +542,48 @@ export default function AddMarkModal({
               </div>
             </div>
 
+            {/* CO Warning Banner */}
+            {showCoWarning && (
+              <div className="mb-4 rounded-lg border border-amber-500/40 bg-amber-500/10 p-4">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-amber-300 mb-1">CO Total Marks Not Configured</p>
+                    <p className="text-xs text-amber-200/80 mb-3">
+                      CO maximum marks are not set for <strong>{selectedExam.displayName}</strong> in CO-PO Mapping.
+                      This may cause overflow in the final Course File output.
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {onGoToCoPo && (
+                        <button
+                          onClick={() => { onClose(); onGoToCoPo(); }}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-semibold bg-amber-500 hover:bg-amber-400 text-amber-950 transition-colors"
+                        >
+                          <ArrowRight className="w-3 h-3" />
+                          Go to CO-PO Mapping
+                        </button>
+                      )}
+                      <button
+                        onClick={() => {
+                          setShowCoWarning(false);
+                          onIgnoreCOWarning?.(selectedExamId);
+                        }}
+                        className="px-3 py-1.5 rounded text-xs text-amber-400/80 hover:text-amber-300 border border-amber-500/30 hover:border-amber-400/50 transition-colors"
+                      >
+                        Ignore for this session
+                      </button>
+                      <button
+                        onClick={() => setShowCoWarning(false)}
+                        className="px-3 py-1.5 rounded text-xs text-gray-400 hover:text-gray-200 border border-gray-600 hover:border-gray-500 transition-colors"
+                      >
+                        Continue anyway
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {error && (
               <div className="mb-4 p-3 bg-red-900/30 border border-red-700 rounded-lg text-red-300 text-sm">
                 {error}
@@ -610,30 +687,46 @@ export default function AddMarkModal({
                       CO Marks (Must sum to {rawMark || '0'})
                     </label>
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                      {Array.from({ length: numberOfCOs }, (_, i) => (
-                        <div key={i}>
-                          <label className="block text-xs text-gray-400 mb-1">CO{i + 1}</label>
-                          <input
-                            ref={(el) => {
-                              coMarkRefs.current[i] = el;
-                            }}
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            value={coMarks[i] || ''}
-                            onChange={(e) => {
-                              const newCoMarks = [...coMarks];
-                              newCoMarks[i] = e.target.value;
-                              setCoMarks(newCoMarks);
-                            }}
-                            onKeyDown={(e) => handleKeyDown(e, `co-${i}`)}
-                            className={`w-full px-3 py-2 bg-gray-900 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-100 placeholder-gray-500 ${
-                              focusedCOIndex === i ? 'border-blue-500' : 'border-gray-600'
-                            }`}
-                            placeholder="0"
-                          />
-                        </div>
-                      ))}
+                      {Array.from({ length: numberOfCOs }, (_, i) => {
+                        const coMax = coPoMaxMarks[selectedExamId]?.[i];
+                        const hasMax = coMax !== undefined && coMax > 0;
+                        const enteredVal = parseFloat(coMarks[i] || '0') || 0;
+                        const isOverMax = hasMax && enteredVal > coMax;
+                        return (
+                          <div key={i}>
+                            <div className="flex items-baseline justify-between mb-1">
+                              <label className="block text-xs text-gray-400">CO{i + 1}</label>
+                              {hasMax && (
+                                <span className={`text-[10px] font-medium ${isOverMax ? 'text-amber-400' : 'text-emerald-500/80'}`}>
+                                  Max: {coMax}
+                                </span>
+                              )}
+                            </div>
+                            <input
+                              ref={(el) => {
+                                coMarkRefs.current[i] = el;
+                              }}
+                              type="number"
+                              min="0"
+                              max={hasMax ? coMax : undefined}
+                              step="0.01"
+                              value={coMarks[i] || ''}
+                              onChange={(e) => {
+                                const newCoMarks = [...coMarks];
+                                newCoMarks[i] = e.target.value;
+                                setCoMarks(newCoMarks);
+                              }}
+                              onKeyDown={(e) => handleKeyDown(e, `co-${i}`)}
+                              className={`w-full px-3 py-2 bg-gray-900 border rounded-lg focus:ring-2 focus:border-transparent text-gray-100 placeholder-gray-500 ${
+                                isOverMax
+                                  ? 'border-amber-500 focus:ring-amber-500 text-amber-300'
+                                  : focusedCOIndex === i ? 'border-blue-500' : 'border-gray-600'
+                              }`}
+                              placeholder="0"
+                            />
+                          </div>
+                        );
+                      })}
                       {/* Non-CO Input */}
                       <div>
                         <label className="block text-xs text-gray-400 mb-1">Non-CO (Optional)</label>
@@ -650,11 +743,41 @@ export default function AddMarkModal({
                         />
                       </div>
                     </div>
-                    {rawMark && (
-                      <div className="mt-2 text-sm text-gray-400">
-                        Current sum: {(coMarks.reduce((sum, cm) => sum + (parseFloat(cm) || 0), 0) + (parseFloat(nonCoMark) || 0)).toFixed(2)}
-                      </div>
-                    )}
+                    {rawMark && (() => {
+                      const rawVal = parseFloat(rawMark) || 0;
+                      const coSum = coMarks.reduce((s, cm) => s + (parseFloat(cm) || 0), 0);
+                      const nonCoVal = parseFloat(nonCoMark) || 0;
+                      const distributed = coSum + nonCoVal;
+                      const remaining = rawVal - distributed;
+                      const isExact = Math.abs(remaining) < 0.01;
+                      const isOver = remaining < -0.01;
+                      const pct = rawVal > 0 ? Math.min((distributed / rawVal) * 100, 100) : 0;
+                      return (
+                        <div className="mt-3 space-y-2">
+                          {/* Progress bar */}
+                          <div className="w-full h-2 bg-gray-700 rounded-full overflow-hidden">
+                            <div
+                              className={`h-full rounded-full transition-all duration-200 ${
+                                isOver ? 'bg-amber-500' : isExact ? 'bg-emerald-500' : 'bg-sky-500'
+                              }`}
+                              style={{ width: `${pct}%` }}
+                            />
+                          </div>
+                          {/* Status row */}
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-gray-500">
+                              Distributed: <span className="text-gray-300 font-medium tabular-nums">{distributed.toFixed(2)}</span>
+                              <span className="text-gray-600"> / {rawVal}</span>
+                            </span>
+                            <span className={`font-semibold tabular-nums ${
+                              isExact ? 'text-emerald-400' : isOver ? 'text-amber-400' : 'text-sky-400'
+                            }`}>
+                              {isExact ? '✓ Balanced' : isOver ? `Overflow by ${Math.abs(remaining).toFixed(2)}` : `${remaining.toFixed(2)} remaining`}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
                 )}
 

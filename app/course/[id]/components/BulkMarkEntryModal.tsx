@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, KeyboardEvent } from 'react';
 import { Button } from '@/components/ui/button';
-import { X, Save, Loader2 } from 'lucide-react';
+import { X, Save, Loader2, AlertTriangle, ArrowRight } from 'lucide-react';
 import { notify } from '@/app/utils/notifications';
 
 interface Student {
@@ -37,6 +37,11 @@ interface BulkMarkEntryModalProps {
   marks: Mark[];
   courseId: string;
   onMarksSaved: () => void;
+  // CO validation props
+  coPoMaxMarks?: Record<string, number[]>;
+  onGoToCoPo?: () => void;
+  ignoredCoWarnings?: Set<string>;
+  onIgnoreCOWarning?: (examId: string) => void;
 }
 
 interface MarkEntry {
@@ -55,6 +60,10 @@ export default function BulkMarkEntryModal({
   marks,
   courseId,
   onMarksSaved,
+  coPoMaxMarks = {},
+  onGoToCoPo,
+  ignoredCoWarnings = new Set(),
+  onIgnoreCOWarning,
 }: BulkMarkEntryModalProps) {
   const [selectedExamId, setSelectedExamId] = useState<string>('');
   const [markEntries, setMarkEntries] = useState<MarkEntry[]>([]);
@@ -62,6 +71,7 @@ export default function BulkMarkEntryModal({
   const [saving, setSaving] = useState(false);
   const [showEmptyDialog, setShowEmptyDialog] = useState(false);
   const [emptyCount, setEmptyCount] = useState(0);
+  const [showCoWarning, setShowCoWarning] = useState(false);
   
   // Refs for all input fields
   const inputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({});
@@ -332,6 +342,21 @@ export default function BulkMarkEntryModal({
             return;
           }
 
+          // Check if CO marks exceed configured maximums (if maxMarks are set)
+          const examMaxMarks = coPoMaxMarks[selectedExamId];
+          const maxMarksConfigured = examMaxMarks && examMaxMarks.slice(0, numberOfCOs).some(m => m > 0);
+          if (maxMarksConfigured) {
+            for (let coIdx = 0; coIdx < numberOfCOs; coIdx++) {
+              const configuredMax = examMaxMarks[coIdx] ?? 0;
+              const studentCOMark = coMarksNum[coIdx] ?? 0;
+              if (studentCOMark > configuredMax) {
+                setError(`CO${coIdx + 1} mark for ${students[i].studentId} (${studentCOMark}) exceeds configured maximum of ${configuredMax}`);
+                setSaving(false);
+                return;
+              }
+            }
+          }
+
           markData.coMarks = coMarksNum;
           markData.nonCoMark = nonCoMarkPayload;
         }
@@ -423,6 +448,16 @@ export default function BulkMarkEntryModal({
   const handleExamSelect = (examId: string) => {
     setSelectedExamId(examId);
     setError('');
+    // Check if CO warning should be shown
+    const exam = exams.find(e => e._id === examId);
+    if (exam && exam.numberOfCOs && exam.numberOfCOs > 0) {
+      const maxMarks = coPoMaxMarks[examId];
+      const configured = maxMarks && maxMarks.slice(0, exam.numberOfCOs).some(m => m > 0);
+      const ignored = ignoredCoWarnings.has(examId);
+      setShowCoWarning(!configured && !ignored);
+    } else {
+      setShowCoWarning(false);
+    }
   };
 
   const handleClose = () => {
@@ -430,6 +465,7 @@ export default function BulkMarkEntryModal({
     setMarkEntries([]);
     setError('');
     setShowEmptyDialog(false);
+    setShowCoWarning(false);
     onClose();
   };
 
@@ -463,11 +499,16 @@ export default function BulkMarkEntryModal({
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
               {exams.map(exam => {
                 const examMarks = marks.filter(m => m.examId === exam._id).length;
+                const hasCOs = (exam.numberOfCOs ?? 0) > 0;
+                const maxMarks = coPoMaxMarks[exam._id];
+                const coConfigured = !hasCOs || (maxMarks && maxMarks.slice(0, exam.numberOfCOs).some(m => m > 0));
+                const coIgnored = ignoredCoWarnings.has(exam._id);
+                const showCoChip = hasCOs && !coConfigured && !coIgnored;
                 return (
                   <button
                     key={exam._id}
                     onClick={() => handleExamSelect(exam._id)}
-                    className="p-4 rounded-lg border-2 border-gray-600 bg-gray-900/50 hover:border-gray-500 transition-all text-left"
+                    className="p-4 rounded-lg border-2 border-gray-600 bg-gray-900/50 hover:border-gray-500 transition-all text-left relative"
                   >
                     <div className="font-semibold text-gray-100">{exam.displayName}</div>
                     <div className="text-sm text-gray-400 mt-1">
@@ -478,6 +519,12 @@ export default function BulkMarkEntryModal({
                     <div className="text-xs text-gray-500 mt-2">
                       {examMarks}/{students.length} students entered
                     </div>
+                    {showCoChip && (
+                      <div className="mt-2 inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                        <AlertTriangle className="w-2.5 h-2.5" />
+                        CO marks not set
+                      </div>
+                    )}
                   </button>
                 );
               })}
@@ -489,6 +536,48 @@ export default function BulkMarkEntryModal({
         {selectedExamId && selectedExam && (
           <>
             <div className="flex-1 overflow-auto p-6">
+              {/* CO Warning Banner (inline) */}
+              {showCoWarning && (
+                <div className="mb-4 rounded-lg border border-amber-500/40 bg-amber-500/10 p-4">
+                  <div className="flex items-start gap-3">
+                    <AlertTriangle className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      <p className="text-sm font-semibold text-amber-300 mb-1">CO Total Marks Not Configured</p>
+                      <p className="text-xs text-amber-200/80 mb-3">
+                        CO maximum marks are not set for <strong>{selectedExam.displayName}</strong> in CO-PO Mapping.
+                        This may cause overflow in the final Course File output.
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {onGoToCoPo && (
+                          <button
+                            onClick={() => { handleClose(); onGoToCoPo(); }}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-semibold bg-amber-500 hover:bg-amber-400 text-amber-950 transition-colors"
+                          >
+                            <ArrowRight className="w-3 h-3" />
+                            Go to CO-PO Mapping
+                          </button>
+                        )}
+                        <button
+                          onClick={() => {
+                            setShowCoWarning(false);
+                            onIgnoreCOWarning?.(selectedExamId);
+                          }}
+                          className="px-3 py-1.5 rounded text-xs text-amber-400/80 hover:text-amber-300 border border-amber-500/30 hover:border-amber-400/50 transition-colors"
+                        >
+                          Ignore for this session
+                        </button>
+                        <button
+                          onClick={() => setShowCoWarning(false)}
+                          className="px-3 py-1.5 rounded text-xs text-gray-400 hover:text-gray-200 border border-gray-600 hover:border-gray-500 transition-colors"
+                        >
+                          Continue anyway
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {error && (
                 <div className="mb-4 p-3 bg-red-900/30 border border-red-700 rounded-lg text-red-300 text-sm">
                   {error}
@@ -506,14 +595,27 @@ export default function BulkMarkEntryModal({
                         Raw Mark
                         <div className="text-[10px] font-normal mt-0.5 text-gray-500">Max: {selectedExam.totalMarks}</div>
                       </th>
-                      {numberOfCOs > 0 && Array.from({ length: numberOfCOs }, (_, i) => (
-                        <th key={`co-${i}`} className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-gray-300 border-b border-gray-700 w-24">
-                          CO{i + 1}
-                        </th>
-                      ))}
+                      {numberOfCOs > 0 && Array.from({ length: numberOfCOs }, (_, i) => {
+                        const coMax = coPoMaxMarks[selectedExamId]?.[i];
+                        const hasMax = coMax !== undefined && coMax > 0;
+                        return (
+                          <th key={`co-${i}`} className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-gray-300 border-b border-gray-700 w-24">
+                            CO{i + 1}
+                            {hasMax && (
+                              <div className="text-[10px] font-normal mt-0.5 text-emerald-500/80">Max: {coMax}</div>
+                            )}
+                          </th>
+                        );
+                      })}
                       {numberOfCOs > 0 && (
                         <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-gray-300 border-b border-gray-700 w-32">
                           Non-CO <div className="text-[10px] font-normal lowercase text-gray-500 mt-0.5">(Optional)</div>
+                        </th>
+                      )}
+                      {numberOfCOs > 0 && (
+                        <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-gray-300 border-b border-gray-700 w-28">
+                          Remaining
+                          <div className="text-[10px] font-normal lowercase text-gray-500 mt-0.5">to distribute</div>
                         </th>
                       )}
                       {numberOfQuestions > 0 && Array.from({ length: numberOfQuestions }, (_, i) => (
@@ -546,40 +648,78 @@ export default function BulkMarkEntryModal({
                             placeholder="0"
                           />
                         </td>
-                        {numberOfCOs > 0 && Array.from({ length: numberOfCOs }, (_, coIndex) => (
-                          <td key={`co-${coIndex}`} className="px-4 py-3 text-sm">
-                            <input
-                              ref={(el) => {
-                                inputRefs.current[getFieldKey(studentIndex, 'co', coIndex)] = el;
-                              }}
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              value={markEntries[studentIndex]?.coMarks[coIndex] || ''}
-                              onChange={(e) => updateMarkEntry(studentIndex, 'co', e.target.value, coIndex)}
-                              onKeyDown={(e) => handleKeyDown(e, studentIndex, 'co', coIndex)}
-                              className="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-100 text-center"
-                              placeholder="0"
-                            />
-                          </td>
-                        ))}
-                        {numberOfCOs > 0 && (
-                          <td className="px-4 py-3 text-sm">
-                            <input
-                              ref={(el) => {
-                                inputRefs.current[getFieldKey(studentIndex, 'nonCo')] = el;
-                              }}
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              value={markEntries[studentIndex]?.nonCoMark || ''}
-                              onChange={(e) => updateMarkEntry(studentIndex, 'nonCo', e.target.value)}
-                              onKeyDown={(e) => handleKeyDown(e, studentIndex, 'nonCo')}
-                              className="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-100 text-center"
-                              placeholder="0"
-                            />
-                          </td>
-                        )}
+                        {numberOfCOs > 0 && Array.from({ length: numberOfCOs }, (_, coIndex) => {
+                          const coMax = coPoMaxMarks[selectedExamId]?.[coIndex];
+                          const hasMax = coMax !== undefined && coMax > 0;
+                          const enteredVal = parseFloat(markEntries[studentIndex]?.coMarks[coIndex] || '0') || 0;
+                          const isOverMax = hasMax && enteredVal > coMax;
+                          return (
+                            <td key={`co-${coIndex}`} className="px-4 py-3 text-sm">
+                              <input
+                                ref={(el) => {
+                                  inputRefs.current[getFieldKey(studentIndex, 'co', coIndex)] = el;
+                                }}
+                                type="number"
+                                min="0"
+                                max={hasMax ? coMax : undefined}
+                                step="0.01"
+                                value={markEntries[studentIndex]?.coMarks[coIndex] || ''}
+                                onChange={(e) => updateMarkEntry(studentIndex, 'co', e.target.value, coIndex)}
+                                onKeyDown={(e) => handleKeyDown(e, studentIndex, 'co', coIndex)}
+                                className={`w-full px-3 py-2 bg-gray-900 border rounded-lg focus:ring-2 focus:border-transparent text-gray-100 text-center ${
+                                  isOverMax
+                                    ? 'border-amber-500 focus:ring-amber-500 text-amber-300'
+                                    : 'border-gray-600 focus:ring-blue-500'
+                                }`}
+                                placeholder="0"
+                                title={hasMax ? `Max: ${coMax}` : undefined}
+                              />
+                            </td>
+                          );
+                        })}
+                        {numberOfCOs > 0 && (() => {
+                          const rawVal = parseFloat(markEntries[studentIndex]?.rawMark || '0') || 0;
+                          const coSum = (markEntries[studentIndex]?.coMarks || []).reduce((s, cm) => s + (parseFloat(cm) || 0), 0);
+                          const nonCoVal = parseFloat(markEntries[studentIndex]?.nonCoMark || '0') || 0;
+                          const remaining = rawVal - coSum - nonCoVal;
+                          const hasRawMark = !!markEntries[studentIndex]?.rawMark;
+                          const isExact = Math.abs(remaining) < 0.01;
+                          const isOver = remaining < -0.01;
+                          return (
+                            <>
+                              <td className="px-4 py-3 text-sm">
+                                <input
+                                  ref={(el) => {
+                                    inputRefs.current[getFieldKey(studentIndex, 'nonCo')] = el;
+                                  }}
+                                  type="number"
+                                  min="0"
+                                  step="0.01"
+                                  value={markEntries[studentIndex]?.nonCoMark || ''}
+                                  onChange={(e) => updateMarkEntry(studentIndex, 'nonCo', e.target.value)}
+                                  onKeyDown={(e) => handleKeyDown(e, studentIndex, 'nonCo')}
+                                  className="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-100 text-center"
+                                  placeholder="0"
+                                />
+                              </td>
+                              <td className="px-4 py-3 text-center">
+                                {hasRawMark ? (
+                                  <span className={`inline-flex items-center justify-center min-w-[52px] px-2 py-1 rounded-full text-xs font-bold tabular-nums ${
+                                    isExact
+                                      ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
+                                      : isOver
+                                        ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40'
+                                        : 'bg-sky-500/20 text-sky-400 border border-sky-500/40'
+                                  }`}>
+                                    {isExact ? '✓ 0' : isOver ? `−${Math.abs(remaining).toFixed(1)}` : `+${remaining.toFixed(1)}`}
+                                  </span>
+                                ) : (
+                                  <span className="text-gray-600 text-xs">—</span>
+                                )}
+                              </td>
+                            </>
+                          );
+                        })()}
                         {numberOfQuestions > 0 && Array.from({ length: numberOfQuestions }, (_, qIndex) => (
                           <td key={`q-${qIndex}`} className="px-4 py-3 text-sm">
                             <input
