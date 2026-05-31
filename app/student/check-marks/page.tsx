@@ -127,6 +127,11 @@ export default function StudentCheckMarks() {
     return marks.find(m => m.examId === examId);
   };
 
+  const getExamPercentage = (rawMark: number, totalMarks: number) => {
+    if (!totalMarks || totalMarks <= 0) return 0;
+    return (rawMark / totalMarks) * 100;
+  };
+
   // Calculate aggregated mark for Quiz or Assignment
   const getAggregatedMark = (courseData: CourseData, category: 'Quiz' | 'Assignment'): { mark: number; totalMarks: number } | null => {
     const categoryExams = courseData.exams.filter(exam => exam.examCategory === category);
@@ -143,16 +148,20 @@ export default function StudentCheckMarks() {
       ? courseData.course.quizAggregation || 'average'
       : courseData.course.assignmentAggregation || 'average';
 
+    const categoryWeightage = category === 'Quiz'
+      ? Number(courseData.course.quizWeightage || 0)
+      : Number(courseData.course.assignmentWeightage || 0);
+
     if (aggregationMethod === 'best') {
-      // Find the best mark
       let bestMark = categoryMarks[0];
-      let bestValue = 0;
+      let bestValue = -1;
 
       categoryMarks.forEach(mark => {
         const exam = categoryExams.find(e => e._id === mark!.examId);
         if (exam) {
-          if (mark!.rawMark > bestValue) {
-            bestValue = mark!.rawMark;
+          const percentage = getExamPercentage(mark!.rawMark, exam.totalMarks);
+          if (percentage > bestValue) {
+            bestValue = percentage;
             bestMark = mark!;
           }
         }
@@ -160,27 +169,19 @@ export default function StudentCheckMarks() {
 
       const exam = categoryExams.find(e => e._id === bestMark!.examId);
       if (exam) {
-        const markValue = bestMark!.rawMark;
-        const totalMarks = exam.totalMarks;
-        
-        return { mark: markValue, totalMarks };
+        const weightedScore = (getExamPercentage(bestMark!.rawMark, exam.totalMarks) * categoryWeightage) / 100;
+        return { mark: weightedScore, totalMarks: categoryWeightage };
       }
     } else {
-      // Calculate average
-      let totalMarks = 0;
-      
-      categoryMarks.forEach(mark => {
+      const averagePercentage = categoryMarks.reduce((sum, mark) => {
         const exam = categoryExams.find(e => e._id === mark!.examId);
-        if (exam) {
-          totalMarks += mark!.rawMark;
-        }
-      });
+        if (!exam) return sum;
+        return sum + getExamPercentage(mark!.rawMark, exam.totalMarks);
+      }, 0) / categoryMarks.length;
 
-      const avgMark = totalMarks / categoryMarks.length;
+      const weightedScore = (averagePercentage * categoryWeightage) / 100;
       
-      const maxTotal = Math.max(...categoryExams.map(e => e.totalMarks));
-      
-      return { mark: avgMark, totalMarks: maxTotal };
+      return { mark: weightedScore, totalMarks: categoryWeightage };
     }
 
     return null;
@@ -716,7 +717,9 @@ export default function StudentCheckMarks() {
                                   {item.mark.toFixed(2)}/{item.totalMarks}
                                 </span>
                                 <span className="text-purple-400">
-                                  {((item.mark / item.totalMarks) * 100).toFixed(1)}%
+                                  {item.isAggregated
+                                    ? 'weighted'
+                                    : `${((item.mark / item.totalMarks) * 100).toFixed(1)}%`}
                                 </span>
                                 <span className="text-gray-500">×</span>
                                 <span className="text-cyan-400">{item.weightage}%</span>

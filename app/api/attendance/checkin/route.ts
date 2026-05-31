@@ -28,6 +28,7 @@ export async function POST(req: NextRequest) {
 
   const courseId = body?.courseId as string;
   const confirmedStudentId = body?.confirmedStudentId as string | undefined;
+  const sessionDateISO = typeof body?.sessionDateISO === 'string' ? body.sessionDateISO : '';
   if (!courseId) {
     return NextResponse.json({ error: 'Missing courseId' }, { status: 400 });
   }
@@ -40,6 +41,16 @@ export async function POST(req: NextRequest) {
 
     if (!activeSession) {
       return NextResponse.json({ error: 'No active attendance session' }, { status: 400 });
+    }
+
+    const parsedSessionDate = sessionDateISO ? new Date(sessionDateISO) : null;
+    if (!parsedSessionDate || Number.isNaN(parsedSessionDate.getTime())) {
+      return NextResponse.json({ error: 'Invalid session date' }, { status: 400 });
+    }
+
+    const activeSessionDateISO = new Date(activeSession.date).toISOString();
+    if (parsedSessionDate.toISOString() !== activeSessionDateISO) {
+      return NextResponse.json({ error: 'This QR code is not valid for the current attendance session' }, { status: 409 });
     }
 
     const courseObjectId = new mongoose.Types.ObjectId(courseId);

@@ -6,6 +6,7 @@ import Course from '@/models/Course';
 import Student from '@/models/Student';
 import Exam from '@/models/Exam';
 import Mark from '@/models/Mark';
+import AttendanceSession from '@/models/AttendanceSession';
 
 // POST import and create a new course
 export async function POST(request: NextRequest) {
@@ -40,6 +41,7 @@ export async function POST(request: NextRequest) {
       quizWeightage: importData.course.quizWeightage,
       assignmentAggregation: importData.course.assignmentAggregation,
       assignmentWeightage: importData.course.assignmentWeightage,
+      coPoMapping: importData.course.coPoMapping,
       userId: session.user.id,
     });
 
@@ -105,6 +107,36 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // 5. Import attendance sessions
+    if (importData.attendanceSessions) {
+      for (const sessionData of importData.attendanceSessions) {
+        const attSession = await AttendanceSession.create({
+          courseId,
+          startedBy: session.user.id,
+          date: sessionData.date,
+          open: sessionData.open,
+          qrEnabled: sessionData.qrEnabled,
+        });
+
+        const records = [];
+        for (const record of sessionData.records) {
+          const studentId = studentMap.get(record.studentId);
+          if (studentId) {
+            records.push({
+              studentId,
+              status: record.status,
+              recordedAt: record.recordedAt,
+              markedBy: record.markedBy,
+              studentIdString: record.studentIdString,
+            });
+          }
+        }
+
+        attSession.records = records;
+        await attSession.save();
+      }
+    }
+
     return NextResponse.json(
       { 
         message: 'Course imported successfully',
@@ -113,6 +145,7 @@ export async function POST(request: NextRequest) {
           students: importData.students.length,
           exams: importData.exams.length,
           marks: importData.marks.length,
+          attendanceSessions: importData.attendanceSessions ? importData.attendanceSessions.length : 0,
         }
       },
       { status: 201 }

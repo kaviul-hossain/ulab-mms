@@ -1,4 +1,5 @@
 import mongoose, { Schema, Document, Model } from 'mongoose';
+import type { ExcelExportMapping } from '@/app/course/[id]/lib/excelExportMapping';
 
 export interface ICourse extends Document {
   name: string;
@@ -6,13 +7,23 @@ export interface ICourse extends Document {
   semester: string;
   year: number;
   section: string;
+  classTime?: string;
+  classRoom?: string;
+  numberOfStudents?: number;
+  classRepresentativeId?: mongoose.Types.ObjectId | null;
   courseType: 'Theory' | 'Lab';
   showFinalGrade: boolean;
   quizAggregation: 'average' | 'best'; // How to aggregate quiz marks
   quizWeightage: number; // Weightage for aggregated quiz column
   assignmentAggregation: 'average' | 'best'; // How to aggregate assignment marks
   assignmentWeightage: number; // Weightage for aggregated assignment column
+  projectWeightage: number; // Weightage for aggregated project column (sum-based)
   gradingScale?: string; // Encoded grading scale (e.g., "0:F:0|50:D:0|55:C:1|...")
+  excelExportMapping?: ExcelExportMapping | null;
+  coPoMapping?: {
+    maxMarks: Record<string, number[]>;
+    mapping: boolean[][];
+  };
   isArchived: boolean; // Whether the course is archived
   archivedAt?: Date; // When the course was archived
   userId: mongoose.Types.ObjectId;
@@ -49,6 +60,26 @@ const CourseSchema: Schema = new Schema(
       trim: true,
       default: 'A',
     },
+    classTime: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    classRoom: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    numberOfStudents: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    classRepresentativeId: {
+      type: Schema.Types.ObjectId,
+      ref: 'Student',
+      default: null,
+    },
     courseType: {
       type: String,
       required: [true, 'Please provide a course type'],
@@ -80,9 +111,26 @@ const CourseSchema: Schema = new Schema(
       min: [0, 'Weightage cannot be negative'],
       max: [100, 'Weightage cannot exceed 100'],
     },
+    projectWeightage: {
+      type: Number,
+      default: 25,
+      min: [0, 'Weightage cannot be negative'],
+      max: [100, 'Weightage cannot exceed 100'],
+    },
     gradingScale: {
       type: String,
-      default: '0:F:0|50:D:0|55:C:1|60:C:2|65:B:1|70:B:0|75:B:2|80:A:1|85:A:0|95:A:2',
+      default: '0:F:0|50:D:0|60:C:0|65:C:2|70:B:1|75:B:0|80:B:2|85:A:1|90:A:0|95:A:2',
+    },
+    excelExportMapping: {
+      type: Schema.Types.Mixed,
+      default: null,
+    },
+    coPoMapping: {
+      type: Schema.Types.Mixed,
+      default: {
+        maxMarks: {},
+        mapping: Array(6).fill(Array(12).fill(false))
+      }
     },
     isArchived: {
       type: Boolean,
@@ -105,7 +153,10 @@ const CourseSchema: Schema = new Schema(
 // Create compound index for duplicate prevention: same code + semester + year + section for same user
 CourseSchema.index({ code: 1, semester: 1, year: 1, section: 1, userId: 1 }, { unique: true });
 
-const Course: Model<ICourse> =
-  mongoose.models.Course || mongoose.model<ICourse>('Course', CourseSchema);
+if (mongoose.models.Course) {
+  delete mongoose.models.Course;
+}
+
+const Course: Model<ICourse> = mongoose.model<ICourse>('Course', CourseSchema);
 
 export default Course;

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
@@ -6,6 +7,8 @@ import Course from '@/models/Course';
 import Student from '@/models/Student';
 import Exam from '@/models/Exam';
 import Mark from '@/models/Mark';
+import AttendanceSession from '@/models/AttendanceSession';
+import { calculateLetterGrade } from '@/app/utils/grading';
 
 export async function GET(
   request: NextRequest,
@@ -30,9 +33,12 @@ export async function GET(
       return NextResponse.json({ error: 'Course not found' }, { status: 404 });
     }
 
-    const students = await Student.find({ courseId });
+    const students = await Student.find({ courseId })
+      .sort({ studentId: 1, _id: 1 })
+      .collation({ locale: 'en', numericOrdering: true });
     const exams = await Exam.find({ courseId });
     const marks = await Mark.find({ courseId });
+    const attendanceSessions = await AttendanceSession.find({ courseId });
 
     const exportData = {
       version: '1.0',
@@ -48,7 +54,9 @@ export async function GET(
         quizWeightage: course.quizWeightage,
         assignmentAggregation: course.assignmentAggregation,
         assignmentWeightage: course.assignmentWeightage,
+        projectWeightage: course.projectWeightage,
         gradingScale: course.gradingScale,
+        coPoMapping: course.coPoMapping,
       },
       students: students.map(student => ({
         studentId: student.studentId,
@@ -65,9 +73,7 @@ export async function GET(
         numberOfQuestions: exam.numberOfQuestions,
       })),
       marks: marks.map(mark => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const student = students.find((s: any) => s._id.toString() === mark.studentId.toString());
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const exam = exams.find((e: any) => e._id.toString() === mark.examId.toString());
 
         return {
@@ -79,53 +85,106 @@ export async function GET(
           weightedMark: mark.weightedMark,
         };
       }),
+      attendanceSessions: attendanceSessions.map(session => ({
+        date: session.date,
+        open: session.open,
+        qrEnabled: session.qrEnabled,
+        sessionCode: session.sessionCode,
+        records: session.records.map((record: any) => {
+          const student = students.find((s: any) => s._id.toString() === record.studentId.toString());
+          return {
+            studentId: student?.studentId,
+            status: record.status,
+            recordedAt: record.recordedAt,
+            markedBy: record.markedBy,
+            studentIdString: record.studentIdString,
+          };
+        }),
+      })),
     };
 
     if (format === 'csv') {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const getExamPercentage = (rawMark: number, totalMarks: number) => {
+        if (!totalMarks || totalMarks <= 0) return 0;
+        return (rawMark / totalMarks) * 100;
+      };
+
+      const getWeightedContribution = (rawMark: number, totalMarks: number, weightage: number) => {
+        return (getExamPercentage(rawMark, totalMarks) * weightage) / 100;
+      };
+
       const getAggregatedMark = (studentId: any, category: 'Quiz' | 'Assignment', aggregationMode?: 'average' | 'best'): any => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const categoryExams = exams.filter((e: any) => e.examCategory === category);
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const categoryMarks = marks.filter((m: any) =>
           m.studentId.toString() === studentId.toString() &&
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           categoryExams.some((e: any) => e._id.toString() === m.examId.toString())
         );
 
         if (categoryMarks.length === 0) return null;
 
+        const categoryWeightage = category === 'Quiz' ? Number(course.quizWeightage || 0) : Number(course.assignmentWeightage || 0);
+
         if (aggregationMode === 'best') {
           let bestMark = categoryMarks[0];
-          let bestValue = -Infinity;
+          let bestValue = -1;
 
           categoryMarks.forEach((mark: any) => {
             const exam = categoryExams.find((e: any) => e._id.toString() === mark.examId.toString());
-            if (exam && mark.rawMark > bestValue) {
-              bestValue = mark.rawMark;
-              bestMark = mark;
+            if (exam) {
+              const percentage = getExamPercentage(mark.rawMark, exam.totalMarks);
+              if (percentage > bestValue) {
+                bestValue = percentage;
+                bestMark = mark;
+              }
             }
           });
 
-          return bestMark;
+          const bestExam = categoryExams.find((e: any) => e._id.toString() === bestMark.examId.toString());
+          const weightedMark = bestExam ? getWeightedContribution(bestMark.rawMark, bestExam.totalMarks, categoryWeightage) : 0;
+
+          return {
+            rawMark: weightedMark,
+            totalMarks: categoryWeightage,
+            isAggregated: true,
+          };
         }
 
-        const totalMarks = categoryMarks.reduce((sum: number, mark: any) => sum + mark.rawMark, 0);
-        const avgMark = totalMarks / categoryMarks.length;
+        const averagePercentage = categoryMarks.reduce((sum: number, mark: any) => {
+          const exam = categoryExams.find((e: any) => e._id.toString() === mark.examId.toString());
+          if (!exam) return sum;
+          return sum + getExamPercentage(mark.rawMark, exam.totalMarks);
+        }, 0) / categoryMarks.length;
+
+        const weightedAverage = (averagePercentage * categoryWeightage) / 100;
 
         return {
-          rawMark: avgMark,
+          rawMark: weightedAverage,
+          totalMarks: categoryWeightage,
           isAggregated: true,
         };
       };
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // Project: sum all raw marks, convert to projectWeightage
+      const getProjectAggregatedMark = (studentId: any): any => {
+        const projectExams = exams.filter((e: any) => e.examCategory === 'Project');
+        if (projectExams.length === 0) return null;
+        const projectMarks = marks.filter((m: any) =>
+          m.studentId.toString() === studentId.toString() &&
+          projectExams.some((e: any) => e._id.toString() === m.examId.toString())
+        );
+        if (projectMarks.length === 0) return null;
+        const sumRaw = projectMarks.reduce((s: number, m: any) => s + m.rawMark, 0);
+        const sumTotal = projectExams.reduce((s: number, e: any) => s + e.totalMarks, 0);
+        const projectWeightage = Number(course.projectWeightage || 0);
+        const weighted = sumTotal > 0 ? (sumRaw / sumTotal) * projectWeightage : 0;
+        return { rawMark: Math.round(weighted * 100) / 100, totalMarks: projectWeightage, isAggregated: true };
+      };
+
       const calculateFinalGrade = (studentId: any): number => {
         let totalContribution = 0;
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         exams.forEach((exam: any) => {
-          if (exam.examCategory === 'Quiz' || exam.examCategory === 'Assignment') {
+          if (exam.examCategory === 'Quiz' || exam.examCategory === 'Assignment' || exam.examCategory === 'Project') {
             return;
           }
 
@@ -145,23 +204,19 @@ export async function GET(
         const hasQuizzes = exams.some((e: any) => e.examCategory === 'Quiz');
         if (hasQuizzes && course.quizWeightage) {
           const aggMark = getAggregatedMark(studentId, 'Quiz', course.quizAggregation);
-          if (aggMark) {
-            const quizExams = exams.filter((e: any) => e.examCategory === 'Quiz');
-            const totalMarks = quizExams.length > 0 ? Math.max(...quizExams.map((e: any) => e.totalMarks)) : 100;
-            const percentage = (aggMark.rawMark / totalMarks) * 100;
-            totalContribution += (percentage * course.quizWeightage) / 100;
-          }
+          if (aggMark) totalContribution += aggMark.rawMark;
         }
 
         const hasAssignments = exams.some((e: any) => e.examCategory === 'Assignment');
         if (hasAssignments && course.assignmentWeightage) {
           const aggMark = getAggregatedMark(studentId, 'Assignment', course.assignmentAggregation);
-          if (aggMark) {
-            const assignmentExams = exams.filter((e: any) => e.examCategory === 'Assignment');
-            const totalMarks = assignmentExams.length > 0 ? Math.max(...assignmentExams.map((e: any) => e.totalMarks)) : 100;
-            const percentage = (aggMark.rawMark / totalMarks) * 100;
-            totalContribution += (percentage * course.assignmentWeightage) / 100;
-          }
+          if (aggMark) totalContribution += aggMark.rawMark;
+        }
+
+        const hasProjects = exams.some((e: any) => e.examCategory === 'Project');
+        if (hasProjects && course.projectWeightage) {
+          const aggMark = getProjectAggregatedMark(studentId);
+          if (aggMark) totalContribution += aggMark.rawMark;
         }
 
         return totalContribution;
@@ -170,11 +225,15 @@ export async function GET(
       const csvRows: string[] = [];
       const headers = ['Student ID', 'Name'];
 
-      const allIndividualExams = exams.filter((exam: any) => exam.examCategory !== 'Quiz' && exam.examCategory !== 'Assignment');
+      const allIndividualExams = exams.filter((exam: any) =>
+        exam.examCategory !== 'Quiz' && exam.examCategory !== 'Assignment' && exam.examCategory !== 'Project'
+      );
       const quizExams = exams.filter((exam: any) => exam.examCategory === 'Quiz');
       const assignmentExams = exams.filter((exam: any) => exam.examCategory === 'Assignment');
+      const projectExams = exams.filter((exam: any) => exam.examCategory === 'Project');
       const hasQuizzes = quizExams.length > 0;
       const hasAssignments = assignmentExams.length > 0;
+      const hasProjects = projectExams.length > 0;
 
       allIndividualExams.forEach((exam: any) => {
         headers.push(`${exam.displayName} (Raw)`);
@@ -195,12 +254,14 @@ export async function GET(
 
       quizExams.forEach((exam: any) => {
         headers.push(`${exam.displayName} (Raw)`);
-        headers.push(`${exam.displayName} (Weighted)`);
       });
 
       assignmentExams.forEach((exam: any) => {
         headers.push(`${exam.displayName} (Raw)`);
-        headers.push(`${exam.displayName} (Weighted)`);
+      });
+
+      projectExams.forEach((exam: any) => {
+        headers.push(`${exam.displayName} (Raw)`);
       });
 
       if (hasQuizzes && course.quizWeightage) {
@@ -211,9 +272,12 @@ export async function GET(
         headers.push(`Assignment (Agg) - ${course.assignmentAggregation} • ${course.assignmentWeightage}%`);
       }
 
-      if (course.showFinalGrade) {
-        headers.push('Final Grade (Est.)');
+      if (hasProjects && course.projectWeightage) {
+        headers.push(`Project (Agg) - Sum • ${course.projectWeightage}%`);
       }
+
+      headers.push('Final Marks (Total)');
+      headers.push('Letter Grade');
 
       csvRows.push(headers.map(h => `"${h}"`).join(','));
 
@@ -268,13 +332,9 @@ export async function GET(
           );
 
           if (mark) {
-            const weightedValue = mark.weightedMark !== undefined && mark.weightedMark !== null
-              ? mark.weightedMark
-              : Math.round(((mark.rawMark / exam.totalMarks) * exam.weightage) * 100) / 100;
             row.push(mark.rawMark);
-            row.push(weightedValue);
           } else {
-            row.push('-', '-');
+            row.push('-');
           }
         });
 
@@ -285,14 +345,18 @@ export async function GET(
           );
 
           if (mark) {
-            const weightedValue = mark.weightedMark !== undefined && mark.weightedMark !== null
-              ? mark.weightedMark
-              : Math.round(((mark.rawMark / exam.totalMarks) * exam.weightage) * 100) / 100;
             row.push(mark.rawMark);
-            row.push(weightedValue);
           } else {
-            row.push('-', '-');
+            row.push('-');
           }
+        });
+
+        projectExams.forEach((exam: any) => {
+          const mark = marks.find((m: any) =>
+            m.studentId.toString() === student._id.toString() &&
+            m.examId.toString() === exam._id.toString()
+          );
+          row.push(mark ? mark.rawMark : '-');
         });
 
         if (hasQuizzes && course.quizWeightage) {
@@ -305,8 +369,18 @@ export async function GET(
           row.push(aggMark ? aggMark.rawMark.toFixed(2) : '-');
         }
 
-        if (course.showFinalGrade) {
-          row.push(calculateFinalGrade(student._id).toFixed(2));
+        if (hasProjects && course.projectWeightage) {
+          const aggMark = getProjectAggregatedMark(student._id);
+          row.push(aggMark ? aggMark.rawMark.toFixed(2) : '-');
+        }
+
+        if (student.withdrawn) {
+          row.push('W', 'W');
+        } else {
+          const finalMarks = calculateFinalGrade(student._id);
+          row.push(finalMarks.toFixed(2));
+          const letterGrade = calculateLetterGrade(finalMarks, course.gradingScale);
+          row.push(letterGrade.display);
         }
 
         csvRows.push(row.map(cell => typeof cell === 'string' ? `"${cell}"` : cell).join(','));
@@ -321,6 +395,8 @@ export async function GET(
         },
       });
     }
+
+    // attendance_pdf handled by separate endpoint /api/courses/[id]/attendance-pdf
 
     return new NextResponse(Buffer.from(JSON.stringify(exportData, null, 2)), {
       status: 200,

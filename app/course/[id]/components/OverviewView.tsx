@@ -1,10 +1,13 @@
 'use client';
 
+import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { BookOpen, FlaskConical, Upload, Download, Plus } from 'lucide-react';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { BookOpen, FlaskConical, Upload, Download, Plus, ClipboardList, AlertTriangle, ExternalLink } from 'lucide-react';
+import UrmsGradeSheet from './UrmsGradeSheet';
 
 interface Course {
   _id: string;
@@ -14,35 +17,86 @@ interface Course {
   year: number;
   courseType: 'Theory' | 'Lab';
   showFinalGrade: boolean;
+  quizWeightage?: number | string;
+  assignmentWeightage?: number | string;
+  projectWeightage?: number | string;
 }
-
 interface OverviewViewProps {
   course: Course;
   students: any[];
   exams: any[];
   marks: any[];
+  calculateFinalGrade: (studentId: string) => { total: number };
   onImportStudents: () => void;
   onAddExam: () => void;
   onImportCourse: () => void;
   onExportCSV: () => void;
   exportingCSV: boolean;
+  onExportCourseFile?: () => void;
+  exportingCourseFile?: boolean;
 }
-
 export default function OverviewView({
   course,
   students,
   exams,
   marks,
+  calculateFinalGrade,
   onImportStudents,
   onAddExam,
   onImportCourse,
   onExportCSV,
   exportingCSV,
+  onExportCourseFile,
+  exportingCourseFile,
 }: OverviewViewProps) {
-  const totalWeightage = exams.reduce((sum, exam) => sum + exam.weightage, 0);
+  const [showExportDisclaimer, setShowExportDisclaimer] = useState(false);
+  const [showChecklist, setShowChecklist] = useState(false);
+  const [showUrmsModal, setShowUrmsModal] = useState(false);
+
+  const hasQuizzes = exams.some(exam => exam.examCategory === 'Quiz');
+  const hasAssignments = exams.some(exam => exam.examCategory === 'Assignment');
+  const hasProjects = exams.some(exam => exam.examCategory === 'Project');
+
+  let totalWeightage = exams.reduce((sum, exam) => {
+    if (exam.examCategory === 'Quiz' || exam.examCategory === 'Assignment' || exam.examCategory === 'Project') {
+      return sum; // these are handled at course level below
+    }
+    return sum + (Number(exam.weightage) || 0);
+  }, 0);
+
+  if (hasQuizzes && course.quizWeightage) {
+    totalWeightage += Number(course.quizWeightage);
+  }
+
+  if (hasAssignments && course.assignmentWeightage) {
+    totalWeightage += Number(course.assignmentWeightage);
+  }
+
+  if (hasProjects && course.projectWeightage) {
+    totalWeightage += Number(course.projectWeightage);
+  }
+
   const studentsWithMarks = students.filter(student => 
     marks.some(mark => mark.studentId === student._id)
   ).length;
+
+  const handleSideBySideUrms = () => {
+    const screenWidth = window.screen.availWidth;
+    const screenHeight = window.screen.availHeight;
+    const halfWidth = Math.floor(screenWidth / 2);
+
+    const commonFeatures = 'popup=yes,menubar=no,toolbar=no,location=no,status=no';
+
+    // Launch URMS portal on the left in a new window
+    window.open(
+      'https://urms-awp.ulab.edu.bd/RMS_ggs_result/ResultEntryFromExcel',
+      'urmsWindow',
+      `${commonFeatures},left=0,top=0,width=${halfWidth},height=${screenHeight}`
+    );
+
+    // Open the right-sided sliding sheet inside the app
+    setShowUrmsModal(true);
+  };
 
   return (
     <div className="space-y-6">
@@ -170,6 +224,53 @@ export default function OverviewView({
                   <Download className="w-4 h-4 mr-2" />
                   {exportingCSV ? 'Exporting...' : 'Export CSV'}
                 </Button>
+                <Button
+                  onClick={() => setShowExportDisclaimer(true)}
+                  disabled={exportingCourseFile}
+                  variant="outline"
+                  className="w-full justify-start"
+                >
+                  <Download className="w-4 h-4 mr-2" />
+                  {exportingCourseFile ? 'Exporting...' : 'Export course file'}
+                  <span className="ml-2 text-xs text-muted-foreground">Beta</span>
+                </Button>
+                <Button
+                  onClick={() => setShowChecklist(true)}
+                  variant="outline"
+                  className="w-full justify-start"
+                >
+                  <ClipboardList className="w-4 h-4 mr-2" />
+                  Course File Checklist
+                </Button>
+                <Button
+                  onClick={() => {
+                    const a = document.createElement('a');
+                    a.href = '/templates/Sample CO PO.xlsx';
+                    a.download = 'Empty_CO_PO_File.xlsx';
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                  }}
+                  variant="outline"
+                  className="w-full justify-start"
+                >
+                  <Download className="w-4 h-4 mr-2" />
+                  Download empty CO PO File
+                </Button>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <h3 className="text-sm font-semibold">External Systems</h3>
+              <div className="flex flex-col gap-2">
+                <Button
+                  onClick={handleSideBySideUrms}
+                  variant="default"
+                  className="w-full justify-start bg-blue-600 hover:bg-blue-700 text-white"
+                >
+                  <ExternalLink className="w-4 h-4 mr-2" />
+                  Side-by-Side URMS Entry
+                </Button>
               </div>
             </div>
           </div>
@@ -211,6 +312,127 @@ export default function OverviewView({
           </div>
         </CardContent>
       </Card>
+
+      {/* Export Disclaimer Modal */}
+      <Dialog open={showExportDisclaimer} onOpenChange={setShowExportDisclaimer}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center text-amber-500">
+              <AlertTriangle className="w-5 h-5 mr-2" />
+              Export Course File (Beta)
+            </DialogTitle>
+            <DialogDescription>
+              Please read the following before exporting the course file:
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <ul className="list-disc pl-5 space-y-2 text-sm text-foreground">
+              <li><strong>This feature is in Beta.</strong> Please double-check the generated file.</li>
+              <li>It supports a maximum of <strong>50 students, 6 COs and 12 POs</strong>.</li>
+              <li>It expects a predefined strict amount of exams for theory: <em>Attendance, Performance, Quiz, Assignment, Midterm Exam, Project, Final Exam</em>.</li>
+              <li>It may malfunction for <strong>Lab</strong> courses because labs often follow different structures than theory courses.</li>
+            </ul>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowExportDisclaimer(false)}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={() => {
+                setShowExportDisclaimer(false);
+                if (onExportCourseFile) onExportCourseFile();
+              }}
+              disabled={exportingCourseFile}
+            >
+              {exportingCourseFile ? 'Exporting...' : 'I Understand, Export'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Course File Checklist Modal */}
+      <Dialog open={showChecklist} onOpenChange={setShowChecklist}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center">
+              <ClipboardList className="w-5 h-5 mr-2 text-primary" />
+              Course File Checklist
+            </DialogTitle>
+            <DialogDescription>
+              List of documents needed for final course file submission.
+              <br/>
+              <strong>Instruction:</strong> Please submit soft copy in concerned Google Drive Folder and Hard copy to Dept. Admin Officer.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="py-2">
+            {course.courseType === 'Lab' ? (
+              <div className="space-y-4">
+                <h4 className="font-semibold text-lg border-b pb-2">Lab Courses Requirements</h4>
+                <ol className="list-decimal pl-5 space-y-2 text-sm">
+                  <li>Course Outline - (Soft and Hard copy)</li>
+                  <li>Attendances - (Hard copy)
+                    <ul className="list-[lower-alpha] pl-5 mt-1 space-y-1 text-muted-foreground">
+                      <li>Class Attendance</li>
+                      <li>Mid Term Attendance</li>
+                      <li>Final Term Attendance</li>
+                    </ul>
+                  </li>
+                  <li>Final Grade Report - (Soft and Hard copy)</li>
+                  <li>Marks Excel breakdown - (Soft and Hard copy)</li>
+                  <li>List of Lab Tasks (for all Lab course) - (Soft and Hard copy)</li>
+                  <li>Open-Ended Lab Form (for all Lab course) - (Soft and Hard copy)</li>
+                  <li>Open-Ended Lab Report + Rubrics (Highest, Medium and Lowest) - (Hard copy)</li>
+                  <li>Complex Engineering Project form (For Dominant Lab Courses) - (Soft and Hard copy)</li>
+                  <li>Complex Engineering Project report + Rubrics (Highest, Medium and Lowest) (For Dominant Lab Courses) - (Hard copy)</li>
+                  <li>CO-PO Excel file (including CO-PO attainment, Semester Course Report/Course Summary) – (Soft and Hard copy)</li>
+                  <li>CQI Form</li>
+                  <li>Excuse Absent Form</li>
+                  <li>Class Summary Report</li>
+                </ol>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <h4 className="font-semibold text-lg border-b pb-2">Theory Courses Requirements</h4>
+                <ol className="list-decimal pl-5 space-y-2 text-sm">
+                  <li>Course Outline (Soft and Hard copy)</li>
+                  <li>Attendances (Hard copy)
+                    <ul className="list-[lower-alpha] pl-5 mt-1 space-y-1 text-muted-foreground">
+                      <li>Class Attendance</li>
+                      <li>Mid Term Attendance</li>
+                      <li>Final Term Attendance</li>
+                    </ul>
+                  </li>
+                  <li>Mid Term Question Moderation, Mid Term Question and Sample Answer Scripts (Highest, Medium and Lowest) - (Hard copy)</li>
+                  <li>Final Question Moderation, Final Question and Sample Answer Scripts (Highest, Medium and Lowest) - (Hard copy)</li>
+                  <li>Final Grade Report - (Soft and Hard copy)</li>
+                  <li>Marks Excel breakdown - (Soft and Hard copy)</li>
+                  <li>Complex Engineering Project form (For Dominant Courses only) - (Hard copy)</li>
+                  <li>Complex Engineering Project report+ Rubrics (Highest, Medium and Lowest) (For Dominant Courses only) - (Hard copy)</li>
+                  <li>CO-PO Excel file (including CO-PO attainment, Semester Course Report/Course Summary) – (Soft and Hard copy)</li>
+                  <li>CQI Form</li>
+                  <li>Excuse Absent Form</li>
+                  <li>Class Summary Report</li>
+                </ol>
+              </div>
+            )}
+          </div>
+          
+          <DialogFooter>
+            <Button onClick={() => setShowChecklist(false)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <UrmsGradeSheet
+        open={showUrmsModal}
+        onOpenChange={setShowUrmsModal}
+        course={course}
+        students={students}
+        calculateFinalGrade={calculateFinalGrade}
+      />
     </div>
   );
 }

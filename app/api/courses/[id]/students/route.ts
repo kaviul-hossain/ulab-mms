@@ -1,0 +1,69 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import mongoose from 'mongoose';
+import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import dbConnect from '@/lib/mongodb';
+import Course from '@/models/Course';
+import Mark from '@/models/Mark';
+import Student from '@/models/Student';
+
+type RouteParams = {
+  params: Promise<{ id: string }>;
+};
+
+export async function DELETE(_request: NextRequest, { params }: RouteParams) {
+  try {
+    const session = await getServerSession(authOptions);
+
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { id: courseId } = await params;
+
+    await dbConnect();
+
+    const course = await Course.findOne({
+      _id: courseId,
+      userId: session.user.id,
+    });
+
+    if (!course) {
+      return NextResponse.json({ error: 'Course not found' }, { status: 404 });
+    }
+
+    const courseObjectId = new mongoose.Types.ObjectId(courseId);
+    const students = await Student.find({ courseId: courseObjectId, userId: session.user.id }).select('_id');
+    const studentIds = students.map((student) => student._id);
+
+    if (studentIds.length === 0) {
+      return NextResponse.json({ message: 'No students found to delete', deletedStudents: 0, deletedMarks: 0 }, { status: 200 });
+    }
+
+    const [marksResult, studentsResult] = await Promise.all([
+      Mark.deleteMany({
+        studentId: { $in: studentIds },
+        userId: session.user.id,
+      }),
+      Student.deleteMany({
+        courseId: courseObjectId,
+        userId: session.user.id,
+      }),
+    ]);
+
+    return NextResponse.json(
+      {
+        message: 'All students deleted successfully',
+        deletedStudents: studentsResult.deletedCount || 0,
+        deletedMarks: marksResult.deletedCount || 0,
+      },
+      { status: 200 }
+    );
+  } catch (error: unknown) {
+    console.error('Bulk delete students error:', error);
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}

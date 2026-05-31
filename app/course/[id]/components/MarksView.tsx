@@ -9,12 +9,14 @@ interface Student {
   _id: string;
   studentId: string;
   name: string;
+  withdrawn?: boolean;
 }
 
 interface Exam {
   _id: string;
   displayName: string;
   totalMarks: number;
+  examCategory?: string;
 }
 
 interface Mark {
@@ -33,6 +35,11 @@ interface MarksViewProps {
   onShowBulkMarkModal: () => void;
   onShowSetZeroModal: () => void;
   onShowResetMarksModal: () => void;
+  onAutoAttendanceMarks: (examId: string) => void;
+  isAutoCalculatingAttendance?: boolean;
+  onGetProjectMarks?: (() => void) | null;
+  isGettingProjectMarks?: boolean;
+  courseType?: 'Theory' | 'Lab';
 }
 
 export default function MarksView({
@@ -44,6 +51,11 @@ export default function MarksView({
   onShowBulkMarkModal,
   onShowSetZeroModal,
   onShowResetMarksModal,
+  onAutoAttendanceMarks,
+  isAutoCalculatingAttendance = false,
+  onGetProjectMarks = null,
+  isGettingProjectMarks = false,
+  courseType = 'Theory',
 }: MarksViewProps) {
   const [showDropdown, setShowDropdown] = useState(false);
   const [showFloatingButtons, setShowFloatingButtons] = useState(false);
@@ -79,6 +91,9 @@ export default function MarksView({
   if (students.length === 0 || exams.length === 0) {
     return null;
   }
+
+  const attendanceExams = exams.filter(e => e.examCategory === 'Attendance');
+  const hasProjectExam = exams.some(e => e.examCategory === 'Project');
 
   return (
     <div className="space-y-6">
@@ -142,6 +157,18 @@ export default function MarksView({
           <span>0️⃣</span>
           Set Empty Marks to 0
         </Button>
+        {attendanceExams.map(exam => (
+          <Button
+            key={`auto-att-${exam._id}`}
+            onClick={() => onAutoAttendanceMarks(exam._id)}
+            variant="outline"
+            className="gap-2 border-green-500/50 hover:bg-green-500/10"
+            disabled={isAutoCalculatingAttendance}
+          >
+            <span>📈</span>
+            {isAutoCalculatingAttendance ? 'Calculating...' : `Auto ${exam.displayName}`}
+          </Button>
+        ))}
         <Button
           onClick={onShowResetMarksModal}
           variant="outline"
@@ -150,6 +177,17 @@ export default function MarksView({
           <Trash2 className="w-4 h-4" />
           Reset Marks
         </Button>
+        {hasProjectExam && onGetProjectMarks && (
+          <Button
+            onClick={onGetProjectMarks}
+            variant="outline"
+            className="gap-2 border-violet-500/50 hover:bg-violet-500/10"
+            disabled={isGettingProjectMarks}
+          >
+            <span>🎯</span>
+            {isGettingProjectMarks ? 'Pulling marks...' : `Get marks from ${courseType === 'Lab' ? 'OEL / CE Project' : 'Project'} tab`}
+          </Button>
+        )}
       </div>
       <Card className="p-6">
         <div className="overflow-x-auto max-h-[calc(100vh-200px)] sticky top-0">
@@ -172,8 +210,10 @@ export default function MarksView({
                   <td className={`px-3 py-3 text-sm font-medium text-center sticky left-0 z-10 border-r w-[50px] ${idx % 2 === 0 ? 'bg-muted' : 'bg-background'}`}>{idx + 1}</td>
                   <td className={`px-4 py-3 text-sm font-medium sticky left-0 z-10 border-r min-w-[200px] ${idx % 2 === 0 ? 'bg-muted' : 'bg-background'}`}>
                     <div className="flex flex-col">
-                      <span className="text-primary">{student.studentId}</span>
-                      <span className="text-xs text-muted-foreground">{student.name}</span>
+                      <span className="text-primary font-semibold">{student.studentId}</span>
+                      <span className={`text-xs ${student.withdrawn ? 'text-amber-700 dark:text-yellow-400 font-semibold' : 'text-muted-foreground'}`}>
+                        {student.name} {student.withdrawn && <span className="font-bold ml-1">(W)</span>}
+                      </span>
                     </div>
                   </td>
                   {exams.map(exam => {
@@ -231,6 +271,19 @@ export default function MarksView({
             <Trash2 className="w-5 h-5" />
             Reset Marks
           </Button>
+          {attendanceExams.map(exam => (
+            <Button
+              key={`float-auto-att-${exam._id}`}
+              onClick={() => onAutoAttendanceMarks(exam._id)}
+              variant="outline"
+              className="gap-2 shadow-lg hover:shadow-xl transition-shadow border-green-500/50 hover:bg-green-500/10 bg-background"
+              size="lg"
+              disabled={isAutoCalculatingAttendance}
+            >
+              <span>📈</span>
+              {isAutoCalculatingAttendance ? '...' : `Auto ${exam.displayName}`}
+            </Button>
+          ))}
         </div>
       )}
     </div>

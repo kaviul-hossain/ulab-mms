@@ -20,11 +20,11 @@ export async function PUT(
     const { id } = await context.params;
     const studentId = id;
     const body = await request.json();
-    const { studentId: newStudentId, name } = body;
+    const { studentId: newStudentId, name, probation, withdrawn } = body;
 
-    if (!newStudentId || !name) {
+    if (newStudentId === undefined && name === undefined && probation === undefined && withdrawn === undefined) {
       return NextResponse.json(
-        { error: 'Student ID and name are required' },
+        { error: 'No student fields provided' },
         { status: 400 }
       );
     }
@@ -42,7 +42,7 @@ export async function PUT(
     }
 
     // Check if new studentId conflicts with another student in the same course
-    if (newStudentId !== student.studentId) {
+    if (newStudentId !== undefined && newStudentId !== student.studentId) {
       const existingStudent = await Student.findOne({
         courseId: student.courseId,
         studentId: newStudentId,
@@ -59,8 +59,10 @@ export async function PUT(
     }
 
     // Update the student
-    student.studentId = newStudentId;
-    student.name = name;
+    if (newStudentId !== undefined) student.studentId = newStudentId;
+    if (name !== undefined) student.name = name;
+    if (probation !== undefined) student.probation = Boolean(probation);
+    if (withdrawn !== undefined) student.withdrawn = Boolean(withdrawn);
     await student.save();
 
     return NextResponse.json(

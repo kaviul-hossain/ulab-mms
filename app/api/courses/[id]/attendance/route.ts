@@ -12,6 +12,10 @@ async function resolveParams(params: any) {
   return resolved.id as string;
 }
 
+function getUtcDateKey(value: Date) {
+  return value.toISOString().split('T')[0];
+}
+
 export async function GET(_req: NextRequest, { params }: { params: any }) {
   await dbConnect();
   const courseId = await resolveParams(params);
@@ -63,12 +67,30 @@ export async function POST(req: NextRequest, { params }: { params: any }) {
       return NextResponse.json({ error: 'Invalid session date' }, { status: 400 });
     }
 
+    const sessionDateKey = getUtcDateKey(sessionDate);
+    const startOfDay = new Date(`${sessionDateKey}T00:00:00.000Z`);
+    const endOfDay = new Date(`${sessionDateKey}T23:59:59.999Z`);
+    const existingSameDaySession = await AttendanceSession.findOne({
+      courseId: new mongoose.Types.ObjectId(courseId),
+      date: {
+        $gte: startOfDay,
+        $lte: endOfDay,
+      },
+    });
+
+    if (existingSameDaySession) {
+      return NextResponse.json(
+        { error: 'Duplicate session date. Select a different date.' },
+        { status: 409 }
+      );
+    }
+
     const sessionDoc = await AttendanceSession.create({
       courseId: new mongoose.Types.ObjectId(courseId),
       startedBy: new mongoose.Types.ObjectId(session.user.id),
       date: sessionDate,
       open: true,
-      sessionCode: `${courseId}-${sessionDate.getTime()}`,
+      sessionCode: `${courseId}-${sessionDateKey}`,
       records: [],
     });
 

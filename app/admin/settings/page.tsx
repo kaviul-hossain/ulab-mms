@@ -18,6 +18,8 @@ export default function AdminSettings() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [authenticated, setAuthenticated] = useState(false);
+  const [versionLoading, setVersionLoading] = useState(true);
+  const [buildVersion, setBuildVersion] = useState('');
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
@@ -47,6 +49,26 @@ export default function AdminSettings() {
 
     checkAuth();
   }, [router]);
+
+  useEffect(() => {
+    const loadVersion = async () => {
+      try {
+        const response = await fetch('/api/version');
+        const data = await response.json();
+        if (response.ok) {
+          setBuildVersion(data.version || 'unknown');
+        } else {
+          setBuildVersion('unknown');
+        }
+      } catch {
+        setBuildVersion('unknown');
+      } finally {
+        setVersionLoading(false);
+      }
+    };
+
+    loadVersion();
+  }, []);
 
   const handleSignOut = async () => {
     try {
@@ -319,6 +341,27 @@ export default function AdminSettings() {
               <li>Change your password regularly for better security</li>
               <li>Never share your admin password with anyone</li>
             </ul>
+          </CardContent>
+        </Card>
+
+        <Card className="mt-6">
+          <CardContent className="flex items-center justify-between gap-4 pt-6">
+            <div>
+              <h3 className="font-semibold">Software Version</h3>
+              <p className="text-sm text-muted-foreground">
+                Automatically updated on each new build or commit.
+              </p>
+            </div>
+            <div className="text-right text-sm text-muted-foreground">
+              {versionLoading ? (
+                <span className="inline-flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Loading...
+                </span>
+              ) : (
+                <span className="font-mono text-foreground">{buildVersion}</span>
+              )}
+            </div>
           </CardContent>
         </Card>
       </div>

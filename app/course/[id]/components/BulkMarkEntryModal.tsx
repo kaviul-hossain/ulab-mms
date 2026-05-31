@@ -25,6 +25,7 @@ interface Mark {
   examId: string;
   rawMark: number;
   coMarks?: number[];
+  nonCoMark?: number;
   questionMarks?: number[];
 }
 
@@ -42,6 +43,7 @@ interface MarkEntry {
   studentId: string;
   rawMark: string;
   coMarks: string[];
+  nonCoMark: string;
   questionMarks: string[];
 }
 
@@ -78,6 +80,7 @@ export default function BulkMarkEntryModal({
           studentId: student._id,
           rawMark: existingMark?.rawMark?.toString() || '',
           coMarks: existingMark?.coMarks?.map(m => m.toString()) || new Array(numberOfCOs).fill(''),
+          nonCoMark: existingMark?.nonCoMark?.toString() || '',
           questionMarks: existingMark?.questionMarks?.map(m => m.toString()) || new Array(numberOfQuestions).fill(''),
         };
       });
@@ -142,7 +145,15 @@ export default function BulkMarkEntryModal({
         // Move to next CO
         const nextKey = getFieldKey(studentIndex, 'co', subIndex + 1);
         inputRefs.current[nextKey]?.focus();
-      } else if (numberOfQuestions > 0) {
+      } else {
+        // Move to Non-CO
+        const nextKey = getFieldKey(studentIndex, 'nonCo');
+        inputRefs.current[nextKey]?.focus();
+      }
+    }
+    // If we're in Non-CO field
+    else if (field === 'nonCo') {
+      if (numberOfQuestions > 0) {
         // Move to first Question
         const nextKey = getFieldKey(studentIndex, 'q', 0);
         inputRefs.current[nextKey]?.focus();
@@ -199,6 +210,12 @@ export default function BulkMarkEntryModal({
         inputRefs.current[prevKey]?.focus();
       }
     }
+    // If we're in Non-CO field
+    else if (field === 'nonCo') {
+      // Move to last CO
+      const prevKey = getFieldKey(studentIndex, 'co', numberOfCOs - 1);
+      inputRefs.current[prevKey]?.focus();
+    }
     // If we're in a Question field
     else if (field === 'q' && subIndex !== undefined) {
       if (subIndex > 0) {
@@ -206,8 +223,8 @@ export default function BulkMarkEntryModal({
         const prevKey = getFieldKey(studentIndex, 'q', subIndex - 1);
         inputRefs.current[prevKey]?.focus();
       } else if (numberOfCOs > 0) {
-        // Move to last CO
-        const prevKey = getFieldKey(studentIndex, 'co', numberOfCOs - 1);
+        // Move to Non-CO
+        const prevKey = getFieldKey(studentIndex, 'nonCo');
         inputRefs.current[prevKey]?.focus();
       } else {
         // Move to rawMark
@@ -226,6 +243,8 @@ export default function BulkMarkEntryModal({
         const newCoMarks = [...newEntries[studentIndex].coMarks];
         newCoMarks[subIndex] = value;
         newEntries[studentIndex].coMarks = newCoMarks;
+      } else if (field === 'nonCo') {
+        newEntries[studentIndex].nonCoMark = value;
       } else if (field === 'q' && subIndex !== undefined) {
         const newQuestionMarks = [...newEntries[studentIndex].questionMarks];
         newQuestionMarks[subIndex] = value;
@@ -283,6 +302,19 @@ export default function BulkMarkEntryModal({
             const val = cm.trim();
             return val ? parseFloat(val) : 0;
           });
+          
+          let nonCoMarkPayload: number | null = null;
+          let nonCoCalcValue = 0;
+          if (entry.nonCoMark.trim() !== '') {
+            nonCoCalcValue = parseFloat(entry.nonCoMark.trim());
+            nonCoMarkPayload = nonCoCalcValue;
+            
+            if (isNaN(nonCoCalcValue) || nonCoCalcValue < 0) {
+              setError(`Invalid Non-CO mark for ${students[i].studentId}: Must be a positive number`);
+              setSaving(false);
+              return;
+            }
+          }
 
           // Check if all CO marks are valid
           if (coMarksNum.some(cm => isNaN(cm) || cm < 0)) {
@@ -291,15 +323,17 @@ export default function BulkMarkEntryModal({
             return;
           }
 
-          // Check if CO marks sum equals raw mark
+          // Check if CO + Non-CO marks sum equals raw mark
           const coMarksSum = coMarksNum.reduce((sum, cm) => sum + cm, 0);
-          if (Math.abs(coMarksSum - rawMarkNum) > 0.01) {
-            setError(`CO marks for ${students[i].studentId} must sum to ${rawMarkNum}. Current sum: ${coMarksSum.toFixed(2)}`);
+          const totalCoSum = coMarksSum + nonCoCalcValue;
+          if (Math.abs(totalCoSum - rawMarkNum) > 0.01) {
+            setError(`CO + Non-CO marks for ${students[i].studentId} must sum to ${rawMarkNum}. Current sum: ${totalCoSum.toFixed(2)}`);
             setSaving(false);
             return;
           }
 
           markData.coMarks = coMarksNum;
+          markData.nonCoMark = nonCoMarkPayload;
         }
 
         // Validate Question marks if applicable
@@ -477,6 +511,11 @@ export default function BulkMarkEntryModal({
                           CO{i + 1}
                         </th>
                       ))}
+                      {numberOfCOs > 0 && (
+                        <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-gray-300 border-b border-gray-700 w-32">
+                          Non-CO <div className="text-[10px] font-normal lowercase text-gray-500 mt-0.5">(Optional)</div>
+                        </th>
+                      )}
                       {numberOfQuestions > 0 && Array.from({ length: numberOfQuestions }, (_, i) => (
                         <th key={`q-${i}`} className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-gray-300 border-b border-gray-700 w-24">
                           Q{i + 1}
@@ -524,6 +563,23 @@ export default function BulkMarkEntryModal({
                             />
                           </td>
                         ))}
+                        {numberOfCOs > 0 && (
+                          <td className="px-4 py-3 text-sm">
+                            <input
+                              ref={(el) => {
+                                inputRefs.current[getFieldKey(studentIndex, 'nonCo')] = el;
+                              }}
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={markEntries[studentIndex]?.nonCoMark || ''}
+                              onChange={(e) => updateMarkEntry(studentIndex, 'nonCo', e.target.value)}
+                              onKeyDown={(e) => handleKeyDown(e, studentIndex, 'nonCo')}
+                              className="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-100 text-center"
+                              placeholder="0"
+                            />
+                          </td>
+                        )}
                         {numberOfQuestions > 0 && Array.from({ length: numberOfQuestions }, (_, qIndex) => (
                           <td key={`q-${qIndex}`} className="px-4 py-3 text-sm">
                             <input

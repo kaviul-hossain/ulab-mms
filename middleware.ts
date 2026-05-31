@@ -10,6 +10,15 @@ export async function middleware(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
 
+  // Redirect authenticated users away from sign-in pages
+  if (pathname === '/auth/signin' && token) {
+    return NextResponse.redirect(new URL('/dashboard', request.url));
+  }
+
+  if (pathname === '/admin/signin' && request.cookies.get('admin-token')) {
+    return NextResponse.redirect(new URL('/admin/dashboard', request.url));
+  }
+
   // Protect dashboard and course routes
   if (pathname.startsWith('/dashboard') || pathname.startsWith('/course')) {
     if (!token) {

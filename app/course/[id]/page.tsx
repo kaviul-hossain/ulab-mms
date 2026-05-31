@@ -14,6 +14,10 @@ import StudentsView from './components/StudentsView';
 import MarksView from './components/MarksView';
 import AttendanceView from './components/AttendanceView';
 import BulkMarkEntryModal from './components/BulkMarkEntryModal';
+import ExcelExportMappingInfo from './components/ExcelExportMappingInfo';
+import CoPoView from './components/CoPoView';
+import ProjectView from './components/ProjectView';
+import PopulateTestDataModal from './components/PopulateTestDataModal';
 import { 
   GradeThreshold, 
   DEFAULT_GRADING_SCALE, 
@@ -26,17 +30,13 @@ import {
   getGradeBgColor 
 } from '@/app/utils/grading';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Progress } from '@/components/ui/progress';
 import { 
   Settings, 
   LogOut, 
@@ -65,6 +65,7 @@ interface Student {
   _id: string;
   studentId: string;
   name: string;
+  withdrawn?: boolean;
 }
 
 interface Exam {
@@ -97,10 +98,12 @@ interface Course {
   year: number;
   courseType: 'Theory' | 'Lab';
   showFinalGrade: boolean;
+  section: string;
   quizAggregation?: 'average' | 'best';
   assignmentAggregation?: 'average' | 'best';
   quizWeightage?: number;
   assignmentWeightage?: number;
+  projectWeightage?: number;
   gradingScale?: string;
 }
 
@@ -132,10 +135,14 @@ export default function CoursePage() {
   const [importCourseFile, setImportCourseFile] = useState<File | null>(null);
   const [exportingJSON, setExportingJSON] = useState(false);
   const [exportingCSV, setExportingCSV] = useState(false);
+  const [exportingCourseFile, setExportingCourseFile] = useState(false);
   const [importingCourse, setImportingCourse] = useState(false);
-  const [courseSettingsTab, setCourseSettingsTab] = useState<'aggregation' | 'grading'>('aggregation');
+  const [isPopulating, setIsPopulating] = useState(false);
+  const [courseSettingsTab, setCourseSettingsTab] = useState<'aggregation' | 'grading' | 'excelExport'>('aggregation');
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [activeView, setActiveView] = useState<'overview' | 'exams' | 'students' | 'marks' | 'attendance'>('overview');
+  const [activeView, setActiveView] = useState<'overview' | 'exams' | 'students' | 'marks' | 'attendance' | 'copo' | 'project'>('overview');
+  const [isGettingProjectMarks, setIsGettingProjectMarks] = useState(false);
+  const [showPopulateModal, setShowPopulateModal] = useState(false);
   const [searchStudentId, setSearchStudentId] = useState('');
   const [showStudentStatsModal, setShowStudentStatsModal] = useState(false);
   const [selectedStudentForStats, setSelectedStudentForStats] = useState<Student | null>(null);
@@ -153,6 +160,7 @@ export default function CoursePage() {
   const [deleteConfirmationStep, setDeleteConfirmationStep] = useState(0);
   const [newStudentData, setNewStudentData] = useState({ studentId: '', name: '' });
   const [showBulkMarkModal, setShowBulkMarkModal] = useState(false);
+  const [isAutoCalculatingAttendance, setIsAutoCalculatingAttendance] = useState(false);
   
   const [csvInput, setCsvInput] = useState('');
   const [examFormData, setExamFormData] = useState({
@@ -163,6 +171,19 @@ export default function CoursePage() {
     numberOfQuestions: '',
     examCategory: '',
   });
+
+  const getInheritedExamWeightage = (examCategory: string) => {
+    if (examCategory === 'Quiz') {
+      return course?.quizWeightage ?? 0;
+    }
+    if (examCategory === 'Assignment') {
+      return course?.assignmentWeightage ?? 0;
+    }
+    if (examCategory === 'Project') {
+      return course?.projectWeightage ?? 25; // managed at course level
+    }
+    return null;
+  };
   const [examSettings, setExamSettings] = useState({
     displayName: '',
     weightage: '',
@@ -176,6 +197,7 @@ export default function CoursePage() {
     assignmentAggregation: 'average' as 'average' | 'best',
     quizWeightage: '',
     assignmentWeightage: '',
+    projectWeightage: '',
     gradingScale: DEFAULT_GRADING_SCALE,
   });
   const [error, setError] = useState('');
@@ -201,6 +223,31 @@ export default function CoursePage() {
       console.error('Error fetching course data:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleToggleWithdrawStudent = async (student: Student) => {
+    const newStatus = !student.withdrawn;
+    const action = newStatus ? 'withdraw' : 'un-withdraw';
+    if (!confirm(`Are you sure you want to ${action} ${student.name}?`)) return;
+
+    try {
+      const response = await fetch(`/api/students/${student._id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ withdrawn: newStatus }),
+      });
+
+      if (response.ok) {
+        toast.success(`Student ${student.name} ${newStatus ? 'withdrawn' : 'un-withdrawn'} successfully`);
+        await fetchCourseData();
+      } else {
+        const data = await response.json();
+        toast.error(data.error || `Failed to ${action} student`);
+      }
+    } catch (err) {
+      console.error('Error toggling withdraw status:', err);
+      toast.error('An error occurred');
     }
   };
 
@@ -371,6 +418,26 @@ export default function CoursePage() {
     }
   };
 
+  const handleDeleteAllStudents = async () => {
+    try {
+      const response = await fetch(`/api/courses/${courseId}/students`, {
+        method: 'DELETE',
+      });
+
+      const data = await response.json().catch(() => ({}));
+
+      if (response.ok) {
+        await fetchCourseData();
+        notify.student.bulkDeleted(data.deletedStudents || 0);
+      } else {
+        notify.student.bulkDeleteError(data.error);
+      }
+    } catch (err) {
+      console.error('Error deleting all students:', err);
+      notify.student.bulkDeleteError();
+    }
+  };
+
   const handleAddExam = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -387,11 +454,12 @@ export default function CoursePage() {
         examData.examCategory = examFormData.examCategory;
       }
 
-      // Only add weightage for non-Quiz and non-Assignment exams
-      if (examFormData.examCategory !== 'Quiz' && examFormData.examCategory !== 'Assignment') {
-        examData.weightage = parseFloat(examFormData.weightage);
+      const inheritedWeightage = getInheritedExamWeightage(examFormData.examCategory);
+
+      if (inheritedWeightage !== null) {
+        examData.weightage = inheritedWeightage;
       } else {
-        examData.weightage = 0; // Set to 0 for Quiz/Assignment
+        examData.weightage = parseFloat(examFormData.weightage);
       }
 
       // Add numberOfCOs if provided (for theory courses)
@@ -424,6 +492,32 @@ export default function CoursePage() {
     } catch (err) {
       setError('Error creating exam');
     }
+  };
+
+  const openExamModal = (presetCategory?: Exam['examCategory']) => {
+    if (presetCategory === 'Quiz' || presetCategory === 'Assignment' || presetCategory === 'Project') {
+      const nextIndex = exams.filter((exam) => exam.examCategory === presetCategory).length + 1;
+      setExamFormData({
+        displayName: `${presetCategory} ${nextIndex}`,
+        totalMarks: '',
+        weightage: '',
+        numberOfCOs: '',
+        numberOfQuestions: '',
+        examCategory: presetCategory,
+      });
+    } else {
+      setExamFormData({
+        displayName: '',
+        totalMarks: '',
+        weightage: '',
+        numberOfCOs: '',
+        numberOfQuestions: '',
+        examCategory: presetCategory || '',
+      });
+    }
+
+    setError('');
+    setShowExamModal(true);
   };
 
   const handleApplyScaling = async (examId: string, method: string) => {
@@ -531,6 +625,53 @@ export default function CoursePage() {
     }
   };
 
+  const handleGetProjectMarks = async () => {
+    setIsGettingProjectMarks(true);
+    try {
+      const res = await fetch(`/api/courses/${courseId}/project/marks`, { method: 'POST' });
+      const data = await res.json();
+      if (res.ok) {
+        toast.success(`Project marks applied to ${data.updated} student(s) across: ${(data.examsUpdated || []).join(', ')}`);
+        await fetchCourseData();
+      } else {
+        toast.error(data.error || 'Failed to get project marks');
+      }
+    } catch {
+      toast.error('Error fetching project marks');
+    } finally {
+      setIsGettingProjectMarks(false);
+    }
+  };
+
+  const handleAutoAttendanceMarks = async (examId: string) => {
+    if (!confirm('This will fetch the attendance data and automatically calculate and save marks based on the attendance percentage. Any existing marks for this exam will be overwritten. Do you want to proceed?')) {
+      return;
+    }
+
+    setIsAutoCalculatingAttendance(true);
+    try {
+      const response = await fetch(`/api/courses/${courseId}/marks/auto-attendance`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ examId }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        toast.success(data.message || 'Attendance marks calculated and saved successfully');
+        await fetchCourseData();
+      } else {
+        toast.error(data.error || 'Failed to auto-calculate attendance marks');
+      }
+    } catch (err) {
+      console.error('Error auto-calculating attendance marks:', err);
+      toast.error('An error occurred while calculating attendance marks');
+    } finally {
+      setIsAutoCalculatingAttendance(false);
+    }
+  };
+
 
   const handleUpdateExamSettings = async () => {
     if (!showExamSettings) return;
@@ -567,8 +708,16 @@ export default function CoursePage() {
   };
 
   const handleDeleteExam = async (examId: string) => {
-    if (!confirm('Are you sure you want to delete this exam? This will delete all associated marks.')) {
+    const exam = exams.find(e => e._id === examId);
+    
+    if (!confirm(`Are you sure you want to delete ${exam?.displayName || 'this exam'}? This will delete all associated marks.`)) {
       return;
+    }
+
+    if (exam?.isRequired) {
+      if (!confirm(`WARNING: ${exam.displayName} is a required core exam. Deleting it may affect standard grade calculations or course requirements. Are you absolutely sure you want to proceed?`)) {
+        return;
+      }
     }
 
     try {
@@ -613,6 +762,9 @@ export default function CoursePage() {
       }
       if (courseSettingsData.assignmentWeightage) {
         updateData.assignmentWeightage = parseFloat(courseSettingsData.assignmentWeightage);
+      }
+      if (courseSettingsData.projectWeightage !== undefined) {
+        updateData.projectWeightage = parseFloat(courseSettingsData.projectWeightage) || 0;
       }
 
       const response = await fetch(`/api/courses/${courseId}`, {
@@ -691,6 +843,38 @@ export default function CoursePage() {
     }
   };
 
+  const handleExportCourseFile = async () => {
+    setExportingCourseFile(true);
+    try {
+      const response = await fetch(`/api/courses/${courseId}/export-file`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${course?.code}_${course?.name}_course_file_${new Date().toISOString().split('T')[0]}.xlsx`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        notify.exportImport.exportSuccess('Excel', `${course?.code}_${course?.name}`);
+      } else {
+        const data = await response.json().catch(() => ({}));
+        notify.exportImport.exportError(data.error);
+      }
+    } catch (err) {
+      console.error('Export error:', err);
+      notify.exportImport.exportError();
+    } finally {
+      setExportingCourseFile(false);
+    }
+  };
+
   const handleImportCourse = async () => {
     if (!importCourseFile) {
       notify.exportImport.noFileSelected();
@@ -725,8 +909,42 @@ export default function CoursePage() {
     }
   };
 
+  const handlePopulateTestData = async (): Promise<{ studentsAdded: number; marksAdded: number } | null> => {
+    const repopulate = students.length > 0;
+    setIsPopulating(true);
+    try {
+      const response = await fetch(`/api/courses/${courseId}/populate-test-data`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ repopulate }),
+      });
+      const data = await response.json();
+      if (response.ok) {
+        await fetchCourseData();
+        return { studentsAdded: data.studentsAdded, marksAdded: data.marksAdded };
+      } else {
+        toast.error(data.error || 'Failed to populate test data');
+        return null;
+      }
+    } catch (err) {
+      toast.error('Error populating test data');
+      return null;
+    } finally {
+      setIsPopulating(false);
+    }
+  };
+
   const getMark = (studentId: string, examId: string) => {
-    return marks.find(m => m.studentId === studentId && m.examId === examId);
+    return marks.find(m => m.studentId.toString() === studentId.toString() && m.examId.toString() === examId.toString());
+  };
+
+  const getExamPercentage = (rawMark: number, totalMarks: number) => {
+    if (!totalMarks || totalMarks <= 0) return 0;
+    return (rawMark / totalMarks) * 100;
+  };
+
+  const getWeightedContribution = (rawMark: number, totalMarks: number, weightage: number) => {
+    return (getExamPercentage(rawMark, totalMarks) * weightage) / 100;
   };
 
   // Calculate aggregated mark for a student based on exam category
@@ -748,38 +966,47 @@ export default function CoursePage() {
       ? course?.quizAggregation || 'average'
       : course?.assignmentAggregation || 'average';
 
+    const categoryWeightage = category === 'Quiz'
+      ? Number(course?.quizWeightage || 0)
+      : Number(course?.assignmentWeightage || 0);
+
     if (aggregationMethod === 'best') {
-      // Find the best mark (highest actual mark)
+      // Find the best normalized score (highest percentage), not the highest raw mark
       let bestMark = categoryMarks[0];
-      let bestValue = 0;
+      let bestValue = -1;
 
       categoryMarks.forEach(mark => {
         const exam = categoryExams.find(e => e._id === mark.examId);
         if (exam) {
-          if (mark.rawMark > bestValue) {
-            bestValue = mark.rawMark;
+          const percentage = getExamPercentage(mark.rawMark, exam.totalMarks);
+          if (percentage > bestValue) {
+            bestValue = percentage;
             bestMark = mark;
           }
         }
       });
 
-      return bestMark;
-    } else {
-      // Calculate average of actual marks (not percentages)
-      let totalMarks = 0;
-      
-      categoryMarks.forEach(mark => {
-        const exam = categoryExams.find(e => e._id === mark.examId);
-        if (exam) {
-          totalMarks += mark.rawMark;
-        }
-      });
+      const bestExam = categoryExams.find(e => e._id === bestMark.examId);
+      const weightedMark = bestExam ? getWeightedContribution(bestMark.rawMark, bestExam.totalMarks, categoryWeightage) : 0;
 
-      const avgMark = totalMarks / categoryMarks.length;
+      return {
+        rawMark: weightedMark,
+        isAggregated: true,
+        examId: bestMark.examId,
+      };
+    } else {
+      // Calculate average of normalized percentages and convert to weighted contribution
+      const averagePercentage = categoryMarks.reduce((sum, mark) => {
+        const exam = categoryExams.find(e => e._id === mark.examId);
+        if (!exam) return sum;
+        return sum + getExamPercentage(mark.rawMark, exam.totalMarks);
+      }, 0) / categoryMarks.length;
+
+      const weightedAverage = (averagePercentage * categoryWeightage) / 100;
       
       // Return a synthetic mark object for display
       return {
-        rawMark: avgMark,
+        rawMark: weightedAverage,
         isAggregated: true,
       };
     }
@@ -798,16 +1025,34 @@ export default function CoursePage() {
   // Check if we should show aggregated columns
   const hasQuizzes = exams.some(exam => exam.examCategory === 'Quiz');
   const hasAssignments = exams.some(exam => exam.examCategory === 'Assignment');
+  const hasProjects = exams.some(exam => exam.examCategory === 'Project');
+
+  // Calculate project aggregated mark: sum all raw marks, convert to weightage
+  // Formula: (sumRaw / sumTotal) × projectWeightage
+  const getProjectAggregatedMark = (studentId: string): { rawMark: number; sumRaw: number; sumTotal: number; isAggregated: boolean } | null => {
+    const projectExams = exams.filter(e => e.examCategory === 'Project');
+    if (projectExams.length === 0) return null;
+    const projectMarks = projectExams
+      .map(e => ({ exam: e, mark: marks.find(m => m.studentId.toString() === studentId.toString() && m.examId.toString() === e._id.toString()) }))
+      .filter(x => x.mark !== undefined);
+    if (projectMarks.length === 0) return null;
+    const sumRaw = projectMarks.reduce((s, x) => s + Number(x.mark!.rawMark ?? 0), 0);
+    // sumTotal is the total marks of only the exams that have been scored
+    const sumTotal = projectMarks.reduce((s, x) => s + Number(x.exam.totalMarks ?? 0), 0);
+    const projectWeightage = Number(course?.projectWeightage || 0);
+    const weighted = sumTotal > 0 ? (sumRaw / sumTotal) * projectWeightage : 0;
+    return { rawMark: Math.round(weighted * 100) / 100, sumRaw, sumTotal, isAggregated: true };
+  };
 
   // Calculate final grade for a student
   const calculateFinalGrade = (studentId: string): { total: number; breakdown: Array<{ name: string; mark: number; totalMarks: number; weightage: number; contribution: number; isAggregated?: boolean }> } => {
     const breakdown: Array<{ name: string; mark: number; totalMarks: number; weightage: number; contribution: number; isAggregated?: boolean }> = [];
     let totalContribution = 0;
 
-    // Process individual exams (non-Quiz, non-Assignment)
+    // Process individual exams (non-Quiz, non-Assignment, non-Project)
     exams.forEach(exam => {
-      if (exam.examCategory === 'Quiz' || exam.examCategory === 'Assignment') {
-        return; // Skip, will be handled by aggregated columns
+      if (exam.examCategory === 'Quiz' || exam.examCategory === 'Assignment' || exam.examCategory === 'Project') {
+        return; // handled by aggregated columns
       }
 
       const mark = getMark(studentId, exam._id);
@@ -832,38 +1077,14 @@ export default function CoursePage() {
     if (hasQuizzes && course?.quizWeightage) {
       const aggMark = getAggregatedMark(studentId, 'Quiz');
       if (aggMark) {
-        let markToUse = 0;
-        let totalMarks = 100; // Aggregated marks are already percentages or actual marks
-        
-        if ('isAggregated' in aggMark && aggMark.isAggregated) {
-          // Average mode: rawMark is the average value
-          markToUse = aggMark.rawMark;
-          // For aggregated average, find the maximum scalingTarget or totalMarks
-          // This handles cases where different quizzes have different scaling targets
-          const quizExams = exams.filter(e => e.examCategory === 'Quiz');
-          if (quizExams.length > 0) {
-            totalMarks = Math.max(...quizExams.map(e => e.totalMarks));
-          }
-        } else {
-          // Best mode: get the actual mark
-          const exam = exams.find(e => e._id === aggMark.examId);
-          if (exam) {
-            markToUse = aggMark.rawMark;
-            totalMarks = exam.totalMarks;
-          }
-        }
-        
-        // Calculate percentage
-        const percentage = (markToUse / totalMarks) * 100;
-        
-        // Calculate contribution
-        const contribution = (percentage * course.quizWeightage) / 100;
+        const totalMarks = Number(course.quizWeightage);
+        const contribution = aggMark.rawMark;
         
         breakdown.push({
           name: 'Quiz (Aggregated)',
-          mark: markToUse,
+          mark: contribution,
           totalMarks: totalMarks,
-          weightage: course.quizWeightage,
+          weightage: totalMarks,
           contribution: contribution,
           isAggregated: true,
         });
@@ -876,43 +1097,34 @@ export default function CoursePage() {
     if (hasAssignments && course?.assignmentWeightage) {
       const aggMark = getAggregatedMark(studentId, 'Assignment');
       if (aggMark) {
-        let markToUse = 0;
-        let totalMarks = 100;
-        
-        if ('isAggregated' in aggMark && aggMark.isAggregated) {
-          // Average mode
-          markToUse = aggMark.rawMark;
-          // For aggregated average, find the maximum scalingTarget or totalMarks
-          // This handles cases where different assignments have different scaling targets
-          const assignmentExams = exams.filter(e => e.examCategory === 'Assignment');
-          if (assignmentExams.length > 0) {
-            totalMarks = Math.max(...assignmentExams.map(e => e.totalMarks));
-          }
-        } else {
-          // Best mode
-          const exam = exams.find(e => e._id === aggMark.examId);
-          if (exam) {
-            markToUse = aggMark.rawMark;
-            totalMarks = exam.totalMarks;
-          }
-        }
-        
-        // Calculate percentage
-        const percentage = (markToUse / totalMarks) * 100;
-        
-        // Calculate contribution
-        const contribution = (percentage * course.assignmentWeightage) / 100;
-        
+        const totalMarks = Number(course.assignmentWeightage);
+        const contribution = aggMark.rawMark;
         breakdown.push({
           name: 'Assignment (Aggregated)',
-          mark: markToUse,
+          mark: contribution,
           totalMarks: totalMarks,
-          weightage: course.assignmentWeightage,
+          weightage: totalMarks,
           contribution: contribution,
           isAggregated: true,
         });
-        
         totalContribution += contribution;
+      }
+    }
+
+    // Add Project aggregated column (sum-based)
+    if (hasProjects && course?.projectWeightage) {
+      const aggMark = getProjectAggregatedMark(studentId);
+      if (aggMark) {
+        const totalMarks = Number(course.projectWeightage);
+        breakdown.push({
+          name: 'Project (Aggregated)',
+          mark: aggMark.rawMark,
+          totalMarks: totalMarks,
+          weightage: totalMarks,
+          contribution: aggMark.rawMark,
+          isAggregated: true,
+        });
+        totalContribution += aggMark.rawMark;
       }
     }
 
@@ -1065,7 +1277,7 @@ export default function CoursePage() {
                   {course.name}
                 </h1>
                 <p className="text-xs mt-1 text-muted-foreground">
-                  {course.code} • {course.semester} {course.year} • 
+                  {course.code} • {course.semester} {course.year} • Section {course.section} • 
                   <Badge variant="secondary" className="ml-1">
                     {course.courseType}
                   </Badge>
@@ -1184,6 +1396,28 @@ export default function CoursePage() {
               {sidebarOpen && <span className="ml-2 font-medium">Attendance</span>}
             </Button>
 
+            <Button
+              variant={activeView === 'copo' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setActiveView('copo')}
+              className="w-full justify-start"
+            >
+              <span className="text-lg">🔗</span>
+              {sidebarOpen && <span className="ml-2 font-medium">CO PO Mapping</span>}
+            </Button>
+
+            <Button
+              variant={activeView === 'project' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setActiveView('project')}
+              className="w-full justify-start"
+            >
+              <span className="text-lg">{course?.courseType === 'Lab' ? '🚀' : '🎓'}</span>
+              {sidebarOpen && <span className="ml-2 font-medium">
+                {course?.courseType === 'Lab' ? 'OEL / CE Project' : 'Project'}
+              </span>}
+            </Button>
+
             {sidebarOpen && <div className="pt-4 mt-4 border-t"></div>}
 
             <Button
@@ -1195,6 +1429,7 @@ export default function CoursePage() {
                   assignmentAggregation: course?.assignmentAggregation || 'average',
                   quizWeightage: course?.quizWeightage?.toString() || '',
                   assignmentWeightage: course?.assignmentWeightage?.toString() || '',
+                  projectWeightage: course?.projectWeightage?.toString() || '',
                   gradingScale: course?.gradingScale 
                     ? decodeGradingScale(course.gradingScale) 
                     : DEFAULT_GRADING_SCALE,
@@ -1204,7 +1439,7 @@ export default function CoursePage() {
               className="w-full justify-start"
             >
               <Settings className="w-5 h-5" />
-              {sidebarOpen && <span className="ml-2 font-medium">Settings</span>}
+              {sidebarOpen && <span className="ml-2 font-medium">Course Settings</span>}
             </Button>
           </nav>
 
@@ -1268,6 +1503,31 @@ export default function CoursePage() {
                 <FileUp className="w-4 h-4 mr-2" />
                 Import
               </Button>
+              {course?.code === 'TESTCODE123' && (
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={() => setShowPopulateModal(true)}
+                  disabled={isPopulating}
+                  className={`w-full text-white mt-2 ${
+                    students.length > 0
+                      ? 'bg-amber-600 hover:bg-amber-700'
+                      : 'bg-blue-600 hover:bg-blue-700'
+                  }`}
+                >
+                  {students.length > 0 ? (
+                    <>
+                      <FlaskConical className="w-4 h-4 mr-2" />
+                      Re-populate Test Data
+                    </>
+                  ) : (
+                    <>
+                      <FlaskConical className="w-4 h-4 mr-2" />
+                      Populate Test Data
+                    </>
+                  )}
+                </Button>
+              )}
             </div>
           )}
         </aside>
@@ -1287,6 +1547,9 @@ export default function CoursePage() {
                 onImportCourse={() => setShowImportCourseModal(true)}
                 onExportCSV={handleExportCSV}
                 exportingCSV={exportingCSV}
+                onExportCourseFile={handleExportCourseFile}
+                exportingCourseFile={exportingCourseFile}
+                calculateFinalGrade={calculateFinalGrade}
               />
             )}
 
@@ -1294,7 +1557,8 @@ export default function CoursePage() {
             {activeView === 'exams' && (
               <ExamsView
                 exams={exams}
-                onShowExamModal={() => setShowExamModal(true)}
+                course={course!}
+                onShowExamModal={openExamModal}
                 onShowExamSettings={(examId) => setShowExamSettings(examId)}
                 onSetExamSettings={setExamSettings}
                 onDeleteExam={handleDeleteExam}
@@ -1310,8 +1574,10 @@ export default function CoursePage() {
                 course={course}
                 hasQuizzes={hasQuizzes}
                 hasAssignments={hasAssignments}
+                hasProjects={hasProjects}
                 getMark={getMark}
                 getAggregatedMark={getAggregatedMark}
+                getProjectAggregatedMark={getProjectAggregatedMark}
                 calculateFinalGrade={calculateFinalGrade}
                 calculateLetterGrade={calculateLetterGrade}
                 getGradeDisplay={getGradeDisplay}
@@ -1337,6 +1603,8 @@ export default function CoursePage() {
                   setDeleteConfirmationStep(0);
                   setShowDeleteStudentModal(true);
                 }}
+                onDeleteAllStudents={handleDeleteAllStudents}
+                onToggleWithdrawStudent={handleToggleWithdrawStudent}
               />
             )}
 
@@ -1363,12 +1631,37 @@ export default function CoursePage() {
                   setConfirmationStep(0);
                   setShowResetMarksModal(true);
                 }}
+                onAutoAttendanceMarks={handleAutoAttendanceMarks}
+                isAutoCalculatingAttendance={isAutoCalculatingAttendance}
+                onGetProjectMarks={handleGetProjectMarks}
+                isGettingProjectMarks={isGettingProjectMarks}
+                courseType={course?.courseType}
+              />
+            )}
+
+            {activeView === 'project' && (
+              <ProjectView 
+                courseId={courseId} 
+                students={students} 
+                exams={exams}
+                title={course?.courseType === 'Lab' ? 'OEL / CE Project Groups' : 'Project Groups'}
+                description={course?.courseType === 'Lab' ? 'Score each group\'s OEL / CE project using the rubric. Marks are pushed to the Marks tab.' : undefined}
+                examFilter={(e) => e.examCategory === 'Project'}
               />
             )}
 
             {/* Attendance View */}
             {activeView === 'attendance' && (
               <AttendanceView courseId={courseId} />
+            )}
+
+            {/* CO-PO Mapping View */}
+            {activeView === 'copo' && (
+              <CoPoView 
+                course={course} 
+                exams={exams} 
+                onUpdate={fetchCourseData} 
+              />
             )}
 
             {/* Empty States */}
@@ -1468,13 +1761,22 @@ export default function CoursePage() {
               <select
                 required
                 value={examFormData.examCategory}
-                onChange={(e) => setExamFormData({ ...examFormData, examCategory: e.target.value })}
+                onChange={(e) => {
+                  const nextCategory = e.target.value;
+                  const inheritedWeightage = getInheritedExamWeightage(nextCategory);
+
+                  setExamFormData({
+                    ...examFormData,
+                    examCategory: nextCategory,
+                    weightage: inheritedWeightage !== null ? inheritedWeightage.toString() : examFormData.weightage,
+                  });
+                }}
                 className="w-full px-4 py-2 bg-background border rounded-lg focus:ring-2 focus:ring-ring text-foreground mt-2"
               >
                 <option value="">Select category...</option>
                 <option value="Quiz">Quiz</option>
-                <option value="Assignment">Assignment</option>
-                <option value="Project">Project</option>
+                <option value="Assignment">{course?.courseType === 'Lab' ? 'Continuous Lab Assessment (CLA)' : 'Assignment'}</option>
+                <option value="Project">{course?.courseType === 'Lab' ? 'OEL / CE Project' : 'Project'}</option>
                 <option value="Attendance">Attendance</option>
                 <option value="MainExam">Main Exam</option>
                 <option value="ClassPerformance">Class Performance</option>
@@ -1500,25 +1802,38 @@ export default function CoursePage() {
             <div>
               <Label>
                 Weightage (%)
-                {(examFormData.examCategory === 'Quiz' || examFormData.examCategory === 'Assignment') && (
-                  <span className="ml-2 text-xs text-amber-500">(Not used for Quiz/Assignment)</span>
+                {(examFormData.examCategory === 'Quiz' || examFormData.examCategory === 'Assignment' || examFormData.examCategory === 'Project') && (
+                  <span className="ml-2 text-xs text-amber-500">(Set in Course Settings)</span>
                 )}
               </Label>
-              <Input
-                type="number"
-                required={examFormData.examCategory !== 'Quiz' && examFormData.examCategory !== 'Assignment'}
-                min="0"
-                max="100"
-                step="0.01"
-                value={examFormData.weightage}
-                onChange={(e) => setExamFormData({ ...examFormData, weightage: e.target.value })}
-                placeholder="e.g., 20"
-                disabled={examFormData.examCategory === 'Quiz' || examFormData.examCategory === 'Assignment'}
-                className="mt-2"
-              />
+              {(examFormData.examCategory === 'Quiz' || examFormData.examCategory === 'Assignment' || examFormData.examCategory === 'Project') ? (
+                <div className="mt-2 rounded-lg border bg-muted/40 px-4 py-3 text-sm text-muted-foreground flex items-center justify-between">
+                  <span>
+                    {examFormData.examCategory === 'Project'
+                      ? `${course?.projectWeightage ?? 25}% (shared across all projects)`
+                      : `${(getInheritedExamWeightage(examFormData.examCategory) ?? 0).toFixed(2)}% from course settings`
+                    }
+                  </span>
+                  <span className="text-xs text-amber-400 font-medium">Change in Course Settings →</span>
+                </div>
+              ) : (
+                <Input
+                  type="number"
+                  required
+                  min="0"
+                  max="100"
+                  step="0.01"
+                  value={examFormData.weightage}
+                  onChange={(e) => setExamFormData({ ...examFormData, weightage: e.target.value })}
+                  placeholder="e.g., 20"
+                  className="mt-2"
+                />
+              )}
               <p className="text-xs text-muted-foreground mt-1">
-                {(examFormData.examCategory === 'Quiz' || examFormData.examCategory === 'Assignment') 
-                  ? 'Weightage is set at course level for aggregated Quiz/Assignment columns'
+                {(examFormData.examCategory === 'Quiz' || examFormData.examCategory === 'Assignment')
+                  ? 'Each item contributes using this shared group weight'
+                  : examFormData.examCategory === 'Project'
+                  ? course?.courseType === 'Lab' ? 'All OEL/CE marks are summed and scaled to the OEL/CE weightage' : 'All project marks are summed and scaled to the project weightage'
                   : 'Percentage contribution to final grade'}
               </p>
             </div>
@@ -1529,7 +1844,7 @@ export default function CoursePage() {
                 <Input
                   type="number"
                   min="0"
-                  max="10"
+                  max="6"
                   value={examFormData.numberOfCOs}
                   onChange={(e) => setExamFormData({ ...examFormData, numberOfCOs: e.target.value })}
                   placeholder="e.g., 3"
@@ -1635,8 +1950,8 @@ export default function CoursePage() {
               >
                 {!examSettings.examCategory && <option value="">Select category...</option>}
                 <option value="Quiz">Quiz</option>
-                <option value="Assignment">Assignment</option>
-                <option value="Project">Project</option>
+                <option value="Assignment">{course?.courseType === 'Lab' ? 'Continuous Lab Assessment (CLA)' : 'Assignment'}</option>
+                <option value="Project">{course?.courseType === 'Lab' ? 'OEL / CE Project' : 'Project'}</option>
                 <option value="Attendance">Attendance</option>
                 <option value="MainExam">Main Exam</option>
                 <option value="ClassPerformance">Class Performance</option>
@@ -1661,13 +1976,18 @@ export default function CoursePage() {
             <div>
               <Label>
                 Weightage (%)
-                {(examSettings.examCategory === 'Quiz' || examSettings.examCategory === 'Assignment') && (
+                {(examSettings.examCategory === 'Quiz' || examSettings.examCategory === 'Assignment' || examSettings.examCategory === 'Project') && (
                   <span className="ml-2 text-xs text-amber-500">(Set in Course Settings)</span>
                 )}
               </Label>
-              {(examSettings.examCategory === 'Quiz' || examSettings.examCategory === 'Assignment') ? (
-                <div className="w-full px-4 py-3 bg-muted/50 border rounded-lg text-muted-foreground cursor-not-allowed mt-2">
-                  Not applicable - weightage set at course level
+              {(examSettings.examCategory === 'Quiz' || examSettings.examCategory === 'Assignment' || examSettings.examCategory === 'Project') ? (
+                <div className="w-full px-4 py-3 bg-muted/50 border rounded-lg text-muted-foreground mt-2 flex items-center justify-between">
+                  <span>
+                    {examSettings.examCategory === 'Project'
+                      ? `${course?.projectWeightage ?? 25}% shared across all projects`
+                      : 'Not applicable — weightage set at course level'}
+                  </span>
+                  <span className="text-xs text-amber-400 font-medium">Change in Course Settings →</span>
                 </div>
               ) : (
                 <Input
@@ -1682,8 +2002,10 @@ export default function CoursePage() {
                 />
               )}
               <p className="text-xs text-muted-foreground mt-1">
-                {(examSettings.examCategory === 'Quiz' || examSettings.examCategory === 'Assignment') 
-                  ? '💡 Use Course Settings button to configure Quiz/Assignment aggregation weightage'
+                {(examSettings.examCategory === 'Quiz' || examSettings.examCategory === 'Assignment')
+                  ? '💡 Use Course Settings to configure Quiz/Assignment aggregation weightage'
+                  : examSettings.examCategory === 'Project'
+                  ? course?.courseType === 'Lab' ? '💡 All OEL/CE marks are summed and scaled to the OEL/CE weightage in Course Settings' : '💡 All project marks are summed and scaled to the project weightage in Course Settings'
                   : 'Percentage contribution to final grade'}
               </p>
             </div>
@@ -1694,7 +2016,7 @@ export default function CoursePage() {
                 <Input
                   type="number"
                   min="0"
-                  max="10"
+                  max="6"
                   value={examSettings.numberOfCOs}
                   onChange={(e) => setExamSettings({ ...examSettings, numberOfCOs: e.target.value })}
                   placeholder="e.g., 3"
@@ -1738,50 +2060,78 @@ export default function CoursePage() {
 
       {/* Course Settings Modal */}
       <Dialog open={showCourseSettings} onOpenChange={setShowCourseSettings}>
-        <DialogContent className="max-w-7xl h-[90vh] flex flex-col p-0">
-          <div className="flex-1 flex flex-col overflow-hidden">
-            {/* Header with Tabs */}
-            <div className="border-b bg-muted/50">
-              <div className="px-6 py-4">
-                <DialogHeader>
-                  <DialogTitle className="flex items-center gap-3 text-2xl">
-                    <span className="text-3xl">⚙️</span>
-                    <span>Course Settings</span>
-                  </DialogTitle>
-                </DialogHeader>
-              </div>
-              
-              {/* Tabs */}
-              <div className="px-6">
-                <div className="flex gap-2 -mb-px">
-                  <button
-                    type="button"
-                    onClick={() => setCourseSettingsTab('aggregation')}
-                    className={`px-6 py-3 font-medium text-sm transition-all border-b-2 ${
-                      courseSettingsTab === 'aggregation'
-                        ? 'border-primary text-primary bg-muted/50'
-                        : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/30'
-                    }`}
-                  >
-                    📊 Quiz & Assignment Settings
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setCourseSettingsTab('grading')}
-                    className={`px-6 py-3 font-medium text-sm transition-all border-b-2 ${
-                      courseSettingsTab === 'grading'
-                        ? 'border-primary text-primary bg-muted/50'
-                        : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/30'
-                    }`}
-                  >
-                    🏆 Grading Scale
-                  </button>
-                </div>
-              </div>
+        <DialogContent className="max-w-7xl w-[96vw] h-[92vh] overflow-hidden p-0">
+          <div className="flex h-full flex-col overflow-hidden">
+            <div className="border-b bg-muted/40 px-6 py-4">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-3 text-2xl">
+                  <span className="text-3xl">⚙️</span>
+                  <span>Course Settings</span>
+                </DialogTitle>
+                <DialogDescription className="mt-1 text-sm text-muted-foreground">
+                  Configure grading, aggregation, and Excel export mapping.
+                </DialogDescription>
+              </DialogHeader>
             </div>
 
-            {/* Content */}
-            <div className="flex-1 overflow-y-auto px-6 py-8">
+            <div className="flex flex-1 min-h-0 overflow-hidden">
+              <aside className="hidden w-72 shrink-0 flex-col gap-2 border-r bg-muted/20 p-4 md:flex">
+                <Button
+                  type="button"
+                  variant={courseSettingsTab === 'aggregation' ? 'default' : 'ghost'}
+                  className="justify-start"
+                  onClick={() => setCourseSettingsTab('aggregation')}
+                >
+                  📊 Quiz & Assignment
+                </Button>
+                <Button
+                  type="button"
+                  variant={courseSettingsTab === 'grading' ? 'default' : 'ghost'}
+                  className="justify-start"
+                  onClick={() => setCourseSettingsTab('grading')}
+                >
+                  🏆 Grading Scale
+                </Button>
+                <Button
+                  type="button"
+                  variant={courseSettingsTab === 'excelExport' ? 'default' : 'ghost'}
+                  className="justify-start"
+                  onClick={() => setCourseSettingsTab('excelExport')}
+                >
+                  📄 Excel Export
+                </Button>
+              </aside>
+
+              <div className="flex-1 min-h-0 overflow-y-auto px-6 py-6 pb-32">
+                <div className="mb-6 grid gap-2 md:hidden">
+                  <Button
+                    type="button"
+                    variant={courseSettingsTab === 'aggregation' ? 'default' : 'outline'}
+                    className="justify-start"
+                    onClick={() => setCourseSettingsTab('aggregation')}
+                  >
+                    📊 Quiz & Assignment
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={courseSettingsTab === 'grading' ? 'default' : 'outline'}
+                    className="justify-start"
+                    onClick={() => setCourseSettingsTab('grading')}
+                  >
+                    🏆 Grading Scale
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={courseSettingsTab === 'excelExport' ? 'default' : 'outline'}
+                    className="justify-start"
+                    onClick={() => setCourseSettingsTab('excelExport')}
+                  >
+                    📄 Excel Export
+                  </Button>
+                </div>
+
+                {/* Content */}
+                <div className="min-h-0">
               {error && (
                 <Alert variant="destructive" className="mb-6">
                   <AlertDescription>{error}</AlertDescription>
@@ -1855,7 +2205,7 @@ export default function CoursePage() {
                           </div>
 
                           <div>
-                            <Label>Assignment Weightage (%)</Label>
+                            <Label>{course?.courseType === 'Lab' ? 'Continuous Lab Assessment (CLA)' : 'Assignment'} Weightage (%)</Label>
                             <Input
                               type="number"
                               min="0"
@@ -1872,15 +2222,53 @@ export default function CoursePage() {
                       </CardContent>
                     </Card>
 
+                    {/* Project Settings */}
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                          🎓 Project Aggregation
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="grid md:grid-cols-2 gap-6">
+                          <div>
+                            <Label>Aggregation Method</Label>
+                            <div className="w-full px-4 py-2 bg-muted/40 border rounded-lg text-foreground mt-2 text-sm text-muted-foreground">
+                              Sum of all project marks → converted to weightage
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              All Project exam marks are added up, then scaled to the weightage below. No average or best — everything counts.
+                            </p>
+                          </div>
+                          <div>
+                            <Label>{course?.courseType === 'Lab' ? 'OEL / CE Project' : 'Project'} Weightage (%)</Label>
+                            <Input
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="0.01"
+                              value={courseSettingsData.projectWeightage}
+                              onChange={(e) => setCourseSettingsData({ ...courseSettingsData, projectWeightage: e.target.value })}
+                              placeholder="e.g., 25"
+                              className="mt-2"
+                            />
+                            <p className="text-xs text-muted-foreground mt-1">Weightage for the aggregated Project column in final grade</p>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+
                     {/* Info Box */}
                     <Alert className="border-primary/50 bg-primary/10">
                       <AlertDescription className="text-sm">
                         💡 <strong>Note:</strong> Individual Quiz/Assignment exams don't need weightages. 
                         The aggregated column will use the weightage you set here.
+                        Project exams are summed (not averaged) before applying their weightage.
                       </AlertDescription>
                     </Alert>
                   </div>
                 )}
+
 
                 {/* Grading Scale Tab */}
                 {courseSettingsTab === 'grading' && (
@@ -2004,8 +2392,12 @@ export default function CoursePage() {
                   </div>
                 )}
 
-                {/* Action Buttons - Fixed at bottom */}
-                <div className="sticky bottom-0 bg-background/95 backdrop-blur-md border-t px-6 py-4 -mx-6 -mb-8 mt-8">
+                {courseSettingsTab === 'excelExport' && (
+                  <ExcelExportMappingInfo />
+                )}
+
+                {/* Action Buttons */}
+                <div className="mt-8 border-t bg-background/95 px-0 py-4 backdrop-blur-md">
                   <div className="flex gap-4 max-w-7xl mx-auto">
                     <Button
                       type="button"
@@ -2028,6 +2420,8 @@ export default function CoursePage() {
                   </div>
                 </div>
               </form>
+                </div>
+              </div>
             </div>
           </div>
         </DialogContent>
@@ -2054,7 +2448,7 @@ export default function CoursePage() {
               <div>
                 <h2 className="text-2xl font-bold text-gray-100">Final Grade Breakdown</h2>
                 <p className="text-sm text-gray-400 mt-1">
-                  {selectedStudentForGrade.name} ({selectedStudentForGrade.studentId})
+                  {selectedStudentForGrade.name} ({selectedStudentForGrade.studentId}) {selectedStudentForGrade.withdrawn && <span className="text-red-400 font-bold ml-2">(Withdrawn)</span>}
                 </p>
               </div>
               <button
@@ -2069,6 +2463,20 @@ export default function CoursePage() {
             </div>
 
             {(() => {
+              if (selectedStudentForGrade.withdrawn) {
+                return (
+                  <div className="text-center py-12">
+                    <div className="w-20 h-20 rounded-full bg-red-900/30 flex items-center justify-center mx-auto mb-4 border border-red-500/30">
+                      <span className="text-4xl font-bold text-red-500">W</span>
+                    </div>
+                    <h3 className="text-xl font-medium text-gray-200 mb-2">Student is Withdrawn</h3>
+                    <p className="text-gray-400">
+                      This student's final grade is recorded as Withdrawn (W).
+                    </p>
+                  </div>
+                );
+              }
+
               const gradeData = calculateFinalGrade(selectedStudentForGrade._id);
               
               if (gradeData.breakdown.length === 0) {
@@ -3241,6 +3649,13 @@ export default function CoursePage() {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    <PopulateTestDataModal
+      isOpen={showPopulateModal}
+      hasStudents={students.length > 0}
+      onClose={() => setShowPopulateModal(false)}
+      onConfirm={handlePopulateTestData}
+    />
     </>
   );
 }

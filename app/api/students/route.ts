@@ -5,6 +5,8 @@ import dbConnect from '@/lib/mongodb';
 import Student from '@/models/Student';
 import Course from '@/models/Course';
 
+const studentIdCollation = { locale: 'en', numericOrdering: true } as const;
+
 // GET all students (with optional filtering)
 export async function GET(request: NextRequest) {
   try {
@@ -52,7 +54,8 @@ export async function GET(request: NextRequest) {
         path: 'courseId',
         select: 'name code semester year section courseType',
       })
-      .sort({ createdAt: -1 });
+      .sort({ studentId: 1, _id: 1 })
+      .collation(studentIdCollation);
 
     return NextResponse.json(students, { status: 200 });
   } catch (error: any) {
@@ -94,11 +97,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Course not found' }, { status: 404 });
     }
 
-    // Create students
+    const sortedStudents = [...students].sort((a, b) =>
+      String(a.studentId || '').localeCompare(String(b.studentId || ''), undefined, {
+        numeric: true,
+        sensitivity: 'base',
+      })
+    );
+
+    // Create students in Student ID order
     const createdStudents = [];
     const errors = [];
 
-    for (const student of students) {
+    for (const student of sortedStudents) {
       try {
         const newStudent = await Student.create({
           studentId: student.studentId,

@@ -24,6 +24,7 @@ interface Mark {
   examId: string;
   rawMark: number;
   coMarks?: number[];
+  nonCoMark?: number;
   questionMarks?: number[];
 }
 
@@ -55,6 +56,7 @@ export default function AddMarkModal({
   const [selectedStudentId, setSelectedStudentId] = useState<string>(initialStudentId || '');
   const [rawMark, setRawMark] = useState('');
   const [coMarks, setCoMarks] = useState<string[]>([]);
+  const [nonCoMark, setNonCoMark] = useState<string>('');
   const [questionMarks, setQuestionMarks] = useState<string[]>([]);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -65,6 +67,7 @@ export default function AddMarkModal({
   const studentSearchRef = useRef<HTMLInputElement>(null);
   const rawMarkRef = useRef<HTMLInputElement>(null);
   const coMarkRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const nonCoMarkRef = useRef<HTMLInputElement>(null);
   const questionMarkRefs = useRef<(HTMLInputElement | null)[]>([]);
   const saveButtonRef = useRef<HTMLButtonElement>(null);
 
@@ -109,6 +112,11 @@ export default function AddMarkModal({
         if (existingMark.coMarks && existingMark.coMarks.length > 0) {
           setCoMarks(existingMark.coMarks.map(m => m.toString()));
         }
+        if (existingMark.nonCoMark !== undefined && existingMark.nonCoMark !== null) {
+          setNonCoMark(existingMark.nonCoMark.toString());
+        } else {
+          setNonCoMark('');
+        }
         if (existingMark.questionMarks && existingMark.questionMarks.length > 0) {
           setQuestionMarks(existingMark.questionMarks.map(m => m.toString()));
         }
@@ -117,6 +125,7 @@ export default function AddMarkModal({
         if (numberOfCOs > 0) {
           setCoMarks(new Array(numberOfCOs).fill(''));
         }
+        setNonCoMark('');
         if (numberOfQuestions > 0) {
           setQuestionMarks(new Array(numberOfQuestions).fill(''));
         }
@@ -152,6 +161,7 @@ export default function AddMarkModal({
       setSelectedStudentId('');
       setRawMark('');
       setCoMarks([]);
+      setNonCoMark('');
       setQuestionMarks([]);
       setError('');
       setSuccess('');
@@ -195,8 +205,20 @@ export default function AddMarkModal({
 
     // Validate CO marks if applicable
     let coMarksArray: number[] | undefined = undefined;
+    let nonCoMarkPayload: number | null = null;
     if (numberOfCOs > 0) {
       const coMarksNum = coMarks.map(cm => parseFloat(cm || '0'));
+      
+      let nonCoCalcValue = 0;
+      if (nonCoMark.trim() !== '') {
+        nonCoCalcValue = parseFloat(nonCoMark);
+        nonCoMarkPayload = nonCoCalcValue;
+        
+        if (isNaN(nonCoCalcValue) || nonCoCalcValue < 0) {
+          setError('Non-CO mark must be a valid positive number');
+          return;
+        }
+      }
       
       // Check if all CO marks are valid numbers
       if (coMarksNum.some(cm => isNaN(cm) || cm < 0)) {
@@ -204,10 +226,11 @@ export default function AddMarkModal({
         return;
       }
 
-      // Check if CO marks sum equals raw mark
+      // Check if CO + Non-CO marks sum equals raw mark
       const coMarksSum = coMarksNum.reduce((sum, cm) => sum + cm, 0);
-      if (Math.abs(coMarksSum - rawMarkNum) > 0.01) { // Allow small floating point differences
-        setError(`CO marks must sum to ${rawMarkNum}. Current sum: ${coMarksSum.toFixed(2)}`);
+      const totalCoSum = coMarksSum + nonCoCalcValue;
+      if (Math.abs(totalCoSum - rawMarkNum) > 0.01) { // Allow small floating point differences
+        setError(`CO + Non-CO marks must sum to ${rawMarkNum}. Current sum: ${totalCoSum.toFixed(2)}`);
         return;
       }
 
@@ -246,6 +269,7 @@ export default function AddMarkModal({
           examId: selectedExamId,
           rawMark: rawMarkNum,
           coMarks: coMarksArray,
+          nonCoMark: nonCoMarkPayload,
           questionMarks: questionMarksArray,
         }),
       });
@@ -267,6 +291,7 @@ export default function AddMarkModal({
           if (numberOfCOs > 0) {
             setCoMarks(new Array(numberOfCOs).fill(''));
           }
+          setNonCoMark('');
           if (numberOfQuestions > 0) {
             setQuestionMarks(new Array(numberOfQuestions).fill(''));
           }
@@ -434,7 +459,14 @@ export default function AddMarkModal({
                         : 'border-gray-600 bg-gray-900/50 hover:border-gray-500'
                     }`}
                   >
-                    <div className="font-semibold text-gray-100">{exam.displayName}</div>
+                    <div className="flex items-start justify-between">
+                      <div className="font-semibold text-gray-100">{exam.displayName}</div>
+                      {selectedExamId === exam._id && (
+                        <span className="text-[10px] font-medium px-2 py-0.5 rounded-sm bg-green-500/20 text-green-400 border border-green-500/30">
+                          Last Selected
+                        </span>
+                      )}
+                    </div>
                     <div className="text-sm text-gray-400 mt-1">
                       Total: {exam.totalMarks} marks
                       {exam.numberOfCOs && ` • ${exam.numberOfCOs} COs`}
@@ -538,6 +570,7 @@ export default function AddMarkModal({
                         if (numberOfCOs > 0) {
                           setCoMarks(new Array(numberOfCOs).fill(''));
                         }
+                        setNonCoMark('');
                       }}
                       className="text-xs text-gray-400 hover:text-gray-200"
                     >
@@ -601,10 +634,25 @@ export default function AddMarkModal({
                           />
                         </div>
                       ))}
+                      {/* Non-CO Input */}
+                      <div>
+                        <label className="block text-xs text-gray-400 mb-1">Non-CO (Optional)</label>
+                        <input
+                          ref={nonCoMarkRef}
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={nonCoMark || ''}
+                          onChange={(e) => setNonCoMark(e.target.value)}
+                          onKeyDown={(e) => handleKeyDown(e, 'non-co')}
+                          className="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-100 placeholder-gray-500"
+                          placeholder="0"
+                        />
+                      </div>
                     </div>
                     {rawMark && (
                       <div className="mt-2 text-sm text-gray-400">
-                        Current sum: {coMarks.reduce((sum, cm) => sum + (parseFloat(cm) || 0), 0).toFixed(2)}
+                        Current sum: {(coMarks.reduce((sum, cm) => sum + (parseFloat(cm) || 0), 0) + (parseFloat(nonCoMark) || 0)).toFixed(2)}
                       </div>
                     )}
                   </div>

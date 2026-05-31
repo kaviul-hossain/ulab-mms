@@ -11,6 +11,7 @@ interface Student {
   _id: string;
   studentId: string;
   name: string;
+  withdrawn?: boolean;
 }
 
 interface Exam {
@@ -68,6 +69,11 @@ export default function StudentDetailModal({
 
   const studentMarks = marks.filter(m => m.studentId === student._id);
 
+  const getExamPercentage = (rawMark: number, totalMarks: number) => {
+    if (!totalMarks || totalMarks <= 0) return 0;
+    return (rawMark / totalMarks) * 100;
+  };
+
   // Helper function to get aggregated mark for Quiz or Assignment
   const getAggregatedMark = (category: 'Quiz' | 'Assignment'): Mark | { rawMark: number; isAggregated: boolean; examId?: string } | null => {
     const categoryExams = exams.filter(exam => exam.examCategory === category);
@@ -84,35 +90,47 @@ export default function StudentDetailModal({
       ? course?.quizAggregation || 'average'
       : course?.assignmentAggregation || 'average';
 
+    const categoryWeightage = category === 'Quiz'
+      ? Number(course?.quizWeightage || 0)
+      : Number(course?.assignmentWeightage || 0);
+
     if (aggregationMethod === 'best') {
       let bestMark = categoryMarks[0];
-      let bestValue = 0;
+      let bestValue = -1;
 
       categoryMarks.forEach(mark => {
         const exam = categoryExams.find(e => e._id === mark!.examId);
         if (exam) {
-          if (mark!.rawMark > bestValue) {
-            bestValue = mark!.rawMark;
+          const percentage = getExamPercentage(mark!.rawMark, exam.totalMarks);
+          if (percentage > bestValue) {
+            bestValue = percentage;
             bestMark = mark!;
           }
         }
       });
 
-      return bestMark;
-    } else {
-      let totalMarks = 0;
-      
-      categoryMarks.forEach(mark => {
-        const exam = categoryExams.find(e => e._id === mark!.examId);
-        if (exam) {
-          totalMarks += mark!.rawMark;
-        }
-      });
+      const exam = categoryExams.find(e => e._id === bestMark!.examId);
+      if (exam) {
+        const weightedScore = (getExamPercentage(bestMark!.rawMark, exam.totalMarks) * categoryWeightage) / 100;
+        return {
+          rawMark: weightedScore,
+          isAggregated: true,
+          examId: bestMark!.examId,
+        };
+      }
 
-      const avgMark = totalMarks / categoryMarks.length;
+      return null;
+    } else {
+      const averagePercentage = categoryMarks.reduce((sum, mark) => {
+        const exam = categoryExams.find(e => e._id === mark!.examId);
+        if (!exam) return sum;
+        return sum + getExamPercentage(mark!.rawMark, exam.totalMarks);
+      }, 0) / categoryMarks.length;
+
+      const weightedScore = (averagePercentage * categoryWeightage) / 100;
       
       return {
-        rawMark: avgMark,
+        rawMark: weightedScore,
         isAggregated: true,
       };
     }
@@ -154,31 +172,14 @@ export default function StudentDetailModal({
     if (hasQuizzes && course?.quizWeightage) {
       const aggMark = getAggregatedMark('Quiz');
       if (aggMark) {
-        let markToUse = 0;
-        let totalMarks = 100;
-        
-        if ('isAggregated' in aggMark && aggMark.isAggregated) {
-          markToUse = aggMark.rawMark;
-          const quizExams = exams.filter(e => e.examCategory === 'Quiz');
-          if (quizExams.length > 0) {
-            totalMarks = Math.max(...quizExams.map(e => e.totalMarks));
-          }
-        } else {
-          const exam = exams.find(e => e._id === aggMark.examId);
-          if (exam) {
-            markToUse = aggMark.rawMark;
-            totalMarks = exam.totalMarks;
-          }
-        }
-        
-        const percentage = (markToUse / totalMarks) * 100;
-        const contribution = (percentage * course.quizWeightage) / 100;
+        const totalMarks = Number(course.quizWeightage);
+        const contribution = aggMark.rawMark;
         
         breakdown.push({
           name: 'Quiz (Aggregated)',
-          mark: markToUse,
+          mark: contribution,
           totalMarks: totalMarks,
-          weightage: course.quizWeightage,
+          weightage: totalMarks,
           contribution: contribution,
           isAggregated: true,
         });
@@ -191,31 +192,14 @@ export default function StudentDetailModal({
     if (hasAssignments && course?.assignmentWeightage) {
       const aggMark = getAggregatedMark('Assignment');
       if (aggMark) {
-        let markToUse = 0;
-        let totalMarks = 100;
-        
-        if ('isAggregated' in aggMark && aggMark.isAggregated) {
-          markToUse = aggMark.rawMark;
-          const assignmentExams = exams.filter(e => e.examCategory === 'Assignment');
-          if (assignmentExams.length > 0) {
-            totalMarks = Math.max(...assignmentExams.map(e => e.totalMarks));
-          }
-        } else {
-          const exam = exams.find(e => e._id === aggMark.examId);
-          if (exam) {
-            markToUse = aggMark.rawMark;
-            totalMarks = exam.totalMarks;
-          }
-        }
-        
-        const percentage = (markToUse / totalMarks) * 100;
-        const contribution = (percentage * course.assignmentWeightage) / 100;
+        const totalMarks = Number(course.assignmentWeightage);
+        const contribution = aggMark.rawMark;
         
         breakdown.push({
           name: 'Assignment (Aggregated)',
-          mark: markToUse,
+          mark: contribution,
           totalMarks: totalMarks,
-          weightage: course.assignmentWeightage,
+          weightage: totalMarks,
           contribution: contribution,
           isAggregated: true,
         });
@@ -314,7 +298,18 @@ export default function StudentDetailModal({
                   
                   {/* Big Grade Display */}
                   <div className="text-center mb-6">
-                    {letterGrade && (
+                    {student.withdrawn ? (
+                      <div>
+                        <div className="text-6xl font-bold mb-2 text-red-500">W</div>
+                        <div className="text-sm text-gray-400 mb-1">Withdrawn</div>
+                        <div className="text-3xl font-bold text-cyan-300 mb-1">
+                          {gradeData.total.toFixed(2)}%
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          Final standing score
+                        </div>
+                      </div>
+                    ) : letterGrade ? (
                       <div>
                         <div className={`text-6xl font-bold mb-2 ${getGradeColor(letterGrade.letter)}`}>
                           {letterGrade.letter}
@@ -330,7 +325,7 @@ export default function StudentDetailModal({
                           Current weighted score
                         </div>
                       </div>
-                    )}
+                    ) : null}
                   </div>
 
                   {/* Quick Stats */}

@@ -67,6 +67,12 @@ export class NotificationService {
     deleteError: (error?: string) => {
       toast.error(error || 'Failed to delete student');
     },
+    bulkDeleted: (count: number) => {
+      toast.success(`Successfully deleted ${count} student${count !== 1 ? 's' : ''}!`);
+    },
+    bulkDeleteError: (error?: string) => {
+      toast.error(error || 'Failed to delete students');
+    },
     bulkImported: (count: number) => {
       toast.success(`Successfully imported ${count} student${count !== 1 ? 's' : ''}!`);
     },
@@ -270,7 +276,7 @@ export class NotificationService {
   // ============================================
 
   exportImport = {
-    exportSuccess: (format: 'JSON' | 'CSV', fileName?: string) => {
+    exportSuccess: (format: 'JSON' | 'CSV' | 'Excel', fileName?: string) => {
       const message = fileName 
         ? `${fileName} exported as ${format} successfully!`
         : `Course exported as ${format} successfully!`;
