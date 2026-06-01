@@ -1,18 +1,18 @@
-# TO BE CONTINUED
+# ULAB Marks Management System
 
-## CI Version Bump
+ULAB Marks Management System is the internal academic operations platform for the University of Liberal Arts Bangladesh.
 
-This repository uses a CI-based version bump. On merges to `main`, a GitHub Action runs `scripts/ci-bump-version.mjs` which:
+[![Docsify](https://img.shields.io/badge/docsify-docs-1769ff?logo=docsify&logoColor=white)](https://docsify.js.org/)
+[![GitHub Pages](https://img.shields.io/badge/GitHub%20Pages-ready-222222?logo=github&logoColor=white)](https://pages.github.com/)
+[![Next.js](https://img.shields.io/badge/Next.js-app-000000?logo=next.js&logoColor=white)](https://nextjs.org/)
 
-- Increments the patch version. If the patch is >= 9, it rolls over: increment minor and set patch to 0.
-- Commits the updated `package.json`, tags the commit `vX.Y.Z`, and pushes the changes.
+## Documentation
 
-Local git hooks that previously modified `package.json` were removed to avoid merge conflicts. There is no `postinstall` hook that runs `scripts/setup-hooks.mjs` anymore.
+The GitHub Pages documentation site lives in [docs/index.html](docs/index.html) and is powered by Docsify. The main landing content is in [docs/README.md](docs/README.md).
 
-To test locally without pushing, run:
+## Quick Start
 
-```bash
-node ./scripts/ci-bump-version.mjs
-```
-
-Note: running the script locally will attempt to commit and push if there are changes; run in a safe branch or inspect the file before committing.
+1. Install dependencies with `npm install`.
+2. Set the required environment variables, especially `MONGODB_URI`.
+3. Run `npm run dev`.
+4. Open `/auth/signin`.
