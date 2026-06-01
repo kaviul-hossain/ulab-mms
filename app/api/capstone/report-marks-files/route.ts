@@ -11,8 +11,8 @@ export async function GET() {
 
     await dbConnect();
 
-    // Fetch peer marks grouped by group
-    const marks = await CapstoneMarks.find({ submissionType: 'peer' })
+    // Fetch report marks grouped by group
+    const marks = await CapstoneMarks.find({ submissionType: 'report' })
       .populate('studentId', 'name studentId')
       .populate('groupId', 'groupName')
       .populate('supervisorId', 'name email')
@@ -22,19 +22,18 @@ export async function GET() {
     // Transform to display format
     const files = marks.map((mark: any) => ({
       _id: mark._id,
-      filename: `${mark.groupId?.groupName || 'Group'}-peer-marks-${mark.createdAt.toISOString()}`,
-      originalName: `${mark.groupId?.groupName || 'Group'}-peer-marks-${mark.createdAt.toISOString()}.xlsx`,
+      filename: `${mark.groupId?.groupName || 'Group'}-report-marks-${mark.createdAt.toISOString()}`,
+      originalName: `${mark.groupId?.groupName || 'Group'}-report-marks-${mark.createdAt.toISOString()}.xlsx`,
       uploadedBy: mark.submittedBy || mark.supervisorId,
       createdAt: mark.createdAt,
       studentName: mark.studentId?.name,
-      marks: mark.peerMarks,
-      comments: mark.peerComments,
+      marks: mark.reportMarks,
+      comments: mark.reportComments,
     }));
 
     return NextResponse.json({ files });
   } catch (error: any) {
-    console.error('GET /api/capstone/peer-marks-files error:', error);
-    return NextResponse.json({ error: 'Failed to fetch peer marks files' }, { status: 500 });
+    console.error('GET /api/capstone/report-marks-files error:', error);
+    return NextResponse.json({ error: 'Failed to fetch report marks files' }, { status: 500 });
   }
 }
-
