@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Plus, Trash2, ChevronDown } from 'lucide-react';
+import COMarksWarningBanner from './COMarksWarningBanner';
 
 interface Student {
   _id: string;
@@ -26,6 +27,11 @@ interface Mark {
   rawMark: number;
 }
 
+interface ExamRef {
+  _id: string;
+  displayName: string;
+}
+
 interface MarksViewProps {
   students: Student[];
   exams: Exam[];
@@ -40,6 +46,10 @@ interface MarksViewProps {
   onGetProjectMarks?: (() => void) | null;
   isGettingProjectMarks?: boolean;
   courseType?: 'Theory' | 'Lab';
+  // CO warning props
+  examsWithMissingCO?: ExamRef[];
+  onGoToCoPo?: () => void;
+  onIgnoreCOWarning?: () => void;
 }
 
 export default function MarksView({
@@ -56,6 +66,9 @@ export default function MarksView({
   onGetProjectMarks = null,
   isGettingProjectMarks = false,
   courseType = 'Theory',
+  examsWithMissingCO = [],
+  onGoToCoPo,
+  onIgnoreCOWarning,
 }: MarksViewProps) {
   const [showDropdown, setShowDropdown] = useState(false);
   const [showFloatingButtons, setShowFloatingButtons] = useState(false);
@@ -97,6 +110,15 @@ export default function MarksView({
 
   return (
     <div className="space-y-6">
+      {/* CO Warning Banner */}
+      {examsWithMissingCO.length > 0 && onGoToCoPo && onIgnoreCOWarning && (
+        <COMarksWarningBanner
+          examsWithMissingCO={examsWithMissingCO}
+          onGoToCoPo={onGoToCoPo}
+          onIgnore={onIgnoreCOWarning}
+        />
+      )}
+
       <div>
         <h1 className="text-3xl font-bold">Marks Management</h1>
         <p className="text-sm mt-1 text-muted-foreground">

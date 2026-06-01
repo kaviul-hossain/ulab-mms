@@ -105,6 +105,10 @@ interface Course {
   assignmentWeightage?: number;
   projectWeightage?: number;
   gradingScale?: string;
+  coPoMapping?: {
+    maxMarks: Record<string, number[]>;
+    mapping: boolean[][];
+  };
 }
 
 export default function CoursePage() {
@@ -161,6 +165,8 @@ export default function CoursePage() {
   const [newStudentData, setNewStudentData] = useState({ studentId: '', name: '' });
   const [showBulkMarkModal, setShowBulkMarkModal] = useState(false);
   const [isAutoCalculatingAttendance, setIsAutoCalculatingAttendance] = useState(false);
+  // CO marks warning session state: tracks exam IDs the user has dismissed for this session
+  const [ignoredCoWarnings, setIgnoredCoWarnings] = useState<Set<string>>(new Set());
   
   const [csvInput, setCsvInput] = useState('');
   const [examFormData, setExamFormData] = useState({
@@ -938,6 +944,58 @@ export default function CoursePage() {
     return marks.find(m => m.studentId.toString() === studentId.toString() && m.examId.toString() === examId.toString());
   };
 
+  /**
+   * Returns the subset of exams that have COs enabled but no CO max marks configured
+   * in coPoMapping.maxMarks for this course. Used to drive the CO warning banner.
+   */
+  const getExamsWithMissingCOMarks = () => {
+    if (!course) return [];
+    const coPoMaxMarks = course.coPoMapping?.maxMarks || {};
+    return exams.filter(exam => {
+      if (!exam.numberOfCOs || exam.numberOfCOs < 1) return false;
+      // Ignored for this session
+      if (ignoredCoWarnings.has(exam._id)) return false;
+      const maxMarksForExam = coPoMaxMarks[exam._id];
+      // Missing or all zeros means not configured
+      const configured = maxMarksForExam && maxMarksForExam.slice(0, exam.numberOfCOs).some(m => m > 0);
+      return !configured;
+    }).map(e => ({ _id: e._id, displayName: e.displayName }));
+  };
+
+  const handleIgnoreCOWarning = (examId: string) => {
+    setIgnoredCoWarnings(prev => new Set([...prev, examId]));
+  };
+
+  const handleIgnoreAllCOWarnings = () => {
+    const allCoExamIds = exams
+      .filter(e => e.numberOfCOs && e.numberOfCOs > 0)
+      .map(e => e._id);
+    setIgnoredCoWarnings(prev => new Set([...prev, ...allCoExamIds]));
+  };
+
+  /**
+   * Returns the CO-PO readiness status for the export warning:
+   * - 'no-mapping': coPoMapping.mapping is entirely false (no PO connections set at all)
+   * - 'no-max-marks': mapping is set but some CO-enabled exams have no max marks
+   * - 'ok': everything looks good
+   */
+  const getCoPoStatus = (): 'no-mapping' | 'no-max-marks' | 'ok' => {
+    if (!course) return 'ok';
+    const mapping = course.coPoMapping?.mapping;
+    const maxMarks = course.coPoMapping?.maxMarks || {};
+    // Check if mapping matrix exists and has at least one true value
+    const hasAnyMapping = mapping && mapping.some(row => row.some(cell => cell === true));
+    if (!hasAnyMapping) return 'no-mapping';
+    // Check if any CO-enabled exam is missing max marks
+    const hasMissingMaxMarks = exams.some(exam => {
+      if (!exam.numberOfCOs || exam.numberOfCOs < 1) return false;
+      const examMaxMarks = maxMarks[exam._id];
+      return !examMaxMarks || !examMaxMarks.slice(0, exam.numberOfCOs).some((m: number) => m > 0);
+    });
+    if (hasMissingMaxMarks) return 'no-max-marks';
+    return 'ok';
+  };
+
   const getExamPercentage = (rawMark: number, totalMarks: number) => {
     if (!totalMarks || totalMarks <= 0) return 0;
     return (rawMark / totalMarks) * 100;
@@ -1550,6 +1608,8 @@ export default function CoursePage() {
                 onExportCourseFile={handleExportCourseFile}
                 exportingCourseFile={exportingCourseFile}
                 calculateFinalGrade={calculateFinalGrade}
+                coPoStatus={getCoPoStatus()}
+                onGoToCoPo={() => setActiveView('copo')}
               />
             )}
 
@@ -1636,6 +1696,9 @@ export default function CoursePage() {
                 onGetProjectMarks={handleGetProjectMarks}
                 isGettingProjectMarks={isGettingProjectMarks}
                 courseType={course?.courseType}
+                examsWithMissingCO={getExamsWithMissingCOMarks()}
+                onGoToCoPo={() => setActiveView('copo')}
+                onIgnoreCOWarning={handleIgnoreAllCOWarnings}
               />
             )}
 
@@ -1902,6 +1965,10 @@ export default function CoursePage() {
         onMarkSaved={fetchCourseData}
         initialExamId={initialExamId}
         initialStudentId={initialStudentId}
+        coPoMaxMarks={course?.coPoMapping?.maxMarks || {}}
+        onGoToCoPo={() => { setShowMarkModal(false); setActiveView('copo'); }}
+        ignoredCoWarnings={ignoredCoWarnings}
+        onIgnoreCOWarning={handleIgnoreCOWarning}
       />
 
       {/* Bulk Mark Entry Modal */}
@@ -1913,6 +1980,10 @@ export default function CoursePage() {
         marks={marks}
         courseId={courseId}
         onMarksSaved={fetchCourseData}
+        coPoMaxMarks={course?.coPoMapping?.maxMarks || {}}
+        onGoToCoPo={() => { setShowBulkMarkModal(false); setActiveView('copo'); }}
+        ignoredCoWarnings={ignoredCoWarnings}
+        onIgnoreCOWarning={handleIgnoreCOWarning}
       />
 
       {/* Exam Settings Modal */}

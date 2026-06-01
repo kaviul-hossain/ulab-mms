@@ -362,7 +362,7 @@ export async function POST(
           for (let po = 0; po < 12; po++) {
             const col = po + 46;
             const isTicked = copoMatrix[co][po];
-            copoSheet.cell(row, col).value(isTicked ? 1 : '');
+            copoSheet.cell(row, col).value(isTicked ? 1 : 0);
           }
         }
       }

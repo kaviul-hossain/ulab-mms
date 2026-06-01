@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ChevronDown, ChevronRight, Loader2, QrCode, RefreshCw, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, Loader2, QrCode, RefreshCw, Trash2, Clock, MapPin, Users, UserRound, Settings } from 'lucide-react';
 
 interface AttendanceRecord {
   studentId: string;
@@ -190,6 +190,7 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
   const [showSessionDialog, setShowSessionDialog] = useState(false);
   const [sessionDate, setSessionDate] = useState(getLocalDateInputValue());
   const [sessionDialogError, setSessionDialogError] = useState('');
+  const [showExportWarningModal, setShowExportWarningModal] = useState(false);
 
   const fetchAll = async () => {
     setLoading(true);
@@ -252,8 +253,7 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
     }
   };
 
-  const openSettingsModal = async () => {
-    await fetchAll();
+  const openSettingsModal = () => {
     setShowSettingsModal(true);
   };
 
@@ -343,31 +343,19 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
 
       const qs = settingsParams.toString();
       const url = `/api/courses/${courseId}/attendance-pdf${qs ? `?${qs}` : ''}`;
-      const res = await fetch(url, { method: 'GET' });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        console.error('Export failed', err);
-        return;
-      }
-
-      const blob = await res.blob();
-      const contentDisp = res.headers.get('Content-Disposition') || '';
-      let filename = `${courseId}_attendance.pdf`;
-      const match = /filename="?([^";]+)"?/.exec(contentDisp);
-      if (match && match[1]) filename = match[1];
-
-      const link = document.createElement('a');
-      const blobUrl = window.URL.createObjectURL(blob);
-      link.href = blobUrl;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(blobUrl);
+      window.open(url, '_blank');
     } catch (err) {
-      console.error('Error exporting attendance PDF', err);
+      console.error('Error opening attendance view', err);
     } finally {
       setExportLoading(false);
+    }
+  };
+
+  const handleExportClick = () => {
+    if (settingsMissing) {
+      setShowExportWarningModal(true);
+    } else {
+      exportAttendance();
     }
   };
 
@@ -420,10 +408,10 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
           <Button
             type="button"
             variant="outline"
-            onClick={exportAttendance}
+            onClick={handleExportClick}
             disabled={exportLoading}
           >
-            {exportLoading ? 'Exporting...' : 'Export Attendance'}
+            {exportLoading ? 'Opening...' : 'Print Attendance'}
           </Button>
 
           <Button type="button" variant="outline" onClick={() => setShowQrModal(true)} disabled={!isActive}>
@@ -434,20 +422,64 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
           <Button type="button" variant="outline" onClick={() => setShowManageModal(true)}>
             Manage class session
           </Button>
+        </div>
+      </div>
 
-          <Button type="button" variant="outline" onClick={openSettingsModal}>
-            Class Settings
-          </Button>
-        </div>
-        </div>
+      {!loading && course && (
+        settingsMissing ? (
+          <div className="flex items-center gap-3 rounded-lg border border-dashed border-muted-foreground/30 bg-muted/10 px-4 py-3">
+            <div className="flex-1 text-sm text-muted-foreground">
+              Class settings (time, room, representative) are not set. They will appear on PDF exports.
+            </div>
+            <Button variant="outline" size="sm" onClick={() => setShowSettingsModal(true)}>
+              <Settings className="mr-2 h-4 w-4" />
+              Set Class Settings
+            </Button>
+          </div>
+        ) : (
+          <div className="flex flex-wrap items-center gap-4 rounded-lg border bg-muted/10 px-4 py-3 text-sm">
+            <div className="flex items-center gap-1.5 text-muted-foreground">
+              <Clock className="h-4 w-4" />
+              {course?.classTime ? (
+                <span className="font-medium text-foreground">{course.classTime}</span>
+              ) : (
+                <span className="italic opacity-60">Time not set</span>
+              )}
+            </div>
+            
+            <div className="flex items-center gap-1.5 text-muted-foreground">
+              <MapPin className="h-4 w-4" />
+              {course?.classRoom ? (
+                <span className="font-medium text-foreground">{course.classRoom}</span>
+              ) : (
+                <span className="italic opacity-60">Room not set</span>
+              )}
+            </div>
 
-      {settingsMissing && (
-        <div className="rounded-md border border-border bg-muted/60 p-3 text-sm text-foreground dark:bg-muted/20">
-          <strong>Note:</strong> Class settings (Class Time, Class Room, Number of Students, Representative) are not set. Open <em>Class Settings</em> before exporting to include them in the PDF.
-        </div>
+            <div className="flex items-center gap-1.5 text-muted-foreground">
+              <Users className="h-4 w-4" />
+              <span className="font-medium text-foreground">{course?.numberOfStudents || students.length || '0'} Students</span>
+            </div>
+
+            <div className="flex items-center gap-1.5 text-muted-foreground">
+              <UserRound className="h-4 w-4" />
+              {course?.classRepresentativeId ? (
+                <span className="font-medium text-foreground">
+                  {students.find(s => s._id === course.classRepresentativeId)?.name || 'Representative'}
+                </span>
+              ) : (
+                <span className="italic opacity-60">Rep not set</span>
+              )}
+            </div>
+
+            <Button variant="ghost" size="sm" className="ml-auto h-8 px-2 text-xs" onClick={() => setShowSettingsModal(true)}>
+              Edit Settings
+            </Button>
+          </div>
+        )
       )}
 
-        {loading ? (
+      {loading ? (
         <div className="flex items-center gap-2 rounded-lg border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" />
           <span>Loading attendance...</span>
@@ -712,6 +744,42 @@ export default function AttendanceView({ courseId }: { courseId: string }) {
             }}
             onClose={() => setShowSettingsModal(false)}
           />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showExportWarningModal} onOpenChange={setShowExportWarningModal}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Class Settings Not Set</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2 text-sm text-muted-foreground">
+            <p>
+              You haven't set the class settings (Class Time, Class Room, Number of Students, or Representative) yet.
+            </p>
+            <p>
+              If you don't set these, the options will appear empty in the printed sheet. You only need to set these once.
+            </p>
+          </div>
+          <div className="flex justify-end gap-2 pt-4">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowExportWarningModal(false);
+                exportAttendance();
+              }}
+              disabled={exportLoading}
+            >
+              Ignore & Print
+            </Button>
+            <Button
+              onClick={() => {
+                setShowExportWarningModal(false);
+                openSettingsModal();
+              }}
+            >
+              Set Settings
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
