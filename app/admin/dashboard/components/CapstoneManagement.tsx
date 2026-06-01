@@ -102,6 +102,13 @@ export default function CapstoneManagement() {
   const [supervisorSearchOpen, setSupervisorSearchOpen] = useState(false);
   const [supervisorSearchQuery, setSupervisorSearchQuery] = useState<string>('');
 
+  const [marksFiles, setMarksFiles] = useState<any[]>([]);
+  const [loadingMarksFiles, setLoadingMarksFiles] = useState(false);
+  const [peerMarksFiles, setPeerMarksFiles] = useState<any[]>([]);
+  const [loadingPeerMarksFiles, setLoadingPeerMarksFiles] = useState(false);
+  const [posterMarksFiles, setPosterMarksFiles] = useState<any[]>([]);
+  const [loadingPosterMarksFiles, setLoadingPosterMarksFiles] = useState(false);
+
   const [formData, setFormData] = useState<FormData>({
     title: '',
     courseId: '',
@@ -114,6 +121,9 @@ export default function CapstoneManagement() {
   // Load initial data
   useEffect(() => {
     loadInitialData();
+    loadMarksFiles();
+    loadPeerMarksFiles();
+    loadPosterMarksFiles();
   }, []);
 
   const loadInitialData = async () => {
@@ -179,6 +189,30 @@ export default function CapstoneManagement() {
     } catch (err) {
       console.error('Failed to load capstone groups:', err);
     }
+  };
+
+  const getSemesterLabel = (semesterValue?: string) => {
+    if (!semesterValue) return 'N/A';
+
+    const semester = semesters.find(
+      (item) => item._id === semesterValue || item.name === semesterValue
+    );
+
+    if (!semester) return semesterValue;
+
+    return semester.description
+      ? `${semester.name} - ${semester.description}`
+      : semester.name;
+  };
+
+  const getSemesterSelectValue = (semesterValue?: string) => {
+    if (!semesterValue) return '';
+
+    const semester = semesters.find(
+      (item) => item._id === semesterValue || item.name === semesterValue
+    );
+
+    return semester?._id || semesterValue;
   };
 
   const handleNumberOfMembersChange = (num: number) => {
@@ -375,7 +409,7 @@ export default function CapstoneManagement() {
       title: selectedGroup.groupName,
       courseId: selectedGroup.courseId._id,
       supervisorId: selectedGroup.supervisorId._id,
-      semester: (selectedGroup as any).semester || '',
+      semester: getSemesterSelectValue((selectedGroup as any).semester),
       numberOfMembers: formData.numberOfMembers,
       students: formData.students,
     });
@@ -695,7 +729,7 @@ export default function CapstoneManagement() {
                 <SelectContent>
                   {semesters.length > 0 ? (
                     semesters.map((semester) => (
-                      <SelectItem key={semester._id} value={semester.name}>
+                      <SelectItem key={semester._id} value={semester._id}>
                         {semester.name}
                         {semester.description && ` - ${semester.description}`}
                       </SelectItem>
@@ -871,7 +905,7 @@ export default function CapstoneManagement() {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Semester:</span>
-                    <span className="font-medium">{selectedGroup.semester || 'N/A'}</span>
+                      <span className="font-medium">{getSemesterLabel(selectedGroup.semester)}</span>
                   </div>
                 </div>
               </div>
@@ -1022,19 +1056,41 @@ export default function CapstoneManagement() {
               <Label htmlFor="edit-semester" className="font-semibold">
                 Semester <span className="text-red-500">*</span>
               </Label>
-              <Input
-                id="edit-semester"
-                placeholder="e.g., Spring2024, Fall2024, F23"
+              <Select
                 value={formData.semester}
-                onChange={(e) => setFormData({ ...formData, semester: e.target.value })}
-                pattern="[a-zA-Z0-9\-_]+"
-                title="Semester must be alphanumeric (can include hyphens and underscores)"
-                required
-                className="mt-1"
-              />
-              <p className="text-xs text-muted-foreground mt-1">
-                Alphanumeric format (e.g., Spring2024, F23, 2024-Spring)
-              </p>
+                onValueChange={(value) => setFormData({ ...formData, semester: value })}
+              >
+                <SelectTrigger className="mt-1" id="edit-semester">
+                  <SelectValue placeholder="Select a semester" />
+                </SelectTrigger>
+                <SelectContent>
+                  {semesters.length > 0 ? (
+                    semesters.map((semester) => (
+                      <SelectItem key={semester._id} value={semester._id}>
+                        {semester.name}
+                        {semester.description ? ` - ${semester.description}` : ''}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <SelectItem value="" disabled>
+                      No semesters available
+                    </SelectItem>
+                  )}
+                  {formData.semester &&
+                    !semesters.some(
+                      (semester) => semester._id === formData.semester || semester.name === formData.semester
+                    ) && (
+                      <SelectItem value={formData.semester}>
+                        Current semester (legacy value): {formData.semester}
+                      </SelectItem>
+                    )}
+                </SelectContent>
+              </Select>
+              {semesters.length === 0 && (
+                <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-1">
+                  No semesters created. Please create a semester in Semester Management.
+                </p>
+              )}
             </div>
 
             <DialogFooter>
@@ -1054,6 +1110,228 @@ export default function CapstoneManagement() {
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* Submitted Marks Card */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Submitted Marks</CardTitle>
+          <CardDescription>
+            View and download marks submitted by supervisors in Excel format
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {loadingMarksFiles ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : marksFiles.length === 0 ? (
+            <p className="text-muted-foreground text-center py-8">
+              No marks submitted yet
+            </p>
+          ) : (
+            <div className="space-y-3">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="border-b">
+                    <tr>
+                      <th className="text-left py-2 px-3">File Name</th>
+                      <th className="text-left py-2 px-3">Uploaded By</th>
+                      <th className="text-left py-2 px-3">Date</th>
+                      <th className="text-right py-2 px-3">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {marksFiles.map((file) => (
+                      <tr key={file._id} className="border-b hover:bg-muted">
+                        <td className="py-2 px-3 font-medium">{file.originalName}</td>
+                        <td className="py-2 px-3 text-muted-foreground">
+                          {file.uploadedBy?.name || 'Unknown'}
+                        </td>
+                        <td className="py-2 px-3 text-muted-foreground text-xs">
+                          {new Date(file.createdAt).toLocaleDateString()}
+                        </td>
+                        <td className="py-2 px-3 text-right">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => window.location.href = `/api/resources/files/${file._id}`}
+                          >
+                            Download
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Submitted Peer Marks Card */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Submitted Peer Evaluation Marks</CardTitle>
+          <CardDescription>
+            View and download peer evaluation marks submitted by supervisors in Excel format
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {loadingPeerMarksFiles ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : peerMarksFiles.length === 0 ? (
+            <p className="text-muted-foreground text-center py-8">
+              No peer marks submitted yet
+            </p>
+          ) : (
+            <div className="space-y-3">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="border-b">
+                    <tr>
+                      <th className="text-left py-2 px-3">File Name</th>
+                      <th className="text-left py-2 px-3">Uploaded By</th>
+                      <th className="text-left py-2 px-3">Date</th>
+                      <th className="text-right py-2 px-3">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {peerMarksFiles.map((file) => (
+                      <tr key={file._id} className="border-b hover:bg-muted">
+                        <td className="py-2 px-3 font-medium">{file.originalName}</td>
+                        <td className="py-2 px-3 text-muted-foreground">
+                          {file.uploadedBy?.name || 'Unknown'}
+                        </td>
+                        <td className="py-2 px-3 text-muted-foreground text-xs">
+                          {new Date(file.createdAt).toLocaleDateString()}
+                        </td>
+                        <td className="py-2 px-3 text-right">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => window.location.href = `/api/resources/files/${file._id}`}
+                          >
+                            Download
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Submitted Poster Marks Card */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Submitted Poster Marks</CardTitle>
+          <CardDescription>
+            View and download poster marks submitted by supervisors in Excel format
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {loadingPosterMarksFiles ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : posterMarksFiles.length === 0 ? (
+            <p className="text-muted-foreground text-center py-8">
+              No poster marks submitted yet
+            </p>
+          ) : (
+            <div className="space-y-3">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="border-b">
+                    <tr>
+                      <th className="text-left py-2 px-3">File Name</th>
+                      <th className="text-left py-2 px-3">Uploaded By</th>
+                      <th className="text-left py-2 px-3">Date</th>
+                      <th className="text-right py-2 px-3">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {posterMarksFiles.map((file) => (
+                      <tr key={file._id} className="border-b hover:bg-muted">
+                        <td className="py-2 px-3 font-medium">{file.originalName}</td>
+                        <td className="py-2 px-3 text-muted-foreground">
+                          {file.uploadedBy?.name || 'Unknown'}
+                        </td>
+                        <td className="py-2 px-3 text-muted-foreground text-xs">
+                          {new Date(file.createdAt).toLocaleDateString()}
+                        </td>
+                        <td className="py-2 px-3 text-right">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => window.location.href = `/api/resources/files/${file._id}`}
+                          >
+                            Download
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
+
+  async function loadMarksFiles() {
+    setLoadingMarksFiles(true);
+    try {
+      const res = await fetch('/api/capstone/marks-files');
+      if (res.ok) {
+        const data = await res.json();
+        setMarksFiles(data.files || []);
+      }
+    } catch (error) {
+      console.error('Error loading marks files:', error);
+      toast.error('Failed to load marks files');
+    } finally {
+      setLoadingMarksFiles(false);
+    }
+  }
+
+  async function loadPeerMarksFiles() {
+    setLoadingPeerMarksFiles(true);
+    try {
+      const res = await fetch('/api/capstone/peer-marks-files');
+      if (res.ok) {
+        const data = await res.json();
+        setPeerMarksFiles(data.files || []);
+      }
+    } catch (error) {
+      console.error('Error loading peer marks files:', error);
+      toast.error('Failed to load peer marks files');
+    } finally {
+      setLoadingPeerMarksFiles(false);
+    }
+  }
+
+  async function loadPosterMarksFiles() {
+    setLoadingPosterMarksFiles(true);
+    try {
+      const res = await fetch('/api/capstone/poster-marks-files');
+      if (res.ok) {
+        const data = await res.json();
+        setPosterMarksFiles(data.files || []);
+      }
+    } catch (error) {
+      console.error('Error loading poster marks files:', error);
+      toast.error('Failed to load poster marks files');
+    } finally {
+      setLoadingPosterMarksFiles(false);
+    }
+  }
 }

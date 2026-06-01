@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import dbConnect from '@/lib/mongodb';
 import { ResourceFolder } from '@/models/ResourceFolder';
+import { getResourceAccess } from '@/lib/resourceAuth';
 
 export async function GET(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session) {
+    const access = await getResourceAccess(req);
+    if (!access.authorized) {
       return NextResponse.json(
         { error: 'Unauthorized - please sign in' },
         { status: 401 }
@@ -47,8 +46,8 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session) {
+    const access = await getResourceAccess(req);
+    if (!access.authorized || !access.actorId) {
       return NextResponse.json(
         { error: 'Unauthorized - please sign in' },
         { status: 401 }
@@ -68,7 +67,7 @@ export async function POST(req: NextRequest) {
     const folder = new ResourceFolder({
       name: name.trim(),
       parentId: parentId || null,
-      createdBy: session.user.id,
+      createdBy: access.actorId,
     });
 
     await folder.save();

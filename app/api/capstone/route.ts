@@ -65,6 +65,12 @@ export async function POST(request: NextRequest) {
       supervisorComments,
       evaluatorMarks,
       evaluatorComments,
+      peerMarks,
+      peerComments,
+      posterMarks,
+      posterComments,
+      weeklyJournalMarks,
+      weeklyJournalComments,
       submissionType,
     } = await request.json();
 
@@ -117,6 +123,15 @@ export async function POST(request: NextRequest) {
       capstoneMarks.evaluatorId = evaluatorId;
       capstoneMarks.evaluatorMarks = evaluatorMarks;
       capstoneMarks.evaluatorComments = evaluatorComments || '';
+    } else if (submissionType === 'peer') {
+      capstoneMarks.peerMarks = peerMarks;
+      capstoneMarks.peerComments = peerComments || '';
+    } else if (submissionType === 'poster') {
+      capstoneMarks.posterMarks = posterMarks;
+      capstoneMarks.posterComments = posterComments || '';
+    } else if (submissionType === 'weeklyJournal') {
+      capstoneMarks.weeklyJournalMarks = weeklyJournalMarks;
+      capstoneMarks.weeklyJournalComments = weeklyJournalComments || '';
     }
 
     capstoneMarks.submissionType = submissionType;

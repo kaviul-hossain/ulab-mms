@@ -1,15 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import dbConnect from '@/lib/mongodb';
 import { StoredFile } from '@/models/StoredFile';
 import mongoose from 'mongoose';
+import { getResourceAccess } from '@/lib/resourceAuth';
 
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const access = await getResourceAccess(req);
+    if (!access.authorized) {
+      return NextResponse.json(
+        { error: 'Unauthorized - please sign in' },
+        { status: 401 }
+      );
+    }
+
     const { id } = await params;
     await dbConnect();
 
@@ -50,8 +57,8 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session) {
+    const access = await getResourceAccess(req);
+    if (!access.authorized) {
       return NextResponse.json(
         { error: 'Unauthorized - please sign in' },
         { status: 401 }
